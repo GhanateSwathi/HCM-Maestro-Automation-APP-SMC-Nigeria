@@ -151,19 +151,46 @@ name: open-transaction
     env:
       ACTION: line
     label: "Fence the card at its product line"
-- copyTextFrom:
-    text: ".+"
-    below:
-      text: "Sender"
-      below:
-        text: ${output.scan.here}
-      above:
-        text: ${output.scan.line}
-    above:
-      text: ${output.scan.line}
-      below:
-        text: ${output.scan.here}
-    label: "Read the transaction's sender"
+# Fenced above the next card's MRN label too, when there is one: several
+# cards can share a product line ("SPAQ 1: 900" three times on 2026-10-23,
+# state user), and "above the line, below this card's label" then reached the
+# later card's line and read this card's Select as the sender.
+- runFlow:
+    when:
+      true: ${output.scan.next != ''}
+    commands:
+      - copyTextFrom:
+          text: ".+"
+          below:
+            text: "Sender"
+            below:
+              text: ${output.scan.here}
+            above:
+              text: ${output.scan.next}
+          above:
+            text: ${output.scan.line}
+            below:
+              text: ${output.scan.here}
+            above:
+              text: ${output.scan.next}
+          label: "Read the transaction's sender"
+- runFlow:
+    when:
+      true: ${output.scan.next == ''}
+    commands:
+      - copyTextFrom:
+          text: ".+"
+          below:
+            text: "Sender"
+            below:
+              text: ${output.scan.here}
+            above:
+              text: ${output.scan.line}
+          above:
+            text: ${output.scan.line}
+            below:
+              text: ${output.scan.here}
+          label: "Read the transaction's sender"
 - runScript:
     file: transaction.js
     env:

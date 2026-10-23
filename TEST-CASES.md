@@ -149,8 +149,11 @@ cases are tagged `mhbase`.
   any role; sync complete.
 - **Steps:** At launch, allow `Allow SMC-MC to send you notifications?`. After
   sync, on `Allow Permissions`, tap each `Grant` and accept Android's prompt.
-  Tick `Please check if background activity is enabled from settings. *`. Tap
-  `Continue`.
+  Tick `Please check if background activity is enabled from settings. *` —
+  or, as on 2026-10-23 15:56 (state user), `Allow background activity *`,
+  with the cards renamed `Allow background activity in battery -> settings *`
+  and `NearBy Share *`; the next sign-in showed the old wording again. The
+  flow accepts both. Tap `Continue`.
 - **Expected:** Each card — `Notifications *`, `Ignore battery optimization *`,
   `Location *`, `Nearby share *`, `Camera` — reads `Permission granted` and
   its `Grant` button is gone. `Continue` opens the role's boundary screen.
@@ -435,7 +438,10 @@ issue number `--`.
   [Stock — Reject a receipt](#stock--reject-a-receipt-state-user-health-facility-cdd).
 - The Waybill / Batch / Comment fields — left empty when accepting.
 - **Lists longer than a screen.** Only the cards on screen are read; three fit
-  on the Pixel 9 Pro XL.
+  on the Pixel 9 Pro XL. (The reject flows count the whole list.) A card's
+  sender is read inside its own card, fenced by the next card's MRN: on
+  2026-10-23 three cards read `SPAQ 1: 900` and the unfenced read took a later
+  card's `Select` as the sender.
 
 ---
 

@@ -44,8 +44,15 @@ name: allow-permissions
       visible: "Allow Permissions"
     commands:
       # The box has no label of its own; it is the control left of its caption.
+      # The caption comes in two wordings: "Please check if background
+      # activity is enabled from settings. *" (2026-10-15 onwards), and "Allow
+      # background activity *" (state user, 2026-10-23 15:56 - with the cards
+      # renamed "Allow background activity in battery -> settings *" and
+      # "NearBy Share *"; the next sign-in, two minutes later, showed the old
+      # wording again). The second is matched whole: the battery card's title
+      # starts with the same words.
       - tapOn:
-          leftOf: "Please check if background activity.*"
+          leftOf: "Please check if background activity.*|Allow background activity( \\*)?"
           label: "Tick the background-activity checkbox"
 
 # The app also ignores Continue while it is still loading the boundary
