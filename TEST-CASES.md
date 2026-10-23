@@ -13,7 +13,7 @@ were taken from.
 
 | Screen | Cases | Automated | Gaps |
 | --- | :-: | :-: | --- |
-| Login | 6 | 6 | National stock sign-in, wrong-credential rejection, password show/hide toggle |
+| Login | 6 | 6 | Wrong-credential rejection, password show/hide toggle (national stock user: out of scope) |
 | Post-login onboarding | 11 | 11 | Choosing a configured facility, already-selected boundaries. Boundary data (BDD): the CDD's Data found / No data found paths not seen yet (its check fails - server-side issue, 2026-10-23); Proceed Without Downloading on Data found not run |
 | Stock — Manage Stock | 6 | 6 | (Reject and View Transactions: their own sections) |
 | Stock — Dispatch to a health facility | 4 | 4 | Transport Type, Scan Resource; receiving and dispatching in one session (see DSP-04) |
@@ -23,7 +23,7 @@ were taken from.
 | Stock — Health facility returns to the state | 3 | 3 | Return validation (0, above balance) |
 | Stock — Reconciliation (state user, health facility) | 4 | 4 | REC-03/04 fail by design against this build (see the section) |
 | Stock — View Reports (state user, health facility) | 5 | 5 | VR-02–05 fail against fresh sessions (reports are device-local); recipient columns not shown |
-| Stock — Reject a receipt (state user, health facility, CDD) | 6 | 6 | Passed for the state user 2026-10-23 (in two runs, one session); health facility and CDD not run - each needs a fresh dispatch of both variants. The sender's balance coming back; View Reports after a rejection |
+| Stock — Reject a receipt (state user, health facility, CDD) | 6 | 6 | Passed for the state user 2026-10-23 (in two runs, one session); health facility and CDD not run - each needs a fresh dispatch of both variants. View Reports after a rejection (the sender's balance coming back: out of scope) |
 | Stock — View Transactions (state user, health facility, CDD) | 6 | 6 | Passed end to end for all three roles 2026-10-23 (the CDD's list was empty). What the QR encodes; transactions with more than one product; received transactions' cards (Sender) not seen yet |
 | Beneficiary Referral (health facility) | 7 | 7 | Scan Beneficiary; Referred by (CDD team code); opening a listed referral; mandatory-field validation; referral ID (the app shows none) |
 | Registration & Delivery (CDD) | 16 | 16 | The mobile-number bounds (never run - no test number); Unable To Deliver, Redose, Near by households, Search by ID, Mark Closed Household. REG-01, 02, 08, 09, 13 (and REG-07's save) were done in session by hand, not yet as written; the full flow has not run end to end (see the section) |
@@ -119,9 +119,9 @@ Strings below were read from `com.digit.hcm` 2.2.113 (SMC-MC, UAT) on the
   label names the facility, and ONB-03 selects one.
 
 ### Not yet covered
-- **National stock user sign-in.** Waiting on a user ID. Gets its own case and
-  `subflows/sign-in/nat-stock.yaml` once its landing screen has been read off
-  the app.
+- **National stock user** — out of scope (decided 2026-10-23): no sign-in,
+  onboarding or stock flows for this role. `HCM_NAT_STOCK_*` stay in
+  `.env.example` unused.
 - **Wrong-credential rejection.** Deliberately left out: repeated bad
   passwords against a real account can lock it. Needs a dedicated test
   account before it is automated.
@@ -1115,9 +1115,9 @@ once.
   report.
 
 ### Not yet covered
-- **The sender's balance coming back.** It happens on the sender's device
-  when the sender downloads stock, so it needs the sender's session; check it
-  by hand until a flow chains both roles.
+- **The sender's balance coming back** — out of scope (decided 2026-10-23).
+  It happens on the sender's device when the sender downloads stock, so it
+  would need the sender's session.
 - **View Reports after a rejection.**
 
 ---
