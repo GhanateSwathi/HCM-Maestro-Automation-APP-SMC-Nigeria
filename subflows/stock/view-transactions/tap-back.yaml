@@ -1,0 +1,44 @@
+appId: ${HCM_APP_ID}
+name: view-txn-tap-back
+---
+# Tap the app's own Back link (top left) until the screen marked by LEAVING
+# is gone, then wait for one of EXPECT. Fails if EXPECT never shows.
+#
+# Why the retry: the background Auto Sync raises an Android heads-up
+# notification ("Auto Sync" / "Last synced at ...") that slides over the top
+# of the app for a few seconds. On 2026-10-23 (run 20261023-140237, health
+# facility) it covered the Back link as the flow tapped it; the tap went to
+# the notification and the details screen stayed. Android's own Back is not
+# used instead: it is the app's Back link that is under test, and Back on the
+# home screen would leave the app.
+- tapOn:
+    text: "Back"
+    below: "Open navigation menu"
+    label: "Tap Back"
+- extendedWaitUntil:
+    notVisible: ${LEAVING}
+    timeout: 5000
+    optional: true
+    label: "The screen is left"
+- repeat:
+    times: 3
+    while:
+      visible: ${LEAVING}
+    label: "Back again, once a notification has cleared"
+    commands:
+      - takeScreenshot: artifacts/view-txn-back-retry
+      - waitForAnimationToEnd:
+          timeout: 5000
+      - tapOn:
+          text: "Back"
+          below: "Open navigation menu"
+          label: "Tap Back again"
+      - extendedWaitUntil:
+          notVisible: ${LEAVING}
+          timeout: 8000
+          optional: true
+          label: "The screen is left"
+- extendedWaitUntil:
+    visible: ${EXPECT}
+    timeout: 15000
+    label: "Back lands on the expected screen"

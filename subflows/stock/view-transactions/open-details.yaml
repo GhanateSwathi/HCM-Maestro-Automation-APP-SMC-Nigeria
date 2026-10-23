@@ -164,14 +164,12 @@ name: view-txn-open-details
     label: "Test Case 3 - the details match the card"
 
 # --- Back -------------------------------------------------------------------------
-- tapOn:
-    text: "Back"
-    below: "Open navigation menu"
+- runFlow:
+    file: tap-back.yaml
+    env:
+      LEAVING: "MRN number"
+      EXPECT: "Record Stock Receipt|View all stock transactions"
     label: "Back from the details"
-- extendedWaitUntil:
-    visible: "Record Stock Receipt|View all stock transactions"
-    timeout: 15000
-    label: "Back leaves the details"
 - evalScript: ${output.vt.backTo = 'view transactions'}
 - runFlow:
     when:

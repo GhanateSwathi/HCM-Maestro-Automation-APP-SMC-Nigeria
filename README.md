@@ -44,6 +44,7 @@ says why.
 | [14](prompts/prompt-14-cdd-dose-and-redose.md) | CDD: household of 7, dose and redose | `cdd-household-redose` |
 | [15](prompts/prompt-15-stock-reject.md) | Reject incoming stock, all three receiving roles | `*-stock-reject-receipt` |
 | [16](prompts/prompt-16-view-transactions.md) | View Transactions, state user, health facility and CDD | `*-stock-view-transactions` |
+| [17](prompts/prompt-17-boundary-data-download.md) | Boundary data download after login, health facility and CDD | `flows/onboarding/*-boundary-data`, and `subflows/home/boundary-data.yaml` in every flow that signs in as either |
 
 ## Prerequisites
 
@@ -121,6 +122,8 @@ template is tracked.
 | `REDOSE_REASON` | Optional. The redose's Reason, as the app lists it (`Vomitting`, `Others` on 2026-10-22); blank takes the first |
 | `CONSENT_REASON` | The reason typed when the caregiver refuses consent (`test`; ASCII only). The consent-No flow sets the consent itself - there is no `CONSENT` key, which would reach every flow |
 | `REJECT_REASON` | The reason typed into the reject popup's reason field, when it has one, by the three reject flows (`Automation test - stock rejected`; ASCII only) |
+| `BOUNDARY_DATA_CHOICE` | What the health facility and CDD do when the boundary data check after Submit answers `Data found!`: `Download` (default; copies the boundary's records to the device, changes nothing on the server) or `Proceed` (Proceed Without Downloading). Used by every flow that signs in as either role |
+| `BOUNDARY_DATA_RETRIES` | How many times to Retry `Failed to check data in server` before Proceed Without Downloading (default `2`) |
 | `VIEW_TXN_EXPECTED_STATE` / `_HF` / `_CDD` | Optional. Transactions the role's View Transactions list must hold, comma-separated, each `<variant> <quantity>` or `<variant> <MRN> <quantity>` (e.g. `SPAQ1 490,SPAQ2 490`). Blank: the list is logged and nothing is expected. A receiver's acceptance can change the MRN the sender sees, so give an MRN only when it is known to be stable |
 
 Leave a role's pair blank if you are not testing that role. See
@@ -291,6 +294,7 @@ position, never by name. These flows read the mhbase tenant's field labels
 | [`state-stock-selects-state.yaml`](flows/onboarding/state-stock-selects-state.yaml) | `regression`, `onboarding`, `state-stock`, `mhbase` | The state stock user gets through Allow Permissions and selects the first `ADMIN_State` option. |
 | [`hf-stock-selects-facility.yaml`](flows/onboarding/hf-stock-selects-facility.yaml) | `regression`, `onboarding`, `hf-stock`, `mhbase` | The health facility stock user gets through Allow Permissions and selects the first `ADMIN_Health Facility` option. |
 | [`cdd-selects-facility-and-communities.yaml`](flows/onboarding/cdd-selects-facility-and-communities.yaml) | `regression`, `onboarding`, `cdd`, `mhbase` | The CDD user gets through Allow Permissions, selects the first health facility and the first three `ADMIN_Community` options, and all three stay selected once the menu closes. |
+| [`hf-stock-boundary-data.yaml`](flows/onboarding/hf-stock-boundary-data.yaml) / [`cdd-boundary-data.yaml`](flows/onboarding/cdd-boundary-data.yaml) | `regression`, `onboarding`, `hf-stock` / `cdd`, `mhbase` | [Prompt 17](prompts/prompt-17-boundary-data-download.md): after the boundary Submit, the app checks the server for the boundary's records and answers `Data found!` (Download, or Proceed Without Downloading per `BOUNDARY_DATA_CHOICE`), `No data found!` (Go Back) or `Failed to check data in server` (Retry up to `BOUNDARY_DATA_RETRIES`, then Proceed Without Downloading); whichever comes is handled, logged with the test cases it covers, and the role's home screen checked. Changes nothing on the server. See TEST-CASES BDD-01–07. |
 
 ### `flows/stock/`
 
@@ -586,6 +590,8 @@ flows/                      runnable tests, grouped by feature area
     state-stock-selects-state.yaml              first ADMIN_State option
     hf-stock-selects-facility.yaml              first ADMIN_Health Facility option
     cdd-selects-facility-and-communities.yaml   first facility + first three communities
+    hf-stock-boundary-data.yaml                 health facility's boundary data check, Test Cases 1-7
+    cdd-boundary-data.yaml                      CDD's boundary data check, Test Cases 1-7
   stock/
     state-stock-incoming-receipts.yaml  Manage Stock > Record Stock Receipt, incoming list
     state-stock-accept-receipt.yaml     Cases 2/2a/2b - accept an incoming receipt
@@ -626,6 +632,8 @@ subflows/                   reusable building blocks, pulled in via runFlow
     state-stock.yaml
     hf-stock.yaml
     cdd.yaml
+    boundary-data.yaml      the data check after Submit (health facility, CDD) - Prompt 17
+    boundary-data.js        its book-keeping
   stock/
     download-stock-data.yaml         fetch stock records (home > home)
     open-incoming-transactions.yaml  home > Manage Stock > Record Stock Receipt
@@ -653,6 +661,7 @@ prompts/                    the specification prompts, one file each
   prompt-01-…-14-….md       Prompts 1-14, word for word as given
   prompt-15-stock-reject.md rejecting incoming stock, all three receiving roles
   prompt-16-view-transactions.md  View Transactions, all three roles
+  prompt-17-boundary-data-download.md  the data check after login, health facility and CDD
 scripts/                    run.ps1 (Windows) and run.sh (bash) - same behaviour
                             prepare-qr-camera.ps1 / .sh - flash the QR to the emulator camera
 assets/qr/cdd_qr.png        the CDD's QR code (QR_CODE_PATH; gitignored, like .env)
@@ -681,8 +690,9 @@ Two rules keep this working, and both are easy to break:
 | [`sign-in/state-stock.yaml`](subflows/sign-in/state-stock.yaml) | Same for the state stock user, waiting for its boundary selection. |
 | [`sign-in/hf-stock.yaml`](subflows/sign-in/hf-stock.yaml) | Same for the health facility stock user. |
 | [`home/state-stock.yaml`](subflows/home/state-stock.yaml) | `sign-in/state-stock.yaml`, then the first `ADMIN_State` option, then Submit, then wait for the home screen (`Stock Balance`). Every state stock flow that works from home starts here. |
-| [`home/hf-stock.yaml`](subflows/home/hf-stock.yaml) | The same for the health facility stock user: the first `ADMIN_Health Facility` option (logged), Submit, then the notice this user's Submit raises — Go Back on `No data found!`, or Download on `Data found!` (the facility's records; then Go To Home Screen) — home, and the Manage Stock card (else `Manage Stock card not displayed on home screen for Health Facility User.`). |
-| [`home/cdd.yaml`](subflows/home/cdd.yaml) | The same for the CDD user: the first `ADMIN_Health Facility` and the first three `ADMIN_Community` options (logged), Submit, then the notice Submit raises - `No data found!`, `Data found!` (Download), or `Failed to check data in server`, which is retried twice and then passed with Proceed Without Downloading (it failed three times on 2026-10-21; registering a new household does not need the boundary's existing records) - and home. Logs which it was. |
+| [`home/hf-stock.yaml`](subflows/home/hf-stock.yaml) | The same for the health facility stock user: the first `ADMIN_Health Facility` option (logged), Submit, the boundary data check (`boundary-data.yaml`), home, and the Manage Stock card (else `Manage Stock card not displayed on home screen for Health Facility User.`). |
+| [`home/cdd.yaml`](subflows/home/cdd.yaml) | The same for the CDD user: the first `ADMIN_Health Facility` and the first three `ADMIN_Community` options (logged), Submit, the boundary data check (`boundary-data.yaml`; it failed three times on 2026-10-21 and 23 - registering a new household does not need the boundary's existing records), and home. Logs which answer it was. |
+| [`home/boundary-data.yaml`](subflows/home/boundary-data.yaml) | Prompt 17 - the check the health facility's and the CDD's Submit runs: `Data found!` (both choices offered; Download → `Go To Home Screen`, or Proceed Without Downloading, per `BOUNDARY_DATA_CHOICE`), `No data found!` (Go Back), `Failed to check data in server` (Retry up to `BOUNDARY_DATA_RETRIES`, then Proceed Without Downloading), or straight home; ends on the caller's `HOME_SCREEN`. [`boundary-data.js`](subflows/home/boundary-data.js) records the first answer, the retries, the outcome and the test cases covered. |
 | [`fail.yaml`](subflows/fail.yaml) | Fail the flow with a plain-English `MESSAGE` that reaches the run summary and `report.html` — for checks whose failure should read as a sentence (`BLOCKED - …`, `MRN mismatch: …`). Run it inside a `runFlow: when:` that detects the failure. |
 | [`stock/download-stock-data.yaml`](subflows/stock/download-stock-data.yaml) | From home: Download Stock Data → Download (when `Data Found`) → Go To Home Screen. Copies records to the device; changes nothing on the server. |
 | [`stock/open-incoming-transactions.yaml`](subflows/stock/open-incoming-transactions.yaml) | From home: Manage Stock card (scrolled to if needed) → Record Stock Receipt → wait for the list. Sets `output.incoming` to `present` or `absent`. |
@@ -690,7 +700,7 @@ Two rules keep this working, and both are easy to break:
 | [`stock/incoming-receipts.js`](subflows/stock/incoming-receipts.js) | Log whether incoming transactions were found and enforce `HCM_STATE_STOCK_INCOMING_RECEIPTS` when it is set. |
 | [`stock/accept-receipt/`](subflows/stock/accept-receipt/) | Accepting incoming stock, shared by the state user (Cases 2, 2a, 2b) and the health facility user (Test Cases 3–5): `init-variants.yaml`, `read-balances.yaml` (home Stock Balance), `count-transactions.yaml` / `check-variants.yaml` (a transaction for each variant), `open-transaction.yaml` (a variant's first transaction → its own Select → Stock Receipt Details, product / MRN / sender / quantity checked), `open-accept-confirmation.yaml`, `case2-popup.yaml` / `case2a-cancel.yaml` (the popup, then Cancel), `accept-transaction.yaml` (… → Confirm → banner, list, count, MRN gone), `accept-both.yaml` (variant 1, then 2), `case2b-confirm.yaml` (the state user's: both, then balances), and `variants.js` / `transaction.js` for the book-keeping. A flow renames the cases in its messages through `output.variants.cases`. |
 | [`stock/reject-receipt/`](subflows/stock/reject-receipt/) | Rejecting incoming stock (Prompt 15) for the state user, the health facility and the CDD, over `accept-receipt/`'s transaction reading: `init.yaml` (test data first; the flow passes `ROLE` and `PREREQUISITE`), `reject-receipt.yaml` (the specification's `common/reject_stock.yaml` - Test Cases 1-6, home to home), `open-reject.yaml` (tap Reject; a popup or not, and the popup's title, confirming button and reason field), `cancel-reject.yaml` (Test Case 3), `empty-reason.yaml` (Test Case 4, only for a field marked mandatory), `enter-reason.yaml`, `reject-transaction.yaml` (one variant: reason, Confirm), `read-message.yaml` (the `Stock rejected successfully` banner, looked for straight after Confirm), `reject-outcome.yaml` (back to the list, transaction gone, other variant untouched), `count-all.yaml` (every card per variant, scrolling the whole list - the accept flows count only the cards on screen), `final-check.yaml` (Test Case 6), and `reject.js` for the book-keeping, counting, deviations and report. |
-| [`stock/view-transactions/`](subflows/stock/view-transactions/) | View Transactions (Prompt 16) for the state user, the health facility and the CDD: `init.yaml` (test data first; the flow passes `ROLE` and `EXPECTED`), `view-transactions.yaml` (the specification's `common/view_transactions.yaml` - Test Cases 1-6, home to home), `open-view-transactions.yaml` (Test Case 1), `read-cards.yaml` (Test Case 2 - every card, keyed by MRN, scrolling the whole list) over `card-field.yaml` (one part of one card, fenced between its MRN tag and the next card's), `open-details.yaml` (Test Case 3 - one card's Select Transaction, the details compared, Back), `view-qr.yaml` (Test Case 4 - closed with Back: the popup's X has no text), and `view-txn.js` for the book-keeping, expected entries, notes and report. |
+| [`stock/view-transactions/`](subflows/stock/view-transactions/) | View Transactions (Prompt 16) for the state user, the health facility and the CDD: `init.yaml` (test data first; the flow passes `ROLE` and `EXPECTED`), `view-transactions.yaml` (the specification's `common/view_transactions.yaml` - Test Cases 1-6, home to home), `open-view-transactions.yaml` (Test Case 1), `read-cards.yaml` (Test Case 2 - every card, keyed by MRN, scrolling the whole list) over `card-field.yaml` (one part of one card, fenced between its MRN tag and the next card's), `open-details.yaml` (Test Case 3 - one card's Select Transaction, the details compared, Back), `view-qr.yaml` (Test Case 4 - closed with Back: the popup's X has no text), `tap-back.yaml` (the app's Back link, tapped again when an Android notification covered it), and `view-txn.js` for the book-keeping, expected entries, notes and report. |
 | [`stock/reports/`](subflows/stock/reports/) | View Reports for either role: `open-view-reports.yaml` (the card, all four reports offered — `report-offered.yaml` each), `view-report.yaml` (the specification's `common/view_report.yaml` — one report: facility, table state, back), `report-table.yaml` (headers, rows logged, each expected entry looked for) and `reports.js` (patterns, findings, the report). |
 | [`stock/reconciliation/`](subflows/stock/reconciliation/) | Stock Reconciliation for either role: `reconcile-variant.yaml` (the specification's `common/stock_reconciliation.yaml` — one variant, Cases 1–3, home to home), `open-variant.yaml` (home → warehouse → variant → Stock in hand), `enter-count.yaml`, `enter-comment.yaml`, `submit.yaml`, `case1-equal.yaml`, `differing-count.yaml` (Cases 2 and 3; Case 2 BLOCKED at stock in hand 0), and `recon.js` — the book-keeping, deviations and report. |
 | [`stock/hf-receipt/`](subflows/stock/hf-receipt/) | The health facility flow's own steps: `init.yaml` (test data, before the device is touched), one subflow per test case (`tc1-initial-balance`, `tc2-incoming`, `tc3-details` / `tc3-variant`, `tc4-cancel`, `tc6-final-balance`), and `hf-receipt.js` for the balances, messages and the closing report. |

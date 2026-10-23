@@ -14,7 +14,7 @@ were taken from.
 | Screen | Cases | Automated | Gaps |
 | --- | :-: | :-: | --- |
 | Login | 6 | 6 | National stock sign-in, wrong-credential rejection, password show/hide toggle |
-| Post-login onboarding | 4 | 4 | Choosing a configured facility, already-selected boundaries |
+| Post-login onboarding | 11 | 11 | Choosing a configured facility, already-selected boundaries. Boundary data (BDD): the CDD's Data found / No data found paths not seen yet (its check fails - server-side issue, 2026-10-23); Proceed Without Downloading on Data found not run |
 | Stock — Manage Stock | 6 | 6 | (Reject and View Transactions: their own sections) |
 | Stock — Dispatch to a health facility | 4 | 4 | Transport Type, Scan Resource; receiving and dispatching in one session (see DSP-04) |
 | Stock — Return to National | 3 | 3 | Return validation (0, above balance); one-session receive → dispatch → return |
@@ -24,13 +24,13 @@ were taken from.
 | Stock — Reconciliation (state user, health facility) | 4 | 4 | REC-03/04 fail by design against this build (see the section) |
 | Stock — View Reports (state user, health facility) | 5 | 5 | VR-02–05 fail against fresh sessions (reports are device-local); recipient columns not shown |
 | Stock — Reject a receipt (state user, health facility, CDD) | 6 | 6 | Passed for the state user 2026-10-23 (in two runs, one session); health facility and CDD not run - each needs a fresh dispatch of both variants. The sender's balance coming back; View Reports after a rejection |
-| Stock — View Transactions (state user, health facility, CDD) | 6 | 6 | Passed for the state user 2026-10-23 in session; the committed flows' end-to-end runs for all three roles were in progress at commit. What the QR encodes; transactions with more than one product |
+| Stock — View Transactions (state user, health facility, CDD) | 6 | 6 | Passed end to end for all three roles 2026-10-23 (the CDD's list was empty). What the QR encodes; transactions with more than one product; received transactions' cards (Sender) not seen yet |
 | Beneficiary Referral (health facility) | 7 | 7 | Scan Beneficiary; Referred by (CDD team code); opening a listed referral; mandatory-field validation; referral ID (the app shows none) |
 | Registration & Delivery (CDD) | 16 | 16 | The mobile-number bounds (never run - no test number); Unable To Deliver, Redose, Near by households, Search by ID, Mark Closed Household. REG-01, 02, 08, 09, 13 (and REG-07's save) were done in session by hand, not yet as written; the full flow has not run end to end (see the section) |
 | Registration — consent No (CDD) | 7 | 7 | Done in session by hand 2026-10-22; the flow has not run as written. Reasons other than free text; a refused household found other than by name |
 | Registration — Unable to Deliver (CDD) | 9 | 9 | Comment on Unable to Deliver (optional, left empty); a 20-member household fully registered; UTD-09's sync not run (expired sign-in) |
 | Registration — dose and redose (CDD) | 10 | 10 | Redose reason Others; a redose's time window; RDS-10's sync not run (expired sign-in) |
-| **Total** | **106** | **106** | |
+| **Total** | **113** | **113** | |
 
 Status key: **Automated** — a flow asserts it. **Partial** — the flow performs
 the step but asserts nothing about it. **Blocked** — a flow exists but cannot
@@ -212,11 +212,86 @@ cases are tagged `mhbase`.
   communities fails the flow, but only after the available ones are selected
   and verified.
 
+### Boundary data download after Submit (health facility, CDD)
+
+[Prompt 17](prompts/prompt-17-boundary-data-download.md):
+[`flows/onboarding/hf-stock-boundary-data.yaml`](flows/onboarding/hf-stock-boundary-data.yaml)
+and
+[`flows/onboarding/cdd-boundary-data.yaml`](flows/onboarding/cdd-boundary-data.yaml)
+· `regression`, `onboarding`, `hf-stock` / `cdd`, `mhbase`, over
+[`subflows/home/boundary-data.yaml`](subflows/home/boundary-data.yaml) — which
+every health facility and CDD flow runs after its boundary Submit, so both
+roles handle all three answers the same way. Changes nothing on the server.
+Test data: `BOUNDARY_DATA_CHOICE` (`Download` / `Proceed`),
+`BOUNDARY_DATA_RETRIES` (`2`).
+
+After Submit the app checks the server for the boundary's records. **Which
+answer comes is the server's to decide**, so each run covers the cases of
+the answer it got and logs which (`Boundary data - <role>: first answer …
+Covered: Test Case …`). Answers read off the app 2026-10-19 to 23:
+`Data found!` / `There are records found for the selected area...` (Download,
+Proceed Without Downloading); `No data found!` / `There are no new records
+found for the selected boundary` (Go Back); `Failed to check data in server`
+(Retry, Proceed Without Downloading). **On 2026-10-23 the check failed for
+the CDD every time** — a server-side issue, per the user — so the CDD's
+Data found and No data found paths are handled but not yet seen; the CDD
+gets No data found when there are no records to download.
+
+Runs on 2026-10-23 (`20261023-145737`): health facility `Data found!` →
+Download → `Health facility data download completed` → Go To Home Screen;
+CDD `Failed to check data in server`, Retry ×2, still failing → Proceed
+Without Downloading. Both reached home. That run's health facility report
+counted 2 retries that never happened (the retry loop was ended by setting
+its counter); fixed with a stop flag and re-run in `20261023-151503`
+(4 min 16 s): `Data found!`, no retries, Test Cases 1, 2, 3, 7 covered.
+Every health facility and CDD flow run since uses the same subflow.
+
+### BDD-01 — The app answers the boundary data check (Test Case 1)
+- **Status:** Automated — the flows above. Passed 2026-10-23 for both roles
+  (`20261023-145737`).
+- **Expected:** After Submit, within 5 minutes, one of `Data found!`,
+  `No data found!`, `Failed to check data in server`, or the home screen;
+  which one is logged.
+
+### BDD-02 — Data found offers both choices (Test Case 2)
+- **Status:** Automated. Health facility passed 2026-10-23. CDD: not seen
+  (the check failed).
+- **Expected:** `Download` and `Proceed Without Downloading` under
+  `Data found!`.
+
+### BDD-03 — Data found, Download (Test Case 3)
+- **Status:** Automated. Health facility passed 2026-10-23: `Health facility
+  data download completed`, Go To Home Screen. CDD: not seen.
+- **Expected:** Download → `Go To Home Screen` (up to 5 minutes) with the
+  completion message → home. **QA to confirm** the CDD's message.
+
+### BDD-04 — Data found, Proceed Without Downloading (Test Case 4)
+- **Status:** Automated — not run yet: needs `BOUNDARY_DATA_CHOICE=Proceed`
+  on a run that gets `Data found!`.
+- **Expected:** Proceed Without Downloading → home, nothing downloaded.
+
+### BDD-05 — Failed check: Retry, then proceed (Test Case 5)
+- **Status:** Automated. CDD passed 2026-10-23: failed, Retry 1 and 2 failed
+  too, Proceed Without Downloading → home. Health facility: not seen.
+- **Expected:** `Retry` and `Proceed Without Downloading` offered; Retry up
+  to `BOUNDARY_DATA_RETRIES` times, continuing with whatever a retry answers;
+  still failing → Proceed Without Downloading → home.
+
+### BDD-06 — No data found, Go Back (Test Case 6)
+- **Status:** Automated. Seen for the health facility on 2026-10-19 (the
+  home subflow's earlier version); not seen by these flows yet.
+- **Expected:** `No data found!` with `Go Back` → home.
+
+### BDD-07 — The role's home screen (Test Case 7)
+- **Status:** Automated. Passed 2026-10-23 for both roles.
+- **Expected:** Health facility: Stock Balance, Manage Stock, Download Stock
+  Data. CDD: Registration & Delivery, Stock Balance, Manage Stock.
+
 ### Not yet covered
 - **Choosing a configured facility.** The facility is always the first offered.
   Picking a named one would need a per-tenant variable in `.env`.
-- **Submit and the home screen** — covered for the state stock user by STK-01
-  and for the health facility stock user by the HFR flow.
+- **Submit and the home screen** — covered for the state stock user by STK-01,
+  and for the health facility and the CDD by BDD-01–07.
 - **Already-selected boundaries.** The dropdown subflow assumes a fresh state
   (`clearState`); a menu opened over existing selections would mix their
   chips into the option count.
@@ -1075,9 +1150,14 @@ Waybill number, Batch number, Quantity received, Comment. View QR opens a
 **How it was run.** The screens were read off the app as the state user on
 2026-10-23 (read only), then the shared subflow ran as written in that
 session (`20261023-135912`, 2 min 55 s): all six cases passed, with
-`VIEW_TXN_EXPECTED_STATE` = `SPAQ1 490,SPAQ2 490`. The committed flows —
-sign-in, Download Stock Data, the subflow — for all three roles were running
-when this was committed; their results follow.
+`VIEW_TXN_EXPECTED_STATE` = `SPAQ1 490,SPAQ2 490`. Then the committed flows
+ran end to end, sign-in included, on 2026-10-23: the state user and the CDD
+passed in `20261023-140237` (24 min 48 s — a slow sign-in sync — and 6 min
+23 s). The health facility failed there on Back from a transaction's
+details: the background Auto Sync's Android notification covered the Back
+link as it was tapped. Back is now retried once the notification has gone
+([`tap-back.yaml`](subflows/stock/view-transactions/tap-back.yaml)), and the
+health facility passed in `20261023-145737` (6 min 53 s).
 
 **Points for QA** (logged as `NOTE - …`; the flows pass on them):
 1. The details screen is titled `Stock Receipt Details` and labels the
@@ -1094,27 +1174,34 @@ when this was committed; their results follow.
    only optionally.
 
 ### VTX-01 — Manage Stock offers View Transactions, and it opens (Test Case 1)
-- **Status:** Automated — the flows above. State user passed 2026-10-23
-  (`20261023-135912`, in session).
+- **Status:** Automated — the flows above. Passed 2026-10-23 for all three
+  roles (state user, CDD `20261023-140237`; health facility
+  `20261023-145737`).
 - **Expected:** `View Transactions` on Manage Stock (with `Record Stock
   Receipt`); it opens `View Transactions` / `View all stock transactions`;
   the list or its empty state loads.
 
 ### VTX-02 — The transaction list (Test Case 2)
-- **Status:** Automated. State user passed 2026-10-23: 2 cards —
-  `MRN A4ED-AAB3-1B81 | 19 Oct 2026 | Receiver FAC_F-2026-10-15-137947 | SPAQ 2: 490 | View QR`
-  and `MRN 8407-93EF-C911 | … | SPAQ 1: 490 | View QR`.
+- **Status:** Automated. Passed 2026-10-23 for all three roles. State user,
+  2 cards: `MRN A4ED-AAB3-1B81 | 19 Oct 2026 | Receiver FAC_F-2026-10-15-137947 | SPAQ 2: 490 | View QR`
+  and `MRN 8407-93EF-C911 | … | SPAQ 1: 490 | View QR`. Health facility,
+  2 cards: `MRN 5B66-913A-DFE2 | 19 Oct 2026 | Receiver AU-CDD-001 | SPAQ 2: 480 | View QR`
+  and `MRN 5AAF-446D-7E52 | … | SPAQ 1: 480 | View QR` (Prompt 6's
+  dispatches to the CDD, recorded as `CDC9-2D30-F38E` / `0572-01DA-C66C` —
+  renumbered, as Point for QA 3). CDD: none — `No Transactions Available`
+  (its acceptances of 2026-10-21 were in a session wiped since).
 - **Expected:** Every card read — MRN, date, Receiver or Sender with the id,
   product lines, View QR — scrolling to the end of the list; each has an MRN
   and a product line, else
   `Test Case 2 - View Transactions shows MRN tags for <role>, but no card with a product line could be read.`
-  No cards: the empty state's text is logged. **QA to confirm** the
-  empty-state wording (not seen yet).
+  No cards: the empty state's text is logged — `No Transactions Available`
+  (CDD, 2026-10-23).
 
 ### VTX-03 — Transaction details match the card (Test Case 3)
-- **Status:** Automated. State user passed 2026-10-23: both cards — MRN,
-  resource and quantity matched; Transaction Type `Dispatched`, Sender
-  `FAC_F-2026-10-15-137946`.
+- **Status:** Automated. Passed 2026-10-23 for the state user and the
+  health facility: both cards each — MRN, resource and quantity matched;
+  Transaction Type `Dispatched`, Sender the user's own warehouse
+  (`…137946`, `…137947`). CDD: not applicable (no cards).
 - **Expected:** For the first card of each variant, its own `Select
   Transaction` → details whose MRN number, Resource and quantity match the
   card, else
@@ -1122,11 +1209,14 @@ when this was committed; their results follow.
   Back → Manage Stock → View Transactions reopened (Point for QA 2).
 - **Notes:** Each value is read right of its label and fenced between the
   rows around it; the MRN below the Sender row, whose id wraps onto two
-  lines.
+  lines. Back is tapped again if an Android notification covered it (the
+  health facility's first run, `20261023-140237`).
 
 ### VTX-04 — View QR (Test Case 4)
-- **Status:** Automated. State user passed 2026-10-23: `QR Code` popup with
-  the QR image for `MRN A4ED-AAB3-1B81`, closed back to the list.
+- **Status:** Automated. Passed 2026-10-23 for the state user
+  (`MRN A4ED-AAB3-1B81`) and the health facility (`MRN 5B66-913A-DFE2`):
+  `QR Code` popup with the QR image, closed back to the list. CDD: not
+  applicable.
 - **Expected:** The first card offering `View QR` opens the `QR Code` popup
   with a QR image; it closes and the list is still up. Not applicable when no
   card offers View QR.
@@ -1134,15 +1224,16 @@ when this was committed; their results follow.
   fenced against the status bar. What the QR encodes is not checked.
 
 ### VTX-05 — Expected transactions are listed (Test Case 5)
-- **Status:** Automated. State user passed 2026-10-23: `SPAQ1 490`,
-  `SPAQ2 490` both found.
+- **Status:** Automated. State user passed 2026-10-23 in session:
+  `SPAQ1 490`, `SPAQ2 490` both found. The end-to-end runs had no entries
+  set.
 - **Expected:** Each `VIEW_TXN_EXPECTED_<role>` entry matches a card by
   product and quantity (and MRN, when given), else, at the end,
   `Test Case 5 - View Transactions is missing <entries> for <role>.`
   Blank: nothing expected.
 
 ### VTX-06 — Back to Manage Stock (Test Case 6)
-- **Status:** Automated. State user passed 2026-10-23.
+- **Status:** Automated. Passed 2026-10-23 for all three roles.
 - **Expected:** `Back` on View Transactions → Manage Stock (`Record Stock
   Receipt`, `Record Stock Issued`). The flow ends on home with the execution
   report.

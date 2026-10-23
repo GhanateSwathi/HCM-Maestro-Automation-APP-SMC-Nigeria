@@ -72,14 +72,12 @@ name: view-transactions
     label: "Test Case 5 - look for the expected entries"
 
 # --- Test Case 6 - Back to Manage Stock -----------------------------------------------------
-- tapOn:
-    text: "Back"
-    below: "Open navigation menu"
-    label: "Test Case 6 - Back from View Transactions"
-- extendedWaitUntil:
-    visible: "Record Stock Receipt"
-    timeout: 15000
-    label: "Test Case 6 - Manage Stock is back"
+- runFlow:
+    file: tap-back.yaml
+    env:
+      LEAVING: "View all stock transactions"
+      EXPECT: "Record Stock Receipt"
+    label: "Test Case 6 - Back from View Transactions to Manage Stock"
 - assertVisible:
     text: "Record Stock Issued"
     label: "Test Case 6 - on Manage Stock"

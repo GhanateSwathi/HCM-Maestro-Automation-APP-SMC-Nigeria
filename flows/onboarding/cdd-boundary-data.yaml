@@ -1,0 +1,45 @@
+appId: ${HCM_APP_ID}
+name: "Onboarding - CDD's boundary data download"
+tags:
+  - regression
+  - onboarding
+  - cdd
+  - mhbase
+---
+# Prompt 17 for the CDD: after the facility and three communities are chosen
+# and submitted, the app checks the server for the boundary's records and
+# answers "Data found!", "No data found!" or "Failed to check data in server";
+# each answer is handled (subflows/home/boundary-data.yaml) and the run ends
+# on home. Which answer comes is the server's to decide, so a run covers the
+# test cases of the answer it got and logs which. Downloading copies records
+# to the device and changes nothing on the server.
+#
+# Needs HCM_CDD_USER_ID / HCM_CDD_PASSWORD (AU-CDD-001 on the mhbase tenant);
+# BOUNDARY_DATA_CHOICE (Download or Proceed) and BOUNDARY_DATA_RETRIES are
+# optional.
+
+# Sign in, Allow Permissions, the facility and communities, Submit, the data
+# check, home.
+- runFlow: ../../subflows/home/cdd.yaml
+
+# Test Case 7 - the CDD's home (read 2026-10-21).
+- assertVisible:
+    text: "Registration & Delivery"
+    label: "Test Case 7 - Registration & Delivery on home"
+- assertVisible:
+    text: "Stock Balance"
+    label: "Test Case 7 - Stock Balance on home"
+- runFlow:
+    when:
+      notVisible: "Manage Stock"
+    commands:
+      - scrollUntilVisible:
+          element: "Manage Stock"
+          direction: DOWN
+          timeout: 10000
+          optional: true
+- assertVisible:
+    text: "Manage Stock"
+    label: "Test Case 7 - Manage Stock on home"
+- takeScreenshot: artifacts/boundary-data-cdd-home
+- evalScript: "${console.log('Prompt 17 PASSED for the CDD - ' + output.bd.detail + '; home shows Registration & Delivery, Stock Balance and Manage Stock. Covered: ' + output.bd.covered)}"

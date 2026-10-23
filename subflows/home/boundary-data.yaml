@@ -1,0 +1,236 @@
+appId: ${HCM_APP_ID}
+name: home-boundary-data
+---
+# Prompt 17 - the boundary data check that follows Submit on boundary
+# selection, for the health facility and the CDD (the state user's Submit
+# goes straight to home). Ends on the home screen. Downloading copies the
+# boundary's records to the device and changes nothing on the server.
+#
+# The app answers with one of three notices, read off the app 2026-10-19 to
+# 23 (AU-HFS-001, AU-CDD-001):
+#   "Data found!" / "There are records found for the selected area..." with
+#       Download and Proceed Without Downloading. Download ends on
+#       "Health facility data download completed" with Go To Home Screen
+#       (health facility, 2026-10-19 and 23).
+#   "No data found!" / "There are no new records found for the selected
+#       boundary" with Go Back, which leads on to home.
+#   "Failed to check data in server" with Proceed Without Downloading and
+#       Retry (CDD, 2026-10-21 and 23 - three times in a row each time).
+#
+# Env: HOME_SCREEN - the home screen's marker (a regex); ROLE - words the
+# report. From .env: BOUNDARY_DATA_CHOICE - what to do on "Data found!"
+# (Download, the default, or Proceed); BOUNDARY_DATA_RETRIES - how many times
+# to Retry a failed check before proceeding without the records (default 2).
+# Leaves output.bd (first answer, retries, outcome, detail).
+- runScript:
+    file: boundary-data.js
+    env:
+      ACTION: init
+      ROLE: ${ROLE}
+      CHOICE: ${BOUNDARY_DATA_CHOICE}
+      RETRIES: ${BOUNDARY_DATA_RETRIES}
+    label: "Read the boundary data choices"
+- runFlow:
+    when:
+      true: ${output.bd.failure}
+    file: ../fail.yaml
+    env:
+      MESSAGE: ${output.bd.failure}
+    label: "Boundary data choices are valid"
+
+# --- Test Case 1 - the app answers ---------------------------------------------------
+- extendedWaitUntil:
+    visible: "${HOME_SCREEN}|No data found!|Data found!|Failed to check data in server"
+    timeout: 300000
+    label: "Test Case 1 - home, or the boundary's records notice"
+- runFlow:
+    when:
+      visible: "Failed to check data in server"
+    commands:
+      - runScript:
+          file: boundary-data.js
+          env:
+            ACTION: seen
+            WHAT: failed-check
+- runFlow:
+    when:
+      visible: "No data found!"
+    commands:
+      - runScript:
+          file: boundary-data.js
+          env:
+            ACTION: seen
+            WHAT: no-data
+- runFlow:
+    when:
+      visible: "Data found!"
+    commands:
+      - runScript:
+          file: boundary-data.js
+          env:
+            ACTION: seen
+            WHAT: data-found
+- runScript:
+    file: boundary-data.js
+    env:
+      ACTION: seen
+      WHAT: home
+- takeScreenshot: artifacts/boundary-data-answer
+
+# --- Test Case 5 - "Failed to check data in server": Retry, then proceed --------------
+- runFlow:
+    when:
+      visible: "Failed to check data in server"
+    commands:
+      - assertVisible:
+          text: "Retry"
+          label: "Test Case 5 - the failure offers Retry"
+      - assertVisible:
+          text: "Proceed Without Downloading"
+          label: "Test Case 5 - the failure offers Proceed Without Downloading"
+- repeat:
+    times: 10
+    while:
+      true: ${!output.bd.stop && output.bd.tries < output.bd.maxRetries}
+    label: "Test Case 5 - Retry the check"
+    commands:
+      - runFlow:
+          when:
+            notVisible: "Failed to check data in server"
+          commands:
+            # Answered otherwise - stop retrying. A flag, not the counter:
+            # the report counts the retries actually made.
+            - evalScript: ${output.bd.stop = true}
+      - runFlow:
+          when:
+            visible: "Failed to check data in server"
+          commands:
+            - runScript:
+                file: boundary-data.js
+                env:
+                  ACTION: retry
+            - tapOn:
+                text: "Retry"
+                label: "Retry the check"
+            - extendedWaitUntil:
+                notVisible: "Failed to check data in server"
+                timeout: 5000
+                optional: true
+                label: "The check restarts"
+            - extendedWaitUntil:
+                visible: "${HOME_SCREEN}|No data found!|Data found!|Failed to check data in server"
+                timeout: 300000
+                label: "The check answers again"
+- runFlow:
+    when:
+      visible: "Failed to check data in server"
+    commands:
+      - takeScreenshot: artifacts/boundary-data-failed
+      - tapOn:
+          text: "Proceed Without Downloading"
+          label: "Test Case 5 - proceed without the boundary's records"
+      - runScript:
+          file: boundary-data.js
+          env:
+            ACTION: done
+            OUTCOME: failed-proceed
+            DETAIL: "${'Failed to check data in server after ' + output.bd.tries + ' Retr' + (output.bd.tries == 1 ? 'y' : 'ies') + ' - proceeded without downloading'}"
+
+# --- Test Case 6 - "No data found!": Go Back -----------------------------------------
+- runFlow:
+    when:
+      visible: "No data found!"
+    commands:
+      - assertVisible:
+          text: "Go Back"
+          label: "Test Case 6 - No data found! offers Go Back"
+      - takeScreenshot: artifacts/boundary-data-none
+      - tapOn:
+          text: "Go Back"
+          label: "Test Case 6 - Go Back"
+      - runScript:
+          file: boundary-data.js
+          env:
+            ACTION: done
+            OUTCOME: no-data
+            DETAIL: "No data found! - Go Back"
+
+# --- Test Cases 2-4 - "Data found!": Download, or proceed without ---------------------
+- runFlow:
+    when:
+      visible: "Data found!"
+    commands:
+      - assertVisible:
+          text: "Download"
+          below: "Data found!"
+          label: "Test Case 2 - Data found! offers Download"
+      - assertVisible:
+          text: "Proceed Without Downloading"
+          below: "Data found!"
+          label: "Test Case 2 - Data found! offers Proceed Without Downloading"
+      - takeScreenshot: artifacts/boundary-data-found
+      - runFlow:
+          when:
+            true: ${output.bd.choice == 'Download'}
+          commands:
+            - tapOn:
+                text: "Download"
+                below: "Data found!"
+                label: "Test Case 3 - Download the boundary's records"
+            - extendedWaitUntil:
+                visible: "Go To Home Screen"
+                timeout: 300000
+                label: "Test Case 3 - the download completes"
+            - setClipboard: "none"
+            - runFlow:
+                when:
+                  visible: ".*download completed.*"
+                commands:
+                  - copyTextFrom:
+                      text: ".*download completed.*"
+                      label: "Read the completion message"
+            - takeScreenshot: artifacts/boundary-data-downloaded
+            - runScript:
+                file: boundary-data.js
+                env:
+                  ACTION: done
+                  OUTCOME: data-found-download
+                  DETAIL: "${'Data found! - Download - ' + (maestro.copiedText == 'none' ? 'Go To Home Screen' : maestro.copiedText)}"
+            - tapOn:
+                text: "Go To Home Screen"
+                label: "Test Case 3 - Go To Home Screen"
+      - runFlow:
+          when:
+            true: ${output.bd.choice == 'Proceed'}
+          commands:
+            - tapOn:
+                text: "Proceed Without Downloading"
+                below: "Data found!"
+                label: "Test Case 4 - proceed without downloading"
+            - runScript:
+                file: boundary-data.js
+                env:
+                  ACTION: done
+                  OUTCOME: data-found-proceed
+                  DETAIL: "Data found! - Proceed Without Downloading"
+
+# --- Test Case 7 - home -------------------------------------------------------------
+- extendedWaitUntil:
+    visible: ${HOME_SCREEN}
+    timeout: 60000
+    label: "Test Case 7 - home screen loads after the boundary data check"
+- runFlow:
+    when:
+      true: ${output.bd.outcome == ''}
+    commands:
+      - runScript:
+          file: boundary-data.js
+          env:
+            ACTION: done
+            OUTCOME: home
+            DETAIL: "no notice - straight to home"
+- runScript:
+    file: boundary-data.js
+    env:
+      ACTION: report
+    label: "Log the boundary data result"
