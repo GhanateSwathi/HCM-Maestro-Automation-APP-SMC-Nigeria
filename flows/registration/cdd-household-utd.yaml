@@ -1,0 +1,77 @@
+appId: ${HCM_APP_ID}
+name: "Registration - CDD household of 20, four children, Unable to Deliver with each reason"
+tags:
+  - regression
+  - registration
+  - cdd
+  - mhbase
+  - consumes-data
+---
+# Prompt 13 (the specification's cdd/cdd_household_20_utd.yaml): the CDD
+# (AU-CDD-001) reads the stock balances, registers a household with consent
+# Yes and UTD_HOUSEHOLD_MEMBERS (20) members - the head and four children,
+# two per age band - submits it, then taps Unable To Deliver on each child's
+# card with a different reason (Test Cases 1-4), checks each card's status
+# and that the balances did not move, and syncs. No Dose, checklist or
+# delivery screen: Unable To Deliver sits on the card (2026-10-22).
+#
+# Needs HCM_CDD_USER_ID / HCM_CDD_PASSWORD, TEST_USER (the same user), the
+# UTD_* keys, PRODUCT_VARIANT_1 / _2, and optionally REGISTRATION_VILLAGE,
+# TEST_LATITUDE / TEST_LONGITUDE, HEAD_MOBILE. Names are generated:
+# AutoUTDHead<run time>, AutoUTDChild<n><run time>. A fresh sign-in has no
+# beneficiary IDs, so they are downloaded first (start-registration.yaml).
+# The specification assumes stock from Prompt 11; stock is device-local, so
+# a fresh session reads whatever its device holds - only that it does not
+# change is checked. IRREVERSIBLE: a household of five registered, four
+# unsuccessful deliveries recorded ("This action cannot be changed later") -
+# hence consumes-data.
+#
+# Read off the app as AU-CDD-001, 2026-10-22.
+- runFlow: ../../subflows/registration/utd-init.yaml
+- runFlow: ../../subflows/home/cdd.yaml
+- runFlow:
+    file: ../../subflows/registration/cdd-balances.yaml
+    env:
+      PHASE: start
+
+# --- Register the household: consent Yes, 20 members, the head, four children
+- runFlow: ../../subflows/registration/household-with-children.yaml
+# The specification calls 20 the maximum; the app's stepper goes to 30
+# (Prompt 11, REG-06).
+- runScript:
+    file: ../../subflows/registration/registration.js
+    env:
+      ACTION: step
+      STEP: "Household members"
+      RESULT: NOTE
+      DETAIL: "${output.reg.members + ' accepted; the app allows up to 30, so it is not the maximum'}"
+# --- Test Cases 1 to 4: Unable to Deliver, one reason per child ---------------------
+- evalScript: ${output.reg.ai = 0}
+- repeat:
+    times: ${output.reg.children.length}
+    label: "Unable to Deliver for each child"
+    commands:
+      - runFlow:
+          file: ../../subflows/registration/unable-to-deliver.yaml
+          env:
+            WHO: ${'child' + (output.reg.ai + 1)}
+      - evalScript: ${output.reg.ai = output.reg.ai + 1}
+
+# --- Final verification, sync, report -------------------------------------------------
+- runFlow: ../../subflows/registration/utd-final.yaml
+- runFlow:
+    file: ../../subflows/registration/sync-data.yaml
+    env:
+      STEP: "Sync Data"
+- runScript:
+    file: ../../subflows/registration/registration.js
+    env:
+      ACTION: utd-summary
+    label: "Log the execution report"
+- runFlow:
+    when:
+      true: ${output.reg.failure}
+    file: ../../subflows/fail.yaml
+    env:
+      MESSAGE: ${output.reg.failure}
+    label: "Every child recorded, stock unchanged"

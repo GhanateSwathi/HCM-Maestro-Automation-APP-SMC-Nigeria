@@ -1,0 +1,49 @@
+appId: ${HCM_APP_ID}
+name: utd-init
+---
+# Reads the Unable to Deliver household's test data (Prompt 13, the UTD_*
+# keys - see .env.example) before anything touches the device, and fails at
+# once if any is missing or out of range. Generates the names:
+# AutoUTDHead<stamp> (also the search text), AutoUTDChild<n><stamp>.
+- runScript:
+    file: registration.js
+    env:
+      ACTION: init-utd
+      TEST_USER: ${TEST_USER}
+      VILLAGE: ${REGISTRATION_VILLAGE}
+      LATITUDE: ${TEST_LATITUDE}
+      LONGITUDE: ${TEST_LONGITUDE}
+      MEMBERS: ${UTD_HOUSEHOLD_MEMBERS}
+      HEAD_YEARS: ${UTD_HEAD_AGE_YEARS}
+      HEAD_MONTHS: ${UTD_HEAD_AGE_MONTHS}
+      HEAD_GENDER: ${UTD_HEAD_GENDER}
+      MOBILE: ${HEAD_MOBILE}
+      CHILD_1_MONTHS: ${UTD_CHILD_1_AGE_MONTHS}
+      CHILD_2_MONTHS: ${UTD_CHILD_2_AGE_MONTHS}
+      CHILD_3_MONTHS: ${UTD_CHILD_3_AGE_MONTHS}
+      CHILD_4_MONTHS: ${UTD_CHILD_4_AGE_MONTHS}
+      CHILD_GENDER: ${UTD_CHILD_GENDER}
+      REASON_1: ${UTD_REASON_1}
+      REASON_2: ${UTD_REASON_2}
+      REASON_3: ${UTD_REASON_3}
+      REASON_4: ${UTD_REASON_4}
+      VARIANT_1: ${PRODUCT_VARIANT_1}
+      VARIANT_2: ${PRODUCT_VARIANT_2}
+    label: "Read the Prompt 13 test data"
+- runFlow:
+    when:
+      true: ${output.reg.failure}
+    file: ../fail.yaml
+    env:
+      MESSAGE: ${output.reg.failure}
+    label: "Prompt 13 test data is set in .env"
+# TEST_USER is reported as the account under test, so it must be the one
+# signing in. Only TEST_USER is named in the message.
+- evalScript: "${output.userCheck = (String(TEST_USER).trim().toLowerCase() == String(HCM_CDD_USER_ID).trim().toLowerCase()) ? '' : 'TEST_USER ' + TEST_USER + ' is not the CDD user .env signs in with (HCM_CDD_USER_ID).'}"
+- runFlow:
+    when:
+      true: ${output.userCheck}
+    file: ../fail.yaml
+    env:
+      MESSAGE: ${output.userCheck}
+    label: "TEST_USER is the account signing in"

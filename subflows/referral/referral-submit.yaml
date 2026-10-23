@@ -1,0 +1,96 @@
+appId: ${HCM_APP_ID}
+name: referral-submit
+---
+# Create New Referral, step 4 - Submit the checklist and the success screen.
+# IRREVERSIBLE: creates the referral record.
+#
+# Seen 2026-10-21: no popup; Submit goes to "Data recorded successfully" /
+# "The data has been recorded successfully." with Go Back, under the village
+# chip, and shows no referral id. Confirm is still tapped if a popup ever
+# offers it; the texts on the screen are logged and a success message and a
+# referral id kept when there are any. No Go Back within 30 s fails the
+# record - after Submit, so the record may exist.
+- tapOn:
+    text: "Submit"
+    label: "Submit the referral (creates it)"
+- waitForAnimationToEnd:
+    timeout: 3000
+- runFlow:
+    when:
+      visible: "Confirm"
+    commands:
+      - takeScreenshot: artifacts/referral-${output.ref.slug}-popup
+      - tapOn:
+          text: "Confirm"
+          label: "Confirm"
+- extendedWaitUntil:
+    visible: "Go Back"
+    timeout: 30000
+    optional: true
+    label: "The success screen"
+- runFlow:
+    when:
+      notVisible: "Go Back"
+    commands:
+      - takeScreenshot: artifacts/referral-${output.ref.slug}-no-success
+      - runScript:
+          file: referral.js
+          env:
+            ACTION: fail
+            WHY: "${'No success screen (Go Back) within 30 s after Submit for ' + output.ref.reason + '.'}"
+- runFlow:
+    when:
+      visible: "Go Back"
+    commands:
+      - takeScreenshot: artifacts/referral-${output.ref.slug}-success
+      # Everything the screen says, for the log - between the village chip at
+      # its top and Go Back, or the status bar's icons come too. Seen
+      # 2026-10-21: "Data recorded successfully" / "The data has been
+      # recorded successfully." and no referral id.
+      - evalScript: ${output.ref.i = 0}
+      - repeat:
+          times: 6
+          while:
+            visible:
+              text: "(?!Go Back$).+"
+              below: ${output.referral.villageSelector}
+              above: "Go Back"
+              index: ${output.ref.i}
+          commands:
+            - copyTextFrom:
+                text: "(?!Go Back$).+"
+                below: ${output.referral.villageSelector}
+                above: "Go Back"
+                index: ${output.ref.i}
+                label: "Read the success screen"
+            - evalScript: "${console.log('Referral ' + output.ref.reason + ' success screen - ' + maestro.copiedText)}"
+            - evalScript: ${output.ref.i = output.ref.i + 1}
+      - runFlow:
+          when:
+            visible: ".*[Ss]uccess.*"
+          commands:
+            - copyTextFrom:
+                text: ".*[Ss]uccess.*"
+                label: "Read the success message"
+            - runScript:
+                file: referral.js
+                env:
+                  ACTION: success
+      - runFlow:
+          when:
+            visible: ".*\\b([Rr]eferral|[Bb]eneficiary)\\s*(ID|Id|id)\\b.*"
+          commands:
+            - copyTextFrom:
+                text: ".*\\b([Rr]eferral|[Bb]eneficiary)\\s*(ID|Id|id)\\b.*"
+                label: "Read the referral id"
+            - runScript:
+                file: referral.js
+                env:
+                  ACTION: refid
+      - tapOn:
+          text: "Go Back"
+          label: "Go Back"
+      - extendedWaitUntil:
+          visible: "Create New Referral"
+          timeout: 15000
+          label: "Back on the referral screen"

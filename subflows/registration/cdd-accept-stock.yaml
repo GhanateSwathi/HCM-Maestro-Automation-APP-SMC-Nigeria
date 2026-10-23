@@ -1,0 +1,131 @@
+appId: ${HCM_APP_ID}
+name: cdd-accept-stock
+---
+# Step 11 - from the CDD's home screen: both balances are 0, the health
+# facility's dispatch is listed (Prompt 6), its quantities are
+# EXPECTED_CDD_RECEIVED_SPAQ1 / _SPAQ2, then PRODUCT_VARIANT_1 and _2 are
+# accepted and the balances rise by them. Ends on home with the balances in
+# output.reg.balances.after (CDD_BALANCE_SPAQ1 / _SPAQ2).
+# IRREVERSIBLE: accepts one incoming transaction per variant.
+#
+# The acceptance is accept-receipt/'s, shared with the state and health
+# facility users. Read off the app as AU-CDD-001, 2026-10-21: after a fresh
+# sign-in Incoming Transactions already listed both of Prompt 6's dispatches
+# (Download Stock Data answered "No Data Found"): "MRN CDC9-2D30-F38E",
+# "SPAQ 2: 480" and "MRN 0572-01DA-C66C", "SPAQ 1: 480", each from
+# FAC_F-2026-10-15-137947, "Dispatched". Download Stock Data is still run,
+# for a device that has not fetched them.
+- runFlow: ../stock/download-stock-data.yaml
+
+# --- Balances are 0 before the receipt ---------------------------------------
+- runFlow:
+    file: ../stock/read-stock-balance.yaml
+    env:
+      VARIANT: ${output.reg.variant1}
+- runScript:
+    file: registration.js
+    env:
+      ACTION: balance
+      PHASE: before
+      INDEX: "0"
+- runFlow:
+    file: ../stock/read-stock-balance.yaml
+    env:
+      VARIANT: ${output.reg.variant2}
+- runScript:
+    file: registration.js
+    env:
+      ACTION: balance
+      PHASE: before
+      INDEX: "1"
+- takeScreenshot: artifacts/registration-cdd-balance-before
+- runScript:
+    file: registration.js
+    env:
+      ACTION: opening
+- runFlow:
+    when:
+      true: ${output.reg.stockFailure}
+    file: ../fail.yaml
+    env:
+      MESSAGE: ${output.reg.stockFailure}
+    label: "The CDD's balances are 0 before the receipt"
+
+# --- The dispatch is listed --------------------------------------------------
+- runFlow: ../stock/accept-receipt/init-variants.yaml
+- evalScript: ${output.variants.expected = [output.reg.received1, output.reg.received2]}
+# The shared messages name the cases; set one by one - braces inside ${}
+# would end the expression early.
+- evalScript: ${output.variants.cases.blocked = 'BLOCKED - Steps 11 to 15'}
+- evalScript: ${output.variants.cases.accept = 'Step 11'}
+- runFlow: ../stock/open-incoming-transactions.yaml
+- runFlow:
+    when:
+      true: ${output.incoming == 'absent'}
+    commands:
+      - takeScreenshot: artifacts/registration-cdd-no-incoming
+      - runFlow:
+          file: ../fail.yaml
+          env:
+            MESSAGE: "No incoming stock for CDD; Prompt 6 dispatch not received. Steps 12 to 15 BLOCKED."
+          label: "Incoming stock is listed for the CDD"
+- runFlow: ../stock/accept-receipt/check-variants.yaml
+- takeScreenshot: artifacts/registration-cdd-incoming
+
+# --- Each variant's Stock Receipt Details, before anything is accepted -------
+# open-transaction.yaml fails on a product, MRN, sender or quantity that does
+# not match; the MRN must also be one of CDD_INCOMING_MRNS when that is set.
+- runFlow:
+    file: cdd-check-transaction.yaml
+    env:
+      INDEX: "0"
+- runFlow:
+    file: cdd-check-transaction.yaml
+    env:
+      INDEX: "1"
+
+# --- Accept PRODUCT_VARIANT_1, then _2 (IRREVERSIBLE) -------------------------
+- runFlow: ../stock/accept-receipt/accept-both.yaml
+- runFlow: ../stock/back-to-home.yaml
+
+# --- Balances rose by what was received --------------------------------------
+# The balance is the device's own figure, updated as each Confirm lands.
+- runFlow:
+    file: ../stock/read-stock-balance.yaml
+    env:
+      VARIANT: ${output.reg.variant1}
+- runScript:
+    file: registration.js
+    env:
+      ACTION: balance
+      PHASE: after
+      INDEX: "0"
+- runFlow:
+    file: ../stock/read-stock-balance.yaml
+    env:
+      VARIANT: ${output.reg.variant2}
+- runScript:
+    file: registration.js
+    env:
+      ACTION: balance
+      PHASE: after
+      INDEX: "1"
+- takeScreenshot: artifacts/registration-cdd-balance-after
+- runScript:
+    file: registration.js
+    env:
+      ACTION: received
+- runFlow:
+    when:
+      true: ${output.reg.stockFailure}
+    file: ../fail.yaml
+    env:
+      MESSAGE: ${output.reg.stockFailure}
+    label: "The CDD's balances rose by the quantities received"
+- runScript:
+    file: registration.js
+    env:
+      ACTION: step
+      STEP: "Step 11 - CDD accepts the incoming stock"
+      RESULT: PASSED
+      DETAIL: "${'accepted ' + output.variants.accepted.join(' then ') + ' (' + output.variants.acceptedMrns.join(', ') + '); balance ' + output.reg.variant1 + ' ' + output.reg.balances.before[0] + ' -> ' + output.reg.balances.after[0] + ', ' + output.reg.variant2 + ' ' + output.reg.balances.before[1] + ' -> ' + output.reg.balances.after[1]}"

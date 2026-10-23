@@ -1,0 +1,29 @@
+appId: ${HCM_APP_ID}
+name: "Login - empty form is rejected"
+tags:
+  - regression
+  - login
+---
+# Submitting with both fields blank must be stopped on the device. Validation
+# is client-side, so this types nothing and never reaches the backend.
+- runFlow: ../../subflows/launch-app.yaml
+
+# "Login" also matches the screen heading, so anchor on the one below the form.
+- tapOn:
+    text: "Login"
+    below: "Password.*"
+    label: "Submit the empty form"
+
+- assertVisible:
+    text: "User ID is required"
+    label: "User ID error is shown"
+- assertVisible:
+    text: "Password is required"
+    label: "Password error is shown"
+
+# Still on the login screen - a rejected submit must not start sign-in.
+- assertVisible:
+    text: "Forgot Password.*"
+    label: "Still on the login screen"
+
+- takeScreenshot: artifacts/login-validation

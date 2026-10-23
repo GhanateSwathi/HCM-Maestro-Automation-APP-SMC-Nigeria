@@ -1,0 +1,31 @@
+appId: ${HCM_APP_ID}
+name: "Registration - CDD with no beneficiary IDs meets the Low Beneficiary IDs popup"
+tags:
+  - regression
+  - registration
+  - cdd
+  - mhbase
+---
+# Prompt 11 Test Case 1 on its own (the specification's
+# cdd/cdd_low_beneficiary_id.yaml): signed in fresh, the CDD searches a
+# village and taps Register Beneficiary; with no beneficiary IDs on the
+# device the "Low Beneficiary IDs" popup offers Download. Downloads nothing
+# and registers nothing - the flow ends on the popup.
+#
+# Needs HCM_CDD_USER_ID / HCM_CDD_PASSWORD, TEST_USER (the same user) and the
+# Prompt 11 block of .env. Read off the app as AU-CDD-001, 2026-10-21.
+- runFlow: ../../subflows/registration/init.yaml
+- runFlow: ../../subflows/home/cdd.yaml
+- runFlow: ../../subflows/registration/low-id-popup.yaml
+- runScript:
+    file: ../../subflows/registration/registration.js
+    env:
+      ACTION: summary
+    label: "Log the result"
+- runFlow:
+    when:
+      true: ${output.reg.failure}
+    file: ../../subflows/fail.yaml
+    env:
+      MESSAGE: ${output.reg.failure}
+    label: "Test Case 1 passed"

@@ -1,0 +1,220 @@
+appId: ${HCM_APP_ID}
+name: open-stock-form
+---
+# From the home screen to the quantity field of the Record Stock Issued form,
+# for a dispatch (TRANSACTION_TYPE "Issue") or a return ("Return"). Expects
+# stock-form.js init to have run (product, target facility, failure text).
+# Read off the app 2026-10-19:
+#   Manage Stock -> Record Stock Issued
+#   Select Transaction Type: "Transaction type" = Issue | Return -> Next
+#   Warehouse Details: Date of receipt and Settlement area prefilled,
+#     "Facility To *" -> Next. Issue offered the health facility
+#     (Fac_f-2026-10-15-137947); Return offered the National warehouse
+#     (Fac_f-2026-10-15-137945, the one that sent the state its stock).
+#     As the health facility user, Issue offered "Delivery team" only, which
+#     adds a "Team Code" QR scan for the CDD (scan-team-code.yaml, when
+#     stock-form.js init was given TEAM_CODE).
+#   Stock Details: "Select product *" (multi-select, like the boundary
+#     fields), "Received from - facility *" prefilled, Transport Type and
+#     Vehicle number optional -> Next
+#   Product Details: Waybill number, Batch number, Scan Resource,
+#     "Quantity sent *" (Issue) or "Quantity returned *" (Return) -> Submit
+# Ends on Product Details. Searchable fields raise the keyboard; fields are
+# fenced between their label and the next row so its keys never match.
+
+# --- Manage Stock -> Record Stock Issued -------------------------------------
+- runFlow:
+    when:
+      notVisible: "Manage Stock"
+    commands:
+      - takeScreenshot: artifacts/stock-form-manage-stock-card-missing
+      - runFlow:
+          file: ../fail.yaml
+          env:
+            MESSAGE: "${'Manage Stock card not displayed on home screen for ' + output.form.role + '.'}"
+          label: "Manage Stock card is displayed"
+- tapOn:
+    text: "Manage Stock"
+    label: "Open Manage Stock"
+- extendedWaitUntil:
+    visible: "Record Stock Issued"
+    timeout: 15000
+    label: "Manage Stock lists Record Stock Issued"
+- tapOn:
+    text: "Record Stock Issued"
+    label: "Open Record Stock Issued"
+
+# --- Transaction type --------------------------------------------------------
+- extendedWaitUntil:
+    visible: "Select Transaction Type"
+    timeout: 15000
+    label: "Select Transaction Type opens"
+- tapOn:
+    below: "Transaction type"
+    above: "Next"
+    label: "Open Transaction type"
+- extendedWaitUntil:
+    visible:
+      text: ${TRANSACTION_TYPE}
+      below: "Transaction type"
+    timeout: 10000
+    label: "Transaction type offers the type"
+- tapOn:
+    text: ${TRANSACTION_TYPE}
+    below: "Transaction type"
+    label: "Choose the transaction type"
+- tapOn:
+    text: "Next"
+    label: "Next"
+
+# --- Warehouse Details: Facility To ------------------------------------------
+- extendedWaitUntil:
+    visible: "Warehouse Details"
+    timeout: 15000
+    label: "Warehouse Details opens"
+- tapOn:
+    below: "Facility To.*"
+    above: "Next"
+    label: "Open Facility To"
+# The options list under the field. "version 2" - the form's version label -
+# sits there too, so it is excluded.
+- extendedWaitUntil:
+    visible:
+      text: "(?!version \\d).+"
+      below: "Facility To.*"
+      above: "Next"
+    timeout: 10000
+    optional: true
+    label: "Facility To lists a facility"
+- runFlow:
+    when:
+      notVisible:
+        text: "(?!version \\d).+"
+        below: "Facility To.*"
+        above: "Next"
+    commands:
+      - takeScreenshot: artifacts/stock-form-no-facility
+      - runFlow:
+          file: ../fail.yaml
+          env:
+            MESSAGE: ${output.form.missing}
+          label: "Facility To lists a facility"
+# The configured facility when set (it must be among the options on screen),
+# else the first option, whatever it is called. Relative matches rank by
+# distance, so index 0 is the row nearest the field - the top of the list.
+- runFlow:
+    when:
+      true: ${output.form.target != ''}
+    commands:
+      - runFlow:
+          when:
+            notVisible:
+              text: ${output.form.targetPattern}
+              below: "Facility To.*"
+              above: "Next"
+          commands:
+            - takeScreenshot: artifacts/stock-form-target-facility-missing
+            - runFlow:
+                file: ../fail.yaml
+                env:
+                  MESSAGE: ${output.form.missing}
+                label: "The configured facility is offered"
+      - copyTextFrom:
+          text: ${output.form.targetPattern}
+          below: "Facility To.*"
+          above: "Next"
+          label: "Read the configured facility"
+- runFlow:
+    when:
+      true: ${output.form.target == ''}
+    commands:
+      - copyTextFrom:
+          text: "(?!version \\d).+"
+          below: "Facility To.*"
+          above: "Next"
+          index: 0
+          label: "Read the first facility"
+- runScript:
+    file: stock-form.js
+    env:
+      ACTION: facility
+    label: "Record the facility"
+- tapOn:
+    text: ${output.form.facilityPattern}
+    below: "Facility To.*"
+    above: "Next"
+    label: "Choose the facility"
+- assertVisible:
+    text: ${output.form.facilityPattern}
+    below: "Facility To.*"
+    above: "Next"
+    label: "Facility To shows the chosen facility"
+# A dispatch to a CDD picks "Delivery team" and names the CDD by scanning
+# their QR code.
+- runFlow:
+    when:
+      true: ${output.form.teamCode != ''}
+    file: scan-team-code.yaml
+- tapOn:
+    text: "Next"
+    label: "Next"
+
+# --- Stock Details: the product ----------------------------------------------
+- extendedWaitUntil:
+    visible: "Stock Details"
+    timeout: 15000
+    label: "Stock Details opens"
+- tapOn:
+    below: "Select product.*"
+    above: "Select product variants"
+    label: "Open Select product"
+- extendedWaitUntil:
+    visible:
+      text: ${output.form.product}
+      below: "Select product.*"
+    timeout: 10000
+    optional: true
+    label: "Select product offers the variant"
+- runFlow:
+    when:
+      notVisible:
+        text: ${output.form.product}
+        below: "Select product.*"
+    commands:
+      - takeScreenshot: artifacts/stock-form-variant-missing
+      - runFlow:
+          file: ../fail.yaml
+          env:
+            MESSAGE: "${'Select product does not offer ' + output.form.variant + '.'}"
+          label: "Select product offers the variant"
+# A ticked product shows twice while the menu is open - its row and its chip -
+# and a second tap would untick it.
+- runFlow:
+    when:
+      notVisible:
+        text: ${output.form.product}
+        index: 1
+    commands:
+      - tapOn:
+          text: ${output.form.product}
+          below: "Select product.*"
+          label: "Tick the product variant"
+- tapOn:
+    text: "\\d+ Selected"
+    label: "Collapse the product menu"
+- assertVisible:
+    text: "1 Selected"
+    label: "One product selected"
+- assertVisible:
+    text: ${output.form.product}
+    below: "Select product.*"
+    label: "The selected product is the variant"
+- tapOn:
+    text: "Next"
+    label: "Next"
+
+# --- Product Details ---------------------------------------------------------
+- extendedWaitUntil:
+    visible: "Quantity (sent|returned).*"
+    timeout: 15000
+    label: "Product Details opens with the quantity field"

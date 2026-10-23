@@ -1,0 +1,26 @@
+appId: ${HCM_APP_ID}
+name: first-dose
+---
+# Steps 9 and 10 - on Household Overview, before the CDD has stock: child 1's
+# Dose -> the eligibility checklist, every answer No -> Ready to submit ->
+# Submit -> Record Cycle Dose -> Insufficient Stock, nothing recorded -> home.
+- runFlow:
+    file: start-dose.yaml
+    env:
+      WHO: child1
+- runFlow:
+    when:
+      notVisible: "Eligibility Assessment"
+    commands:
+      - takeScreenshot: artifacts/registration-no-checklist
+      - runFlow:
+          file: ../fail.yaml
+          env:
+            MESSAGE: "Dose for child 1 did not open the eligibility checklist."
+          label: "Dose opens the eligibility checklist"
+- runFlow:
+    file: eligibility-checklist.yaml
+    env:
+      ANSWER: "No"
+      STEP: "Step 9 - eligibility checklist (child 1)"
+- runFlow: insufficient-stock.yaml

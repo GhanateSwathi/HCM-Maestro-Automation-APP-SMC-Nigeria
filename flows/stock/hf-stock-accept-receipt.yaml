@@ -1,0 +1,54 @@
+appId: ${HCM_APP_ID}
+name: "Stock - health facility stock user accepts the state's dispatch"
+tags:
+  - regression
+  - stock
+  - hf-stock
+  - mhbase
+  - consumes-data
+---
+# Prompt 5 (the specification's hf_main.yaml): the health facility user signs
+# in, starts at a zero balance, and accepts what the state user dispatched in
+# Prompt 3 - SPAQ1, then SPAQ2 - all in one session. Test Cases 1-6, in order;
+# any failure stops the cases after it.
+#
+# Needs HCM_HF_STOCK_USER_ID / HCM_HF_STOCK_PASSWORD (AU-HFS-001 on the
+# mhbase tenant), TEST_USER, PRODUCT_VARIANT_1 / _2, EXPECTED_INITIAL_BALANCE
+# and DISPATCHED_QTY_SPAQ1 / _SPAQ2 (from the Prompt 3 report) in .env, and an
+# undownloaded dispatch from the state to this facility for each variant.
+# Accepting consumes both dispatches; hence the consumes-data tag.
+#
+# A blocked case fails with a reason starting "BLOCKED -" and never reaches
+# Accept Stock. Read off the app as AU-HFS-001, 2026-10-19.
+
+# Test data first, so a gap in .env fails before the device is touched.
+- runFlow: ../../subflows/stock/hf-receipt/init.yaml
+
+# Sign in, choose the facility, home; the Manage Stock card is there.
+- runFlow: ../../subflows/home/hf-stock.yaml
+- evalScript: ${output.hf.facility = output.dropdown.options[0]}
+
+# Fetch the stock records - Incoming Transactions stays empty without this.
+# Records come down once: a later run (which starts by wiping the app) finds
+# "No Data Found" for anything fetched here.
+- runFlow: ../../subflows/stock/download-stock-data.yaml
+
+# Test Case 1 - initial balance is EXPECTED_INITIAL_BALANCE.
+- runFlow: ../../subflows/stock/hf-receipt/tc1-initial-balance.yaml
+# Test Case 2 - Record Stock Receipt lists the dispatch, with an MRN.
+- runFlow: ../../subflows/stock/hf-receipt/tc2-incoming.yaml
+# Test Case 3 - each variant's Stock Receipt Details: MRN, quantity dispatched.
+- runFlow: ../../subflows/stock/hf-receipt/tc3-details.yaml
+# Test Case 4 - Accept Confirmation, Cancel: nothing accepted.
+- runFlow: ../../subflows/stock/hf-receipt/tc4-cancel.yaml
+# Test Case 5 - accept SPAQ1, then SPAQ2. IRREVERSIBLE.
+- runFlow: ../../subflows/stock/accept-receipt/accept-both.yaml
+- evalScript: ${console.log('Test Case 5 PASSED - accepted ' + output.variants.accepted.join(' then ') + ' (' + output.variants.acceptedMrns.join(', ') + ')')}
+# Test Case 6 - balances are initial + received; the MRNs left the list.
+- runFlow: ../../subflows/stock/hf-receipt/tc6-final-balance.yaml
+
+- runScript:
+    file: ../../subflows/stock/hf-receipt/hf-receipt.js
+    env:
+      ACTION: summary
+    label: "Log the execution report"

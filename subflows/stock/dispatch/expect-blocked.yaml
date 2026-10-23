@@ -1,0 +1,94 @@
+appId: ${HCM_APP_ID}
+name: expect-blocked
+---
+# Shared by Case 1 and Case 2: with an invalid QUANTITY entered, Submit must
+# not dispatch. Called with:
+#   CASE     "1" or "2", for the messages
+#   QUANTITY the value under test
+#
+# Read off the app 2026-10-19: an invalid quantity raises a message under the
+# field as soon as it is typed, and Submit stays enabled but does nothing -
+#   0                     "Issued quantity should be more than 1"
+#   above the balance (0) "No stock available"
+# The message is read generically - the text under the field that is not
+# itself a number - so a reworded message still passes, and is logged.
+# QA to confirm whether those texts, or a disabled Submit, are the intended
+# behaviour.
+#
+# Never a dispatch: if Submit raises a popup after all, it is cancelled and
+# the case fails.
+- runFlow:
+    file: ../enter-quantity.yaml
+    env:
+      QUANTITY: ${QUANTITY}
+- extendedWaitUntil:
+    visible:
+      text: "(?!\\d+$).+"
+      below: "Quantity sent.*"
+      above: "Submit"
+    timeout: 5000
+    optional: true
+    label: "A validation message appears under the quantity"
+- runFlow:
+    when:
+      notVisible:
+        text: "(?!\\d+$).+"
+        below: "Quantity sent.*"
+        above: "Submit"
+    commands:
+      - takeScreenshot: artifacts/dispatch-case${CASE}-no-validation
+      - runFlow:
+          file: ../../fail.yaml
+          env:
+            MESSAGE: "${'Case ' + CASE + ' - quantity ' + QUANTITY + ' raised no validation message.'}"
+          label: "The invalid quantity is flagged"
+- copyTextFrom:
+    text: "(?!\\d+$).+"
+    below: "Quantity sent.*"
+    above: "Submit"
+    label: "Read the validation message"
+- runScript:
+    file: dispatch.js
+    env:
+      ACTION: error
+      CASE: ${CASE}
+    label: "Record the validation message"
+
+- tapOn:
+    text: "Submit"
+    label: "Try to submit anyway"
+- waitForAnimationToEnd:
+    timeout: 3000
+- runFlow:
+    when:
+      visible: "Cancel|Confirm"
+    commands:
+      - takeScreenshot: artifacts/dispatch-case${CASE}-popup
+      - runFlow:
+          when:
+            visible: "Cancel"
+          commands:
+            - tapOn:
+                text: "Cancel"
+                label: "Cancel the popup - never confirm an invalid dispatch"
+      - runFlow:
+          file: ../../fail.yaml
+          env:
+            MESSAGE: "${'Case ' + CASE + ' - quantity ' + QUANTITY + ' got past Submit to a confirmation popup; it was cancelled.'}"
+          label: "Submit raises no popup"
+- assertVisible:
+    text: "Quantity sent.*"
+    label: "Still on Product Details - nothing was dispatched"
+- assertVisible:
+    text: "(?!\\d+$).+"
+    below: "Quantity sent.*"
+    above: "Submit"
+    label: "The validation message is still shown"
+- takeScreenshot: artifacts/dispatch-case${CASE}-blocked
+
+# Leave the field empty for the next case.
+- tapOn:
+    below: "Quantity sent.*"
+    above: "Submit"
+    label: "Focus Quantity sent"
+- eraseText

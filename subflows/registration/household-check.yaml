@@ -1,0 +1,92 @@
+appId: ${HCM_APP_ID}
+name: household-check
+---
+# On Household Overview: the members registered so far are listed - the head
+# of household by its "Head of household" tag and "<GENDER> | <age>", each of
+# the first CHILDREN children in output.reg.children by its Token ID and age.
+# STEP names the report line.
+#
+# Read off the app as AU-CDD-001, 2026-10-21: the overview lists "Head of the
+# household", "Settlement Area", "Member Count", "Caregiver consent", then a
+# card per member - its beneficiary ID, "Edit Individual", the name, "FEMALE
+# | 30y 0m", and a tag ("Head of household") or the dose status ("Not
+# Administered" with Dose, "Administered success" with Redose). Every name
+# reads "--", here and in search results, though Edit Individual and
+# Beneficiary Details show it: logged as a deviation once, the members are
+# matched by ID and age instead.
+# The overview may come back scrolled, its title off screen; a member card's
+# "Edit Individual" counts as being there.
+- extendedWaitUntil:
+    visible: "Household Overview|Edit Individual"
+    timeout: 15000
+    label: "Household Overview opens"
+- scrollUntilVisible:
+    element: "Household Overview"
+    direction: UP
+    timeout: 10000
+    optional: true
+    label: "From the top"
+- assertVisible:
+    text: "Head of household"
+    label: "The head of household is listed"
+- assertVisible:
+    text: ${output.reg.head.card}
+    above: "Head of household"
+    label: "The head's gender and age"
+- runFlow:
+    when:
+      true: ${!output.reg.namesDeviation}
+    commands:
+      - runFlow:
+          when:
+            visible:
+              text: "--"
+              rightOf: "Head of the household"
+              below: "Household Overview"
+              above: "Settlement Area"
+          commands:
+            - evalScript: ${output.reg.namesDeviation = true}
+            - takeScreenshot: artifacts/registration-names-not-shown
+            - runScript:
+                file: registration.js
+                env:
+                  ACTION: step
+                  STEP: "Household Overview names"
+                  RESULT: DEVIATION
+                  DETAIL: "Household Overview (and the search results) show -- for every member's name; Edit Individual and Beneficiary Details show the names typed"
+- evalScript: ${output.reg.ci = 0}
+- evalScript: ${output.reg.listed = output.reg.head.label + ' ' + output.reg.head.gender + ' ' + output.reg.head.age}
+- runFlow:
+    when:
+      true: ${Number(CHILDREN) > 0}
+    commands:
+      - repeat:
+          times: ${CHILDREN}
+          label: "Each child is listed"
+          commands:
+            # Scrolled to the age line under the ID, centred: an ID at the
+            # screen's foot leaves the line below it off screen (child 5 of
+            # 6, 2026-10-22).
+            - scrollUntilVisible:
+                element:
+                  text: ${output.reg.children[output.reg.ci].card}
+                  below: ${output.reg.children[output.reg.ci].id}
+                direction: DOWN
+                centerElement: true
+                timeout: 15000
+                optional: true
+                label: "Find the child's card"
+            - assertVisible:
+                text: ${output.reg.children[output.reg.ci].card}
+                below: ${output.reg.children[output.reg.ci].id}
+                label: "The child's gender and age"
+            - evalScript: "${output.reg.listed = output.reg.listed + '; ' + output.reg.children[output.reg.ci].label + ' ' + output.reg.children[output.reg.ci].id + ' ' + output.reg.children[output.reg.ci].age}"
+            - evalScript: ${output.reg.ci = output.reg.ci + 1}
+- takeScreenshot: artifacts/registration-household-${CHILDREN}
+- runScript:
+    file: registration.js
+    env:
+      ACTION: step
+      STEP: ${STEP}
+      RESULT: PASSED
+      DETAIL: "${output.reg.listed + ' listed'}"

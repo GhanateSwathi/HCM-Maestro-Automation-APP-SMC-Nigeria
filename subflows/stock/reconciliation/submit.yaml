@@ -1,0 +1,48 @@
+appId: ${HCM_APP_ID}
+name: recon-submit
+---
+# On the reconciliation form: Submit, and record in output.recon.submitted
+# whether it went through, and in output.recon.popup whether a confirmation
+# popup came up. CONFIRM "true" confirms such a popup; "false" cancels it -
+# a submission without a comment is never confirmed. WAIT is how long, in
+# ms, to wait for the success screen.
+#
+# Seen 2026-10-19: no popup; Submit goes straight to "Stock reconciliation
+# submitted successfully" / "Your stock reconciliation has been recorded"
+# with "Back To Home" - also for a differing count with no comment.
+- evalScript: ${output.recon.submitted = false, output.recon.popup = false}
+- tapOn:
+    text: "Submit"
+    label: "Submit the reconciliation"
+- waitForAnimationToEnd:
+    timeout: 3000
+- runFlow:
+    when:
+      visible: "Confirm"
+    commands:
+      - evalScript: ${output.recon.popup = true}
+      - takeScreenshot: artifacts/recon-${output.rv.variant}-popup
+      - runFlow:
+          when:
+            true: ${CONFIRM == 'true'}
+          commands:
+            - tapOn:
+                text: "Confirm"
+                label: "Confirm the reconciliation"
+      - runFlow:
+          when:
+            true: ${CONFIRM != 'true'}
+          commands:
+            - tapOn:
+                text: "Cancel"
+                label: "Cancel - never confirm one without a comment"
+- extendedWaitUntil:
+    visible: "Stock reconciliation submitted successfully"
+    timeout: ${WAIT}
+    optional: true
+    label: "Wait for the success screen"
+- runFlow:
+    when:
+      visible: "Stock reconciliation submitted successfully"
+    commands:
+      - evalScript: ${output.recon.submitted = true}

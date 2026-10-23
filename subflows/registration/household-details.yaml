@@ -1,0 +1,69 @@
+appId: ${HCM_APP_ID}
+name: household-details
+---
+# Step 5 - on Household Details: the member count's bounds (1 to 30) when
+# BOUNDS is not "false" (household-bounds.yaml), then HOUSEHOLD_MEMBERS and
+# Save Household Details. Ends on Beneficiary Details.
+#
+# Read off the app as AU-CDD-001, 2026-10-21: "Date of registration *"
+# (today, prefilled) and "Total household members *", a stepper - "-", the
+# count (starts at 1), "+". The count takes no typing (it focuses, no
+# keyboard, input ignored), so "enter 0 / 31" is pressing "-" / "+" past the
+# limit: "-" goes down to 0, and Save Household Details then moves on to
+# Beneficiary Details - 0 is not refused; "+" stops at 30. Back from
+# Beneficiary Details returns here with the count kept.
+- extendedWaitUntil:
+    visible: "Total household members \\*"
+    timeout: 15000
+    label: "Household Details opens"
+
+- runFlow:
+    when:
+      true: ${typeof BOUNDS === 'undefined' || BOUNDS != 'false'}
+    file: household-bounds.yaml
+
+# --- HOUSEHOLD_MEMBERS --------------------------------------------------------
+- runFlow:
+    file: household-count.yaml
+- runFlow:
+    when:
+      true: ${Number(output.reg.count) > output.reg.members}
+    commands:
+      - repeat:
+          times: ${Number(output.reg.count) - output.reg.members}
+          commands:
+            - tapOn:
+                text: "-"
+                below: "Total household members \\*"
+                label: "Press - down to HOUSEHOLD_MEMBERS"
+- runFlow:
+    when:
+      true: ${Number(output.reg.count) < output.reg.members}
+    commands:
+      - repeat:
+          times: ${output.reg.members - Number(output.reg.count)}
+          commands:
+            - tapOn:
+                text: "\\+"
+                below: "Total household members \\*"
+                label: "Press + up to HOUSEHOLD_MEMBERS"
+- assertVisible:
+    text: ${String(output.reg.members)}
+    below: "Total household members \\*"
+    above: "Save Household Details"
+    label: "The count is HOUSEHOLD_MEMBERS"
+- takeScreenshot: artifacts/registration-household
+- tapOn:
+    text: "Save Household Details"
+    label: "Save Household Details"
+- extendedWaitUntil:
+    visible: "Beneficiary Details"
+    timeout: 15000
+    label: "Beneficiary Details opens"
+- runScript:
+    file: registration.js
+    env:
+      ACTION: step
+      STEP: "Step 5 - household details"
+      RESULT: PASSED
+      DETAIL: "${output.reg.members + ' members saved'}"

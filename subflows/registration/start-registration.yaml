@@ -1,0 +1,55 @@
+appId: ${HCM_APP_ID}
+name: start-registration
+---
+# From the home screen: village, search, Register Beneficiary (no popup),
+# Beneficiary Location saved. Ends on Care giver's consent. CHECK_SHORT
+# ("true" | "false") also taps Register Beneficiary with 2 characters typed
+# (Prompt 11's 3-character rule). Shared by every new registration
+# (register-household.yaml for Prompts 11 and 12, and Prompt 13).
+#
+# Beneficiary IDs live on the device, so a fresh sign-in has none and Register
+# Beneficiary raises "Low Beneficiary IDs" (Prompt 11 Test Case 1). Prompts 12
+# and 13 assume Prompt 11 downloaded them, which no fresh session can
+# satisfy, so here the popup leads to the download (Prompt 11 Step 1) and the
+# search is made again; only a popup after that fails.
+- runFlow: open-registration.yaml
+- runFlow:
+    file: search-and-register.yaml
+    env:
+      CHECK_SHORT: ${CHECK_SHORT}
+- runFlow:
+    when:
+      true: ${output.reg.opened == 'popup'}
+    commands:
+      - takeScreenshot: artifacts/registration-low-ids-at-start
+      - runScript:
+          file: registration.js
+          env:
+            ACTION: step
+            STEP: "Beneficiary IDs"
+            RESULT: NOTE
+            DETAIL: "Low Beneficiary IDs popup - IDs live on the device and this session had none; downloaded first (Prompt 11 Step 1)"
+      - runFlow: download-ids.yaml
+      - runFlow: open-registration.yaml
+      - runFlow:
+          file: search-and-register.yaml
+          env:
+            CHECK_SHORT: "false"
+- runFlow:
+    when:
+      true: ${output.reg.opened == 'popup'}
+    commands:
+      - takeScreenshot: artifacts/registration-popup-after-download
+      - runFlow:
+          file: ../fail.yaml
+          env:
+            MESSAGE: "Low Beneficiary ID popup shown; run Prompt 11 ID download first."
+          label: "No Low Beneficiary IDs popup"
+- runScript:
+    file: registration.js
+    env:
+      ACTION: step
+      STEP: "Step 2 - Registration & Delivery, search, Register Beneficiary"
+      RESULT: PASSED
+      DETAIL: "${'village ' + output.reg.village + ', search text ' + output.reg.searchText + '; Register Beneficiary enabled, no Low Beneficiary IDs popup, Beneficiary Location opened'}"
+- runFlow: beneficiary-location.yaml

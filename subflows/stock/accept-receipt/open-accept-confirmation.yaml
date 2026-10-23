@@ -1,0 +1,40 @@
+appId: ${HCM_APP_ID}
+name: open-accept-confirmation
+---
+# On Stock Receipt Details (opened by open-transaction.yaml): tap Accept Stock
+# and wait for the Accept Confirmation popup. Used by Case 2 and by each
+# acceptance in Case 2b; after a first acceptance a failure reads as a partial
+# acceptance.
+#
+# Read off the app 2026-10-15: Accept Stock and Reject sit at the foot of the
+# screen, one pair per transaction. The popup reads "Accept Confirmation" /
+# "Are you sure you want to accept this stock?" with Confirm and Cancel, and
+# names no product. While it is up, the screen behind it is not in the
+# hierarchy.
+- extendedWaitUntil:
+    visible: "Accept Stock"
+    timeout: 15000
+    optional: true
+    label: "Stock Receipt Details offers Accept Stock"
+- runFlow:
+    when:
+      notVisible: "Accept Stock"
+    file: ../../fail.yaml
+    env:
+      MESSAGE: "${output.v.prefix + 'the ' + output.v.name + ' transaction offers no Accept Stock, so nothing was tapped.'}"
+    label: "Accept Stock is offered"
+- tapOn:
+    text: "Accept Stock"
+    label: "Tap Accept Stock"
+- extendedWaitUntil:
+    visible: "Accept Confirmation"
+    timeout: 15000
+    optional: true
+    label: "Accept Confirmation popup opens"
+- runFlow:
+    when:
+      notVisible: "Accept Confirmation"
+    file: ../../fail.yaml
+    env:
+      MESSAGE: "${output.v.prefix + 'the Accept Confirmation popup did not open for ' + output.v.name + '.'}"
+    label: "Accept Confirmation popup is up"

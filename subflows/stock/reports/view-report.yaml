@@ -1,0 +1,149 @@
+appId: ${HCM_APP_ID}
+name: view-report
+---
+# The specification's common/view_report.yaml. From View Reports: open
+# REPORT, pick the facility, read the table and look for each EXPECTED entry
+# (from SOURCE, the prompt that made them), then back to View Reports.
+# Findings go to reports.js; the flow fails once, at the end.
+#
+# Read off the app 2026-10-19 (com.digit.hcm 2.2.113, mhbase):
+#   - Stock Received / Issued / Returned open "Reports": "Select warehouse *"
+#     and "Product *". Stock Reconciliation opens "Stock Reconciliation" /
+#     "Reports of reconciliation": "Select facility *" and "Select product *".
+#     Each lists the user's own warehouse only; no date filter.
+#   - Before a pick: "Info" / "Please select either warehouse and product to
+#     view the report". The warehouse alone loads the table, both products.
+#   - Empty: "No records found for the selected filters".
+#   - A transaction table scrolls sideways: Date | Product | MRN | Waybill
+#     Number | quantity - that last header shown as the untranslated key
+#     STOCKREPORTS_REPORT_DETAILS_TABLE_HEADER_4_LABEL. Each row is one
+#     element holding every cell. No column names the sender or recipient,
+#     so those are not checked.
+- runScript:
+    file: reports.js
+    env:
+      ACTION: begin
+      REPORT: ${REPORT}
+      SOURCE: ${SOURCE}
+      EXPECTED: ${EXPECTED}
+    label: "Start on the report"
+- runFlow:
+    when:
+      true: ${output.rep.failure}
+    file: ../../fail.yaml
+    env:
+      MESSAGE: ${output.rep.failure}
+    label: "Expected entries are well formed"
+- tapOn:
+    text: ${REPORT}
+    label: "Open the report"
+- extendedWaitUntil:
+    visible: "Select (warehouse|facility) \\*"
+    timeout: 15000
+    label: "The report's filters show"
+
+# --- Facility ----------------------------------------------------------------
+- tapOn:
+    below: "Select (warehouse|facility) \\*"
+    above: "(Select )?[Pp]roduct \\*"
+    label: "Open the facility filter"
+- extendedWaitUntil:
+    visible:
+      text: "(?!(Select )?[Pp]roduct \\*$|Info$|Please select.*|No records found.*|Back to [Hh]ome$).+"
+      below: "Select (warehouse|facility) \\*"
+    timeout: 10000
+    optional: true
+    label: "The facility filter lists a facility"
+- runFlow:
+    when:
+      notVisible:
+        text: "(?!(Select )?[Pp]roduct \\*$|Info$|Please select.*|No records found.*|Back to [Hh]ome$).+"
+        below: "Select (warehouse|facility) \\*"
+    commands:
+      - takeScreenshot: artifacts/report-no-facility
+      - runFlow:
+          file: ../../fail.yaml
+          env:
+            MESSAGE: "${'No facility offered in ' + REPORT + ' for ' + output.reports.role + '.'}"
+          label: "The facility filter lists a facility"
+# REPORT_FACILITY when set, else the first offered - the nearest row below
+# the label. Whatever the first report picked, the later ones pick again.
+- runFlow:
+    when:
+      true: ${output.reports.facility == ''}
+    commands:
+      - runFlow:
+          when:
+            true: ${output.reports.target != ''}
+          commands:
+            - copyTextFrom:
+                text: ${output.reports.targetPattern}
+                below: "Select (warehouse|facility) \\*"
+                label: "Read REPORT_FACILITY in the list"
+      - runFlow:
+          when:
+            true: ${output.reports.target == ''}
+          commands:
+            - copyTextFrom:
+                text: "(?!(Select )?[Pp]roduct \\*$|Info$|Please select.*|No records found.*|Back to [Hh]ome$).+"
+                below: "Select (warehouse|facility) \\*"
+                index: 0
+                label: "Read the first facility"
+      - runScript:
+          file: reports.js
+          env:
+            ACTION: facility
+          label: "Record the facility"
+- tapOn:
+    text: ${output.reports.facilityPattern}
+    below: "Select (warehouse|facility) \\*"
+    label: "Choose the facility"
+
+# --- The table ---------------------------------------------------------------
+- extendedWaitUntil:
+    notVisible: "Please select either warehouse and product.*"
+    timeout: 15000
+    optional: true
+    label: "The table loads"
+- runFlow:
+    when:
+      visible: "No records found for the selected filters"
+    commands:
+      - runScript:
+          file: reports.js
+          env:
+            ACTION: table
+            STATE: empty
+- runFlow:
+    when:
+      visible: "Please select either warehouse and product.*"
+    commands:
+      - runScript:
+          file: reports.js
+          env:
+            ACTION: table
+            STATE: none
+- runFlow:
+    when:
+      notVisible: "No records found for the selected filters|Please select either warehouse and product.*"
+    commands:
+      - runScript:
+          file: reports.js
+          env:
+            ACTION: table
+            STATE: loaded
+      - runFlow: report-table.yaml
+- takeScreenshot: artifacts/report-${output.rep.slug}
+- runScript:
+    file: reports.js
+    env:
+      ACTION: done
+    label: "Record the report's result"
+
+- tapOn:
+    text: "Back"
+    label: "Back to View Reports"
+- extendedWaitUntil:
+    visible: "View stock received reports"
+    timeout: 15000
+    label: "View Reports is back"

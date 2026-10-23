@@ -1,0 +1,10 @@
+appId: ${HCM_APP_ID}
+name: case1-zero
+---
+# Case 1 - a dispatch of 0 is refused. On Product Details; no stock moves.
+- runFlow:
+    file: expect-blocked.yaml
+    env:
+      CASE: "1"
+      QUANTITY: "0"
+- evalScript: ${console.log('Case 1 PASSED - Dispatch with quantity 0 blocked as expected. Message - ' + output.dispatch.errors['1'])}

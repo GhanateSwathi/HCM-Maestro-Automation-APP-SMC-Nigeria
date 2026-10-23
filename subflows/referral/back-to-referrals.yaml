@@ -1,0 +1,18 @@
+appId: ${HCM_APP_ID}
+name: back-to-referrals
+---
+# From anywhere inside Create New Referral: Android Back until the referral
+# screen ("Create New Referral") shows. Nothing unsubmitted is saved
+# (2026-10-21). The keyboard, if up, takes the first Back.
+- repeat:
+    times: 6
+    while:
+      notVisible: "Create New Referral"
+    label: "Back to the referral screen"
+    commands:
+      - back
+      - waitForAnimationToEnd:
+          timeout: 3000
+- assertVisible:
+    text: "Create New Referral"
+    label: "On the referral screen"

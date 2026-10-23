@@ -1,0 +1,180 @@
+appId: ${HCM_APP_ID}
+name: member-form
+---
+# Fills Beneficiary Details (the head of household) or Member Details (Add
+# Members) for WHO (head | child1 | child2) and taps Save Beneficiary. With
+# BOUNDS "true" the age bounds are tried first: the head 17 and 150 years
+# (and 18, logged), a child 2 and 60 months; the head's mobile number too
+# when HEAD_MOBILE is set.
+#
+# Read off the app as AU-CDD-001, 2026-10-21. Beneficiary Details: "First
+# name *" (prefilled with the search text), "Last name *", "Is head of
+# family? *" (ticked), "Date of birth" (or) "Age" - Year(s) / Month(s),
+# "Gender *" (Female / Male buttons, no state reported), "Mobile number"
+# (optional; "Enter a valid mobile number."), Save Beneficiary. Member
+# Details is the same without the head box and the mobile number, first name
+# empty.
+- runScript:
+    file: registration.js
+    env:
+      ACTION: member
+      WHO: ${WHO}
+- extendedWaitUntil:
+    visible: "Beneficiary Details|Member Details"
+    timeout: 15000
+    label: "The member form opens"
+- extendedWaitUntil:
+    visible: "First name \\*"
+    timeout: 10000
+    label: "The form shows its fields"
+
+# --- Names --------------------------------------------------------------------
+- runFlow:
+    when:
+      notVisible:
+        text: ${output.m.firstSelector}
+        below: "First name \\*"
+        above: "Last name \\*"
+    commands:
+      - tapOn:
+          below: "First name \\*"
+          above: "Enter the full legal name.*"
+          index: 0
+          label: "Focus First name"
+      - repeat:
+          times: 40
+          commands:
+            - pressKey: Remote Dpad Right
+      - eraseText: 40
+      - inputText: ${output.m.first}
+      - tapOn:
+          id: "android:id/input_method_nav_back"
+          label: "Close the keyboard"
+- assertVisible:
+    text: ${output.m.firstSelector}
+    below: "First name \\*"
+    above: "Last name \\*"
+    label: "First name is the generated name"
+- tapOn:
+    below: "Last name \\*"
+    above: "Date of birth"
+    index: 0
+    label: "Focus Last name"
+- inputText: ${output.m.last}
+- tapOn:
+    id: "android:id/input_method_nav_back"
+    label: "Close the keyboard"
+- assertVisible:
+    text: ${output.m.last}
+    below: "Last name \\*"
+    above: "Date of birth"
+    label: "Last name is typed"
+
+# --- Age bounds ---------------------------------------------------------------
+- runFlow:
+    when:
+      true: ${BOUNDS == 'true' && WHO == 'head'}
+    commands:
+      - runFlow:
+          file: age-entry.yaml
+          env:
+            FIELD: "Year\\(s\\)"
+            NAME: "years"
+            VALUE: "17"
+            EXPECTED: "rejected"
+      - runFlow:
+          file: age-entry.yaml
+          env:
+            FIELD: "Year\\(s\\)"
+            NAME: "years"
+            VALUE: "150"
+            EXPECTED: "rejected"
+      - runFlow:
+          file: age-entry.yaml
+          env:
+            FIELD: "Year\\(s\\)"
+            NAME: "years"
+            VALUE: "18"
+            EXPECTED: "info"
+- runFlow:
+    when:
+      true: ${BOUNDS == 'true' && WHO != 'head'}
+    commands:
+      - runFlow:
+          file: age-entry.yaml
+          env:
+            FIELD: "Month\\(s\\)"
+            NAME: "months"
+            VALUE: "2"
+            EXPECTED: "rejected"
+      - runFlow:
+          file: age-entry.yaml
+          env:
+            FIELD: "Month\\(s\\)"
+            NAME: "months"
+            VALUE: "60"
+            EXPECTED: "rejected"
+
+# --- The member's age -------------------------------------------------------
+- runFlow:
+    file: age-entry.yaml
+    env:
+      FIELD: "Year\\(s\\)"
+      VALUE: ${output.m.years}
+- runFlow:
+    file: age-entry.yaml
+    env:
+      FIELD: "Month\\(s\\)"
+      VALUE: ${output.m.monthsField}
+- runFlow:
+    when:
+      visible: "Age should be from.*"
+    commands:
+      - takeScreenshot: artifacts/registration-age-refused-${WHO}
+      - runFlow:
+          file: ../fail.yaml
+          env:
+            MESSAGE: "${'The ' + output.m.label + ' age ' + output.m.age + ' is refused on the form.'}"
+          label: "The member's age is accepted"
+
+# --- Gender -----------------------------------------------------------------------
+- runFlow:
+    when:
+      true: ${output.m.gender == ''}
+    commands:
+      - copyTextFrom:
+          text: ".+"
+          below: "Gender \\*"
+          above: "Save Beneficiary"
+          index: 0
+          label: "Read the first gender offered"
+      - runScript:
+          file: registration.js
+          env:
+            ACTION: gender
+- tapOn:
+    text: ${output.m.genderSelector}
+    below: "Gender \\*"
+    label: "Pick the gender"
+
+# --- Mobile number (head only) -----------------------------------------------
+- runFlow:
+    when:
+      true: ${WHO == 'head' && output.reg.mobile == ''}
+    commands:
+      - runScript:
+          file: registration.js
+          env:
+            ACTION: step
+            STEP: "Step 6 - mobile number"
+            RESULT: SKIPPED
+            DETAIL: "HEAD_MOBILE not set - left blank (the field is optional); the 10- and 12-digit checks were not run"
+- runFlow:
+    when:
+      true: ${WHO == 'head' && output.reg.mobile != ''}
+    file: mobile-number.yaml
+
+- takeScreenshot: artifacts/registration-member-${WHO}
+- tapOn:
+    text: "Save Beneficiary"
+    label: "Save Beneficiary"

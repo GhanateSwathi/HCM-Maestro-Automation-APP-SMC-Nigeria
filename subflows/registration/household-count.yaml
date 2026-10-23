@@ -1,0 +1,14 @@
+appId: ${HCM_APP_ID}
+name: household-count
+---
+# On Household Details: read the stepper's count into output.reg.count.
+- copyTextFrom:
+    text: "\\d+"
+    below: "Total household members \\*"
+    above: "Save Household Details"
+    label: "Read the household member count"
+- runScript:
+    file: registration.js
+    env:
+      ACTION: copied
+      WHAT: count

@@ -1,0 +1,81 @@
+appId: ${HCM_APP_ID}
+name: home-hf-stock
+---
+# Takes the health facility stock user from a cold start to the home screen:
+# the onboarding path (sign in, sync, Allow Permissions, first
+# ADMIN_Health Facility option) plus Submit. Every flow that works from that
+# user's home screen starts here. Leaves the facility chosen in
+# output.dropdown.options[0] (also logged by the dropdown).
+- runFlow: ../sign-in/hf-stock.yaml
+- runFlow:
+    file: ../dropdown/select-first-options.yaml
+    env:
+      FIELD: "ADMIN_Health Facility.*"
+      COUNT: "1"
+- evalScript: ${console.log('Health Facility selected - ' + output.dropdown.options[0])}
+
+- tapOn:
+    text: "Submit"
+    label: "Submit the boundary selection"
+
+# Unlike the state user's, this Submit looks for records under the chosen
+# boundary first (AU-HFS-001, "03ba Buri-Buri Health Post", 2026-10-19):
+#   - none: "No data found!" / "There are no new records found for the
+#     selected boundary" with Go Back, which leads on to home.
+#   - some (once the facility had its own activity): "Data found!" / "There
+#     are records found for the selected area..." with Download and Proceed
+#     Without Downloading. Download is what a field user does; it copies
+#     records to the device and changes nothing on the server, ending on
+#     "Health facility data download completed" with Go To Home Screen.
+# Stock is fetched later, by Download Stock Data.
+- extendedWaitUntil:
+    visible: "Stock Balance|No data found!|Data found!"
+    timeout: 300000
+    label: "Home screen, or the boundary's records notice"
+- runFlow:
+    when:
+      visible: "No data found!"
+    commands:
+      - tapOn:
+          text: "Go Back"
+          label: "Dismiss the no-records notice"
+- runFlow:
+    when:
+      visible: "Data found!"
+    commands:
+      - tapOn:
+          text: "Download"
+          below: "Data found!"
+          label: "Download the boundary's records"
+      - extendedWaitUntil:
+          visible: "Go To Home Screen"
+          timeout: 300000
+          label: "Boundary records downloaded"
+      - tapOn:
+          text: "Go To Home Screen"
+          label: "Go to the home screen"
+- extendedWaitUntil:
+    visible: "Stock Balance"
+    timeout: 60000
+    label: "Home screen loads after boundary selection"
+
+- runFlow:
+    when:
+      notVisible: "Manage Stock"
+    commands:
+      - scrollUntilVisible:
+          element: "Manage Stock"
+          direction: DOWN
+          timeout: 10000
+          optional: true
+          label: "Scroll down looking for the Manage Stock card"
+- runFlow:
+    when:
+      notVisible: "Manage Stock"
+    commands:
+      - takeScreenshot: artifacts/hf-manage-stock-card-missing
+      - runFlow:
+          file: ../fail.yaml
+          env:
+            MESSAGE: "Manage Stock card not displayed on home screen for Health Facility User."
+          label: "Manage Stock card is displayed"

@@ -1,0 +1,213 @@
+appId: ${HCM_APP_ID}
+name: consent-no-submit
+---
+# Prompt 12 Test Cases 1-3 - from the "Ready to Submit?" popup of a consent-No
+# registration (consent-no.yaml): Cancel back to the consent screen,
+# nothing submitted; Submit, the success screen, Back To Search; the
+# household in search. Records the household - IRREVERSIBLE.
+#
+# Read off the app as AU-CDD-001, 2026-10-22: Cancel returns to "Care giver's
+# consent" with No still chosen and the reason kept. Submit ends on "Data
+# recorded successfully" / "The data has been recorded successfully" with
+# Back To Search only - no Token ID, no View Household Details, no
+# Household Details - and Back To Search returns to Search Beneficiary, its
+# field empty. Searching the name then finds nothing: consent No records the
+# household without members, and search looks up individuals by name.
+
+# --- Test Case 1: Cancel -------------------------------------------------------------
+- assertVisible:
+    text: "Submit"
+    below: "Ready to Submit\\?"
+    label: "The popup offers Submit"
+- assertVisible:
+    text: "Cancel"
+    below: "Ready to Submit\\?"
+    label: "The popup offers Cancel"
+- takeScreenshot: artifacts/registration-consent-no-popup
+- tapOn:
+    text: "Cancel"
+    below: "Ready to Submit\\?"
+    label: "Cancel"
+- extendedWaitUntil:
+    notVisible: "Ready to Submit\\?"
+    timeout: 10000
+    label: "The popup closes"
+- assertVisible:
+    text: "Care giver's consent"
+    label: "Back on Care giver's consent"
+- assertNotVisible:
+    text: "Data recorded successfully"
+    label: "Nothing was submitted"
+# Kept: the reason field (shown only while No is chosen) still holds the
+# reason. If Cancel cleared them, they are entered again for Test Case 2.
+- evalScript: ${output.reg.kept = false}
+- runFlow:
+    when:
+      visible:
+        text: ${output.reg.reasonSelector}
+        below: "Enter Reason \\*"
+    commands:
+      - evalScript: ${output.reg.kept = true}
+- runFlow:
+    when:
+      true: ${!output.reg.kept}
+    commands:
+      - runFlow:
+          when:
+            notVisible: "Enter Reason \\*"
+          commands:
+            - tapOn:
+                leftOf: "No"
+                below: "Yes"
+                label: "Consent - No again"
+            - extendedWaitUntil:
+                visible: "Enter Reason \\*"
+                timeout: 5000
+                label: "The reason field is back"
+      - tapOn:
+          below: "Enter Reason \\*"
+          index: 0
+          label: "Focus the reason"
+      - repeat:
+          times: 30
+          commands:
+            - pressKey: Remote Dpad Right
+      - eraseText: 30
+      - inputText: ${output.reg.reason}
+      - tapOn:
+          id: "android:id/input_method_nav_back"
+          label: "Close the keyboard"
+- takeScreenshot: artifacts/registration-consent-no-cancelled
+- runScript:
+    file: registration.js
+    env:
+      ACTION: step
+      STEP: "Test Case 1 - Ready to Submit?, Cancel"
+      RESULT: PASSED
+      DETAIL: "${'Cancel returned to Caregiver Consent; household not submitted. ' + (output.reg.kept ? 'No and the reason ' + output.reg.reason + ' were kept' : 'No and the reason were cleared - entered again')}"
+
+# --- Test Case 2: Submit ---------------------------------------------------------------
+- tapOn:
+    text: "Submit"
+    below: "Care giver's consent"
+    label: "Submit the consent again"
+- extendedWaitUntil:
+    visible: "Ready to Submit\\?"
+    timeout: 10000
+    optional: true
+    label: "Ready to Submit? again"
+- runFlow:
+    when:
+      notVisible: "Ready to Submit\\?"
+    commands:
+      - takeScreenshot: artifacts/registration-consent-no-no-popup-again
+      - runFlow:
+          file: ../fail.yaml
+          env:
+            MESSAGE: "Submit after Cancel did not show Ready to Submit? again."
+- tapOn:
+    text: "Submit"
+    below: "Ready to Submit\\?"
+    label: "Submit in the popup"
+- extendedWaitUntil:
+    visible: "Data recorded successfully"
+    timeout: 30000
+    optional: true
+    label: "The household is recorded"
+- runFlow:
+    when:
+      notVisible: "Data recorded successfully"
+    commands:
+      - takeScreenshot: artifacts/registration-consent-no-not-recorded
+      - runFlow:
+          file: ../fail.yaml
+          env:
+            MESSAGE: "Submitting the consent-No household did not show Data recorded successfully."
+          label: "Data recorded successfully"
+- copyTextFrom:
+    text: ".+"
+    below: "Data recorded successfully"
+    above: "Back To Search"
+    label: "Read the success message"
+- evalScript: ${output.reg.successMessage = maestro.copiedText}
+- runFlow:
+    when:
+      visible: "Household Details|Beneficiary Details|Total household members.*|First name \\*|View Household Details"
+    commands:
+      - takeScreenshot: artifacts/registration-consent-no-went-on
+      - runFlow:
+          file: ../fail.yaml
+          env:
+            MESSAGE: "Consent No went on to the household or member details."
+          label: "Consent No stops at the success screen"
+- takeScreenshot: artifacts/registration-consent-no-recorded
+- tapOn:
+    text: "Back To Search"
+    label: "Back To Search"
+- extendedWaitUntil:
+    visible: "Name of the individual"
+    timeout: 15000
+    optional: true
+    label: "Search Beneficiary, its field empty"
+- runFlow:
+    when:
+      notVisible: "Name of the individual"
+    commands:
+      - takeScreenshot: artifacts/registration-consent-no-not-search
+      - runFlow:
+          file: ../fail.yaml
+          env:
+            MESSAGE: "Back To Search did not return to the Registration & Delivery search screen."
+- assertVisible:
+    text: "Search Beneficiary"
+    label: "The search screen"
+- runScript:
+    file: registration.js
+    env:
+      ACTION: step
+      STEP: "Test Case 2 - Ready to Submit?, Submit"
+      RESULT: PASSED
+      DETAIL: "${'Data recorded successfully - ' + output.reg.successMessage + '; no Household Details; Back To Search returned to Search Beneficiary'}"
+
+# --- Test Case 3: the household in search -----------------------------------------
+- tapOn:
+    text: "Name of the individual"
+    label: "Focus the search field"
+- inputText: ${output.reg.searchText}
+- tapOn:
+    id: "android:id/input_method_nav_back"
+    label: "Close the keyboard"
+- extendedWaitUntil:
+    visible:
+      text: "Open"
+      below: "Search by ID"
+    timeout: 8000
+    optional: true
+    label: "Search answers"
+- takeScreenshot: artifacts/registration-consent-no-search
+- runFlow:
+    when:
+      visible:
+        text: "Open"
+        below: "Search by ID"
+    commands:
+      - runScript:
+          file: registration.js
+          env:
+            ACTION: step
+            STEP: "Test Case 3 - the household in search"
+            RESULT: INFO
+            DETAIL: "${'a household card is listed for ' + output.reg.searchText + ' - not expected, since consent No saves no members'}"
+- runFlow:
+    when:
+      notVisible:
+        text: "Open"
+        below: "Search by ID"
+    commands:
+      - runScript:
+          file: registration.js
+          env:
+            ACTION: step
+            STEP: "Test Case 3 - the household in search"
+            RESULT: PASSED
+            DETAIL: "${'nothing listed for ' + output.reg.searchText + ': consent No records the household without members, and search finds individuals by name - so no dose action either'}"

@@ -1,0 +1,21 @@
+appId: ${HCM_APP_ID}
+name: hf-tc3-variant
+---
+# Test Case 3 for variant INDEX (0 or 1): open its first transaction,
+# check Stock Receipt Details (open-transaction.yaml fails on a different
+# product, MRN, sender, or a quantity other than the one dispatched -
+#   Quantity mismatch for <variant>: dispatched <X>, shown as received <Y>.
+# ), then back to Incoming Transactions without accepting.
+- runFlow:
+    file: ../accept-receipt/open-transaction.yaml
+    env:
+      INDEX: ${INDEX}
+- takeScreenshot: artifacts/hf-tc3-details-${output.v.name}
+- evalScript: "${console.log('Test Case 3 - ' + output.v.name + ' transaction ' + output.txn.mrnLabel + ' from ' + output.txn.sender + ': received ' + output.variants.received[output.v.index] + ', dispatched ' + output.variants.expected[output.v.index])}"
+- tapOn:
+    text: "Back"
+    label: "Test Case 3 - back to Incoming Transactions"
+- extendedWaitUntil:
+    visible: "Incoming Transactions"
+    timeout: 15000
+    label: "Test Case 3 - Incoming Transactions is back"

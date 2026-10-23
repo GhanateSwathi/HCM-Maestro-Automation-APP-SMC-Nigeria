@@ -1,0 +1,106 @@
+appId: ${HCM_APP_ID}
+name: report-table
+---
+# A report's table has rows: check the headers (transaction reports), log
+# every row, and look for each expected entry - scrolling down for it.
+
+# --- Headers -----------------------------------------------------------------
+# Date, Product and MRN show first; the table scrolls sideways to Waybill
+# Number and the quantity column.
+- runFlow:
+    when:
+      true: ${!output.rep.reconciliation}
+    commands:
+      - assertVisible:
+          text: "Date"
+          label: "Header Date"
+      - assertVisible:
+          text: "Product"
+          label: "Header Product"
+      - assertVisible:
+          text: "MRN"
+          label: "Header MRN"
+      - swipe:
+          from:
+            text: "MRN"
+          direction: LEFT
+          label: "Scroll the table to its other columns"
+      - waitForAnimationToEnd:
+          timeout: 2000
+      - assertVisible:
+          text: "Waybill Number"
+          label: "Header Waybill Number"
+      - runFlow:
+          when:
+            visible: "STOCKREPORTS_.*"
+          commands:
+            - runScript:
+                file: reports.js
+                env:
+                  ACTION: header
+                label: "The quantity header is an untranslated key"
+      - takeScreenshot: artifacts/report-${output.rep.slug}-columns
+      - swipe:
+          from:
+            text: "Waybill Number"
+          direction: RIGHT
+          label: "Scroll the table back"
+
+# --- Rows, for the log -------------------------------------------------------
+# A row is one element whose text holds every cell, one per line.
+- evalScript: ${output.rep.k = 0}
+- repeat:
+    times: 15
+    while:
+      true: ${output.rep.k < 15}
+    commands:
+      - runFlow:
+          when:
+            visible:
+              text: "(?s).+\\n.+"
+              index: ${output.rep.k}
+          commands:
+            - copyTextFrom:
+                text: "(?s).+\\n.+"
+                index: ${output.rep.k}
+                label: "Read a row"
+            - runScript:
+                file: reports.js
+                env:
+                  ACTION: row
+                label: "Log the row"
+      - runFlow:
+          when:
+            notVisible:
+              text: "(?s).+\\n.+"
+              index: ${output.rep.k}
+          commands:
+            - evalScript: ${output.rep.k = 99}
+      - evalScript: ${output.rep.k = output.rep.k + 1}
+
+# --- Expected entries --------------------------------------------------------
+- repeat:
+    times: ${output.rep.entries.length}
+    label: "Look for each expected entry"
+    commands:
+      - evalScript: ${output.rep.hit = false}
+      - scrollUntilVisible:
+          element:
+            text: ${output.rep.entries[output.rep.next].pattern}
+          direction: DOWN
+          timeout: 5000
+          optional: true
+          label: "Scroll to the expected entry"
+      - runFlow:
+          when:
+            visible:
+              text: ${output.rep.entries[output.rep.next].pattern}
+          commands:
+            - evalScript: ${output.rep.hit = true}
+      - runScript:
+          file: reports.js
+          env:
+            ACTION: entry
+            INDEX: ${output.rep.next}
+            FOUND: ${output.rep.hit}
+          label: "Record whether it was found"

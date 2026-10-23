@@ -1,0 +1,109 @@
+appId: ${HCM_APP_ID}
+name: download-beneficiary-ids
+---
+# Step 1 - from the "Low Beneficiary IDs" popup: Download -> the Beneficiary
+# IDs screen -> Download Beneficiary IDs -> Close -> Back to home. Records
+# the IDs downloaded in output.reg.idCount.
+#
+# Read off the app as AU-CDD-001, 2026-10-21: the screen "Beneficiary IDs"
+# shows a dial ("0" / "Beneficiary IDs left"), "Low on Beneficiary IDs",
+# "Number of available IDs" and "Total beneficiary IDs" (each 0), and the
+# button "Download Beneficiary IDs". The download is a dialog of the same
+# title: "Download in progress..." with a count ("0/10"), then "100%",
+# "Download Completed", "600/600" and Close - about a minute. Afterwards
+# both counts read 600. Back (top left) returns to home.
+- tapOn:
+    text: "Download"
+    below: "Low Beneficiary IDs"
+    label: "Download in the popup"
+- extendedWaitUntil:
+    visible: "Number of available IDs"
+    timeout: 15000
+    optional: true
+    label: "The Beneficiary IDs screen opens"
+- runFlow:
+    when:
+      notVisible: "Number of available IDs"
+    commands:
+      - takeScreenshot: artifacts/registration-ids-screen-missing
+      - runFlow:
+          file: ../fail.yaml
+          env:
+            MESSAGE: "Download in the Low Beneficiary IDs popup did not open the Beneficiary IDs screen."
+          label: "Download redirects to Beneficiary IDs"
+- assertVisible:
+    text: "Beneficiary IDs"
+    above: "Number of available IDs"
+    label: "The screen is Beneficiary IDs"
+
+- tapOn:
+    text: "Download Beneficiary IDs"
+    below: "Total beneficiary IDs"
+    label: "Download Beneficiary IDs"
+- extendedWaitUntil:
+    visible: "Download Completed|.*[Ff]ail.*|.*[Ee]rror.*|.*[Tt]ry again.*"
+    timeout: 300000
+    optional: true
+    label: "The download finishes"
+- runFlow:
+    when:
+      notVisible: "Download Completed"
+    commands:
+      - takeScreenshot: artifacts/registration-ids-download-failed
+      - setClipboard: "no completion within 5 minutes"
+      - runFlow:
+          when:
+            visible: ".*[Ff]ail.*|.*[Ee]rror.*|.*[Tt]ry again.*"
+          commands:
+            - copyTextFrom:
+                text: ".*[Ff]ail.*|.*[Ee]rror.*|.*[Tt]ry again.*"
+                label: "Read the download error"
+      - runFlow:
+          file: ../fail.yaml
+          env:
+            MESSAGE: "${'Beneficiary ID download failed: ' + maestro.copiedText + '.'}"
+          label: "Beneficiary IDs downloaded"
+- copyTextFrom:
+    text: "\\d+/\\d+"
+    below: "Download Beneficiary IDs"
+    label: "Read the downloaded count"
+- runScript:
+    file: registration.js
+    env:
+      ACTION: copied
+      WHAT: idProgress
+- takeScreenshot: artifacts/registration-ids-downloaded
+- tapOn:
+    text: "Close"
+    below: "Download Completed"
+    label: "Close the download"
+- extendedWaitUntil:
+    notVisible: "Download Completed"
+    timeout: 10000
+    label: "The download dialog closes"
+- copyTextFrom:
+    text: "\\d+"
+    rightOf: "Number of available IDs"
+    below: "Beneficiary IDs left"
+    above: "Total beneficiary IDs"
+    label: "Read the available IDs"
+- runScript:
+    file: registration.js
+    env:
+      ACTION: copied
+      WHAT: idCount
+- runScript:
+    file: registration.js
+    env:
+      ACTION: step
+      STEP: "Step 1 - download beneficiary IDs"
+      RESULT: PASSED
+      DETAIL: "${'Download Completed (' + output.reg.idProgress + '); available IDs ' + output.reg.idCount}"
+- tapOn:
+    text: "Back"
+    above: "Beneficiary IDs"
+    label: "Back to home"
+- extendedWaitUntil:
+    visible: "Registration & Delivery"
+    timeout: 15000
+    label: "Back on the home screen"

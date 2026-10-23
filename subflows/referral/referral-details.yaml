@@ -1,0 +1,42 @@
+appId: ${HCM_APP_ID}
+name: referral-details
+---
+# Create New Referral, step 2 - Referral Details: cycle, child name, age,
+# gender. The reason is referral-reason.yaml's.
+#
+# Read off the app 2026-10-21: "Select cycle *" (dropdown), "Name of the
+# child *", "Beneficiary id", "Referral code" (optional, left empty), "Age in
+# months *", "Gender *" (dropdown), "What is the reason for referral? *"
+# (four radio buttons), Next.
+- runFlow:
+    file: pick-option.yaml
+    env:
+      FIELD: "Select cycle \\*"
+      NEXT: "Name of the child \\*"
+      TARGET: ${output.referral.cyclePattern}
+      WHAT: cycle
+      MISSING: "${'REFERRAL_CYCLE ' + output.referral.cycle + ' is not offered.'}"
+- runFlow:
+    when:
+      true: ${!output.ref.skip}
+    commands:
+      - runFlow:
+          file: enter-field.yaml
+          env:
+            FIELD: "Name of the child \\*"
+            NEXT: "Beneficiary id"
+            VALUE: ${output.ref.name}
+      - runFlow:
+          file: enter-field.yaml
+          env:
+            FIELD: "Age in months \\*"
+            NEXT: "Gender \\*"
+            VALUE: ${output.referral.age}
+      - runFlow:
+          file: pick-option.yaml
+          env:
+            FIELD: "Gender \\*"
+            NEXT: "What is the reason for referral.*"
+            TARGET: ${output.referral.genderPattern}
+            WHAT: gender
+            MISSING: "${'CHILD_GENDER ' + output.referral.gender + ' is not offered.'}"

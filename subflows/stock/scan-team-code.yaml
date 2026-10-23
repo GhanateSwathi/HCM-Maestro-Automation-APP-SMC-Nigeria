@@ -1,0 +1,119 @@
+appId: ${HCM_APP_ID}
+name: scan-team-code
+---
+# The specification's scan_qr.yaml. On Warehouse Details with Facility To
+# "Delivery team": scan the recipient's QR code with Team Code, check it is
+# output.form.teamCode (TARGET_CDD), and come back to Warehouse Details with
+# Team Code filled in. Any failure reads "QR code scan failed: <reason>." and
+# stops the flow before a quantity is entered.
+#
+# Read off the app as AU-HFS-001, 2026-10-19:
+#   - "Team Code" (a button with a QR icon) opens "Scan QR Code": a camera
+#     view, "Flash on", "<n> Resources Scanned", a list of codes read, Submit.
+#     There is no gallery or upload option and no manual entry, so the code
+#     cannot come from addMedia: the camera has to see it.
+#   - The QR is the one a user shows from their side menu, holding
+#     "<user name>||<user id>" (AU-CDD-001||…). Once read, Team Code shows the
+#     user name.
+#   - While the code stays in view the scanner keeps reading it, each time
+#     raising a red "Code already scanned" banner over Submit, which a tap
+#     then hits instead. The banner clears about 5 s after the code leaves
+#     the view.
+#
+# On the emulator the camera is a virtual room. scripts/prepare-qr-camera.ps1
+# (or .sh) walks the camera to its wall and flashes QR_CODE_PATH there - 2 s
+# up, 10 s down - so the code is read once and Submit is free in the gaps.
+# Without it, nothing is read here.
+- tapOn:
+    text: "Team Code"
+    below: "Facility To.*"
+    above: "Next"
+    label: "Open the Team Code scanner"
+# A field device asks for the camera on first use; answer it if it shows.
+- runFlow: ../accept-system-dialogs.yaml
+- extendedWaitUntil:
+    visible: "Scan QR Code"
+    timeout: 15000
+    optional: true
+    label: "The QR scanner opens"
+- runFlow:
+    when:
+      notVisible: "Scan QR Code"
+    commands:
+      - takeScreenshot: artifacts/qr-scanner-missing
+      - runFlow:
+          file: ../fail.yaml
+          env:
+            MESSAGE: "QR code scan failed: the scanner did not open."
+          label: "The QR scanner opens"
+
+- extendedWaitUntil:
+    visible: "[1-9]\\d* Resources Scanned"
+    timeout: 30000
+    optional: true
+    label: "The scanner reads a code"
+- runFlow:
+    when:
+      notVisible: "[1-9]\\d* Resources Scanned"
+    commands:
+      - takeScreenshot: artifacts/qr-scan-failed
+      - runFlow:
+          file: ../fail.yaml
+          env:
+            MESSAGE: "QR code scan failed: nothing was read within 30 seconds - is the emulator camera facing the QR (scripts/prepare-qr-camera)?"
+          label: "The scanner reads a code"
+- takeScreenshot: artifacts/qr-scanned
+- copyTextFrom:
+    text: ".*\\|\\|.*"
+    below: "\\d+ Resources Scanned"
+    label: "Read the code the scanner listed"
+- runScript:
+    file: stock-form.js
+    env:
+      ACTION: scanned
+    label: "Check the code names the recipient"
+- runFlow:
+    when:
+      true: ${output.form.failure}
+    file: ../fail.yaml
+    env:
+      MESSAGE: ${output.form.failure}
+    label: "The QR code is the recipient's"
+
+# Submit hands the code back to the form. The banner covers it whenever the
+# scanner has just re-read the code, so wait for it to clear, tap, and try
+# again until the scanner closes.
+- repeat:
+    times: 10
+    while:
+      visible: "Scan QR Code"
+    label: "Confirm the scanned code"
+    commands:
+      - extendedWaitUntil:
+          notVisible: "Code already scanned"
+          timeout: 10000
+          optional: true
+          label: "Wait for the banner to clear"
+      - tapOn:
+          text: "Submit"
+          below: "\\d+ Resources Scanned"
+          waitToSettleTimeoutMs: 100
+          retryTapIfNoChange: false
+          label: "Submit the scanned code"
+      - waitForAnimationToEnd:
+          timeout: 2000
+- runFlow:
+    when:
+      visible: "Scan QR Code"
+    commands:
+      - takeScreenshot: artifacts/qr-scan-not-confirmed
+      - runFlow:
+          file: ../fail.yaml
+          env:
+            MESSAGE: "QR code scan failed: the scanner's Submit did not return to Warehouse Details."
+          label: "The scanner closed"
+- assertVisible:
+    text: ${output.form.teamCodePattern}
+    below: "Facility To.*"
+    above: "Next"
+    label: "Team Code shows the recipient"

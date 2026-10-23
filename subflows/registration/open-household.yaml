@@ -1,0 +1,49 @@
+appId: ${HCM_APP_ID}
+name: open-household
+---
+# From the home screen: Registration & Delivery -> the village -> search the
+# head's name -> Open -> Household Overview.
+#
+# Read off the app as AU-CDD-001, 2026-10-21: a search result is a card with
+# the household's name ("--", as on Household Overview), "Open", and a
+# Beneficiary / Age / Gender table, a row per member ("--\n30y 0m\nFemale").
+# The search text is unique to the run, so there is one card.
+- runFlow: open-registration.yaml
+- tapOn:
+    text: "Name of the individual"
+    label: "Focus the search field"
+- inputText: ${output.reg.searchText}
+- tapOn:
+    id: "android:id/input_method_nav_back"
+    label: "Close the keyboard"
+- extendedWaitUntil:
+    visible:
+      text: "Open"
+      below: "Search by ID"
+    timeout: 15000
+    optional: true
+    label: "The household is found"
+- runFlow:
+    when:
+      notVisible:
+        text: "Open"
+        below: "Search by ID"
+    commands:
+      - takeScreenshot: artifacts/registration-household-not-found
+      - runFlow:
+          file: ../fail.yaml
+          env:
+            MESSAGE: "${'Search for ' + output.reg.searchText + ' found no household.'}"
+          label: "The household is found"
+- assertVisible:
+    text: ${'(?s).*' + output.reg.head.age + '\\s+' + output.reg.head.gender}
+    below: "Search by ID"
+    label: "The result lists the head of household"
+- tapOn:
+    text: "Open"
+    below: "Search by ID"
+    label: "Open the household"
+- extendedWaitUntil:
+    visible: "Household Overview"
+    timeout: 15000
+    label: "Household Overview opens"

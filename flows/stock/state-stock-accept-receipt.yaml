@@ -1,0 +1,62 @@
+appId: ${HCM_APP_ID}
+name: "Stock - state stock user accepts an incoming stock receipt"
+tags:
+  - regression
+  - stock
+  - state-stock
+  - mhbase
+  - consumes-data
+---
+# Test Case 2, 2a and 2b, in one session so 2a (Cancel) runs before 2b
+# (Confirm), and any failure stops the cases that depend on it.
+#
+# Needs HCM_STATE_STOCK_USER_ID / HCM_STATE_STOCK_PASSWORD (AU-SAT-001 on the
+# mhbase tenant), PRODUCT_VARIANT_1 / PRODUCT_VARIANT_2 (SPAQ1, SPAQ2), and
+# at least one incoming transaction for each. On this build a transaction
+# carries one product, so Case 2b accepts the first SPAQ1 transaction, then
+# the first SPAQ2 one - consuming both, so every run needs fresh incoming
+# stock. Hence the consumes-data tag: exclude it when there is none.
+#
+# Maestro has passed and failed but no "blocked". A blocked run fails with a
+# reason starting "BLOCKED -" and never reaches Accept Stock.
+#
+# Screens read off the app, and Case 2b run by hand, on 2026-10-15.
+
+- runFlow: ../../subflows/home/state-stock.yaml
+
+# Fetch stock records - the incoming list stays empty without this - and
+# note each variant's Stock Balance before anything is accepted.
+- runFlow: ../../subflows/stock/download-stock-data.yaml
+- runFlow: ../../subflows/stock/accept-receipt/init-variants.yaml
+- runFlow:
+    file: ../../subflows/stock/accept-receipt/read-balances.yaml
+    env:
+      PHASE: before
+
+- runFlow: ../../subflows/stock/open-incoming-transactions.yaml
+
+# Precondition: Test Case 1 ends in State A...
+- runFlow:
+    when:
+      true: ${output.incoming == 'absent'}
+    commands:
+      - takeScreenshot: artifacts/stock-case2-blocked
+      - runFlow:
+          file: ../../subflows/fail.yaml
+          env:
+            MESSAGE: "BLOCKED - Case 2, 2a and 2b: No incoming transactions available; Case 2 cannot be executed."
+          label: "Precondition - incoming transactions are present"
+# ...with at least one transaction for each product variant.
+- runFlow: ../../subflows/stock/accept-receipt/check-variants.yaml
+
+# Case 2 and 2a work on the first variant's transaction: Select -> Stock
+# Receipt Details (product, MRN and sender checked) -> Accept Stock ->
+# Accept Confirmation.
+- runFlow:
+    file: ../../subflows/stock/accept-receipt/open-transaction.yaml
+    env:
+      INDEX: "0"
+- runFlow: ../../subflows/stock/accept-receipt/open-accept-confirmation.yaml
+- runFlow: ../../subflows/stock/accept-receipt/case2-popup.yaml
+- runFlow: ../../subflows/stock/accept-receipt/case2a-cancel.yaml
+- runFlow: ../../subflows/stock/accept-receipt/case2b-confirm.yaml

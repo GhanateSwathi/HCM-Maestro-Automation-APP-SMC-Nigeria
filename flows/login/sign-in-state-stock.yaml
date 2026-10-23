@@ -1,0 +1,22 @@
+appId: ${HCM_APP_ID}
+name: "Login - state stock user signs in"
+tags:
+  - regression
+  - login
+  - state-stock
+---
+# Needs HCM_STATE_STOCK_USER_ID / HCM_STATE_STOCK_PASSWORD and a reachable
+# environment. Fails when the backend is down - check login-screen.yaml first.
+- runFlow: ../../subflows/sign-in/state-stock.yaml
+
+# "Community *" alone also appears on the CDD screen, so prove this is the
+# state user's screen: one boundary dropdown, no facility picker. The ADMIN_
+# forms are the mhbase tenant's raw boundary codes.
+- assertNotVisible:
+    text: "(ADMIN_)?Health Facility.*"
+    label: "No facility picker for the state role"
+- assertVisible:
+    text: "Submit"
+    label: "Submit button is present"
+
+- takeScreenshot: artifacts/sign-in-state-stock-boundary-selection

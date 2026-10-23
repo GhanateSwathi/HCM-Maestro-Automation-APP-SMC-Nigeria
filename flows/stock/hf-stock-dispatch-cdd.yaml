@@ -1,0 +1,87 @@
+appId: ${HCM_APP_ID}
+name: "Stock - health facility stock user dispatches stock to a CDD by QR code"
+tags:
+  - regression
+  - stock
+  - hf-stock
+  - mhbase
+  - consumes-data
+  - qr-camera
+---
+# Prompt 6 (the specification's hf_dispatch_cdd.yaml): the health facility
+# user dispatches PRODUCT_VARIANT to the CDD TARGET_CDD, naming the CDD by
+# scanning their QR code. The Prompt 3 cases, per product: 0 is refused,
+# balance + 1 is refused, then balance - REMAINING_BALANCE is dispatched and
+# REMAINING_BALANCE is left.
+#
+# Needs HCM_HF_STOCK_USER_ID / HCM_HF_STOCK_PASSWORD (AU-HFS-001), TEST_USER,
+# TARGET_CDD (AU-CDD-001), PRODUCT_VARIANT (SPAQ1,SPAQ2), REMAINING_BALANCE
+# (10) in .env, and:
+#   - the emulator camera facing QR_CODE_PATH: run
+#     scripts/prepare-qr-camera.ps1 (or .sh) after the emulator boots. The
+#     app's scanner reads only the camera - no gallery, no typing - so the QR
+#     hangs in the emulator's virtual room (qr-camera tag).
+#   - stock in this session. The balance lives on the device: this flow
+#     starts by wiping the app, after which the balance is 0 unless Download
+#     Stock Data brings records down, and Case 3 is BLOCKED. The stock Prompt
+#     5 accepted has to be dispatched in the session that accepted it.
+#
+# Read off the app as AU-HFS-001, 2026-10-19: Record Stock Issued -> Issue ->
+# Facility To offers only "Delivery team", which adds the Team Code scan
+# (subflows/stock/scan-team-code.yaml); the rest of the form is the state's.
+
+# TEST_USER is reported as the account under test, so it must be the one
+# signing in. Only TEST_USER is named in the message.
+- evalScript: "${output.userCheck = (String(TEST_USER).trim() == '' || String(TEST_USER) == 'undefined' || String(TEST_USER).trim().toLowerCase() == String(HCM_HF_STOCK_USER_ID).trim().toLowerCase()) ? '' : 'TEST_USER ' + TEST_USER + ' is not the health facility stock user .env signs in with (HCM_HF_STOCK_USER_ID).'}"
+- runFlow:
+    when:
+      true: ${output.userCheck}
+    file: ../../subflows/fail.yaml
+    env:
+      MESSAGE: ${output.userCheck}
+    label: "TEST_USER is the account signing in"
+- evalScript: "${output.cddCheck = (String(TARGET_CDD).trim() == '' || String(TARGET_CDD) == 'undefined') ? 'TARGET_CDD must be set in .env (e.g. AU-CDD-001).' : ''}"
+- runFlow:
+    when:
+      true: ${output.cddCheck}
+    file: ../../subflows/fail.yaml
+    env:
+      MESSAGE: ${output.cddCheck}
+    label: "TARGET_CDD is set in .env"
+
+- runFlow: ../../subflows/home/hf-stock.yaml
+- runFlow: ../../subflows/stock/download-stock-data.yaml
+
+- runScript:
+    file: ../../subflows/stock/dispatch/dispatch.js
+    env:
+      ACTION: plan
+      VARIANTS: ${PRODUCT_VARIANT}
+    label: "Read the products to dispatch"
+- runFlow:
+    when:
+      true: ${output.plan.failure}
+    file: ../../subflows/fail.yaml
+    env:
+      MESSAGE: ${output.plan.failure}
+    label: "PRODUCT_VARIANT is set in .env"
+
+- repeat:
+    times: ${output.plan.variants.length}
+    label: "Dispatch each product"
+    commands:
+      - runFlow:
+          file: ../../subflows/stock/dispatch/dispatch-variant.yaml
+          env:
+            VARIANT: ${output.plan.variants[output.plan.next]}
+            TARGET: "Delivery team"
+            TEAM_CODE: ${TARGET_CDD}
+            MISSING: "Facility To does not offer Delivery team, so no CDD can be chosen."
+            ROLE: "Health Facility User"
+
+- evalScript: ${console.log('Prompt 6 - Health Facility ' + TEST_USER + ' dispatched to CDD ' + TARGET_CDD + ' (Team Code scanned from the QR by the emulator virtual camera)')}
+- runScript:
+    file: ../../subflows/stock/dispatch/dispatch.js
+    env:
+      ACTION: summary
+    label: "Log the dispatch summary"

@@ -1,0 +1,34 @@
+appId: ${HCM_APP_ID}
+name: init-dispatch
+---
+# Starts the book-keeping for one product VARIANT, with REMAINING_BALANCE (10)
+# from .env and the recipient from the caller:
+#   TARGET     the Facility To option (blank takes the first offered)
+#   TEAM_CODE  the CDD to scan when TARGET is "Delivery team" (blank: no scan)
+#   MISSING    the failure message when TARGET is not offered
+#   ROLE       who is signed in, for messages
+# Fails at once if a required one is unset.
+- runScript:
+    file: dispatch.js
+    env:
+      ACTION: init
+      VARIANT: ${VARIANT}
+      REMAINING: ${REMAINING_BALANCE}
+    label: "Read the dispatch test data"
+- runFlow:
+    when:
+      true: ${output.dispatch.failure}
+    file: ../../fail.yaml
+    env:
+      MESSAGE: ${output.dispatch.failure}
+    label: "Dispatch test data is set in .env"
+- runScript:
+    file: ../stock-form.js
+    env:
+      ACTION: init
+      VARIANT: ${VARIANT}
+      TARGET: ${TARGET}
+      TEAM_CODE: ${TEAM_CODE}
+      MISSING: ${MISSING}
+      ROLE: ${ROLE}
+    label: "Set up the Issue form"

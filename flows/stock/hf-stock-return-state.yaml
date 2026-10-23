@@ -1,0 +1,73 @@
+appId: ${HCM_APP_ID}
+name: "Stock - health facility stock user returns stock to the state"
+tags:
+  - regression
+  - stock
+  - hf-stock
+  - mhbase
+  - consumes-data
+---
+# Prompt 7 (the specification's hf_return_state.yaml): the health facility
+# user returns RETURN_QUANTITY (5) of PRODUCT_VARIANT_1, then _2, to the
+# state that supplied it, HF_RETURN_DESTINATION. Prompt 4's return, run for
+# the health facility: each product must start at EXPECTED_START_BALANCE (10)
+# - nothing is submitted otherwise - and end at EXPECTED_FINAL_BALANCE (5),
+# and the second return must leave the first product's balance alone.
+#
+# Needs HCM_HF_STOCK_USER_ID / HCM_HF_STOCK_PASSWORD (AU-HFS-001), TEST_USER,
+# PRODUCT_VARIANT_1 / _2, RETURN_QUANTITY, EXPECTED_START_BALANCE,
+# EXPECTED_FINAL_BALANCE and HF_RETURN_DESTINATION - the state warehouse as
+# the Return form lists it, Fac_f-2026-10-15-137946.
+#
+# Read off the app as AU-HFS-001, 2026-10-19: Record Stock Issued ->
+# Transaction type Return -> Facility To offers that one warehouse - the one
+# that sent the facility its stock (Prompt 5's "Received from") - and no
+# Delivery team, so a return scans no QR code. The rest is the state's form.
+#
+# Precondition: 10 of each, as Prompt 6 leaves them. The balance lives on
+# the device and this flow starts by wiping the app, so on its own it stops
+# before returning anything, with "Precondition not met: SPAQ1 balance is 0,
+# expected 10. Run Prompt 6 first." Run it in the session that holds the
+# stock.
+#
+# Once SPAQ1 is returned, a SPAQ2 failure reads
+# "Partial return: SPAQ1 returned (10 -> 5), SPAQ2 failed – <reason>".
+
+# TEST_USER is reported as the account under test, so it must be the one
+# signing in. Only TEST_USER is named in the message.
+- evalScript: "${output.userCheck = (String(TEST_USER).trim() == '' || String(TEST_USER) == 'undefined' || String(TEST_USER).trim().toLowerCase() == String(HCM_HF_STOCK_USER_ID).trim().toLowerCase()) ? '' : 'TEST_USER ' + TEST_USER + ' is not the health facility stock user .env signs in with (HCM_HF_STOCK_USER_ID).'}"
+- runFlow:
+    when:
+      true: ${output.userCheck}
+    file: ../../subflows/fail.yaml
+    env:
+      MESSAGE: ${output.userCheck}
+    label: "TEST_USER is the account signing in"
+
+- runFlow: ../../subflows/home/hf-stock.yaml
+- runFlow: ../../subflows/stock/download-stock-data.yaml
+
+# Test Case 1 and 2.
+- runFlow:
+    file: ../../subflows/stock/return/return-variant.yaml
+    env:
+      VARIANT: ${PRODUCT_VARIANT_1}
+      DESTINATION: ${HF_RETURN_DESTINATION}
+      DESTINATION_KEY: "HF_RETURN_DESTINATION"
+      ROLE: "Health Facility User"
+      PREREQUISITE: "Prompt 6"
+- runFlow:
+    file: ../../subflows/stock/return/return-variant.yaml
+    env:
+      VARIANT: ${PRODUCT_VARIANT_2}
+      DESTINATION: ${HF_RETURN_DESTINATION}
+      DESTINATION_KEY: "HF_RETURN_DESTINATION"
+      ROLE: "Health Facility User"
+      PREREQUISITE: "Prompt 6"
+
+# The second return must not have moved the first product's balance.
+- evalScript: ${console.log('Prompt 7 - Health Facility ' + TEST_USER + ' returned stock to the state, ' + HF_RETURN_DESTINATION)}
+- runFlow:
+    file: ../../subflows/stock/return/finish.yaml
+    env:
+      VARIANT: ${PRODUCT_VARIANT_1}

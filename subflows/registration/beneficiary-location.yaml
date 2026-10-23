@@ -1,0 +1,67 @@
+appId: ${HCM_APP_ID}
+name: beneficiary-location
+---
+# Step 3 - on Beneficiary Location: the GPS fix is captured, then Save
+# Location. TEST_LATITUDE / TEST_LONGITUDE, when set, are pushed as the
+# emulator's fix (setLocation); blank leaves the emulator's own.
+#
+# Read off the app as AU-CDD-001, 2026-10-21: "Beneficiary Location" /
+# "Capture house location details", "Administrative area *" (the village,
+# read-only), "Lat/Long *" and "Save Location". The app fills Lat/Long by
+# itself and shows only the fix's accuracy ("5.00 meters", green) - never
+# the coordinates - so "captured" is that reading appearing; the report
+# names the coordinates set. Location was granted on Allow Permissions; a
+# prompt here is answered all the same.
+- extendedWaitUntil:
+    visible: "Beneficiary Location"
+    timeout: 15000
+    label: "Beneficiary Location opens"
+- runFlow:
+    when:
+      visible: "While using the app"
+    commands:
+      - tapOn:
+          text: "While using the app"
+          label: "Allow location while using the app"
+- runFlow:
+    when:
+      true: ${output.reg.latitude}
+    commands:
+      - setLocation:
+          latitude: ${output.reg.latitude}
+          longitude: ${output.reg.longitude}
+          label: "Set the GPS fix to TEST_LATITUDE / TEST_LONGITUDE"
+- extendedWaitUntil:
+    visible:
+      text: "\\d+(\\.\\d+)? meters"
+      below: "Lat/Long \\*"
+    timeout: 60000
+    optional: true
+    label: "Lat/Long is captured"
+- runFlow:
+    when:
+      notVisible:
+        text: "\\d+(\\.\\d+)? meters"
+        below: "Lat/Long \\*"
+    commands:
+      - takeScreenshot: artifacts/registration-location-missing
+      - runFlow:
+          file: ../fail.yaml
+          env:
+            MESSAGE: "Beneficiary location not captured."
+          label: "Beneficiary location captured"
+- copyTextFrom:
+    text: "\\d+(\\.\\d+)? meters"
+    below: "Lat/Long \\*"
+    label: "Read the fix's accuracy"
+- runScript:
+    file: registration.js
+    env:
+      ACTION: step
+      STEP: "Step 3 - beneficiary location"
+      RESULT: PASSED
+      DETAIL: "${'captured, accuracy ' + maestro.copiedText + '; position ' + output.reg.location + '; administrative area ' + output.reg.village}"
+- takeScreenshot: artifacts/registration-location
+- tapOn:
+    text: "Save Location"
+    label: "Save Location"

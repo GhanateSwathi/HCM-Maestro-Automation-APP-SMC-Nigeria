@@ -1,0 +1,228 @@
+appId: ${HCM_APP_ID}
+name: redose
+---
+# The specification's common/redose.yaml - from Household Overview, for child
+# WHO, dosed already: Redose on its card -> Redose Details (the product
+# offered must follow the age band, as for the dose) -> the quantity into
+# output.m.redose -> Reason (REDOSE_REASON, else the first offered) ->
+# Submit -> "Data recorded Successfully" -> View Household Details; then the
+# card shows "Redose Completed", and a second redose must not be offered.
+# STEP names the report line. Ends on Household Overview. Records a redose -
+# IRREVERSIBLE; stock falls by its quantity.
+#
+# Read off the app as AU-CDD-001, 2026-10-22:
+#   - After a dose the card reads "Administered success" with View Details and
+#     Redose. Redose opens "Redose Details" / "Capture redose details of the
+#     beneficiary" straight away - no eligibility checklist: "Date of Redose"
+#     (today), "Resources to be delivered" (the product, a fixed button),
+#     "Quantity Distributed" (a - 1 + stepper), "Add Items" (disabled),
+#     "Reason *" (a searchable dropdown: Vomitting, Others), Submit.
+#   - Submit has no confirmation and no delivery checks: it ends on "Data
+#     recorded Successfully" / "Data has been recorded successfully. Data will
+#     be synced when you are online." with View Household Details / Go Back.
+# No centring scrolls here: centring a button low on a card overshot it and the
+# search ran on to the bottom (2026-10-22); a visible button is tappable.
+#   - The card then reads "Administered success", "Redose Completed", View
+#     Details, and Redose - shown but no longer tappable.
+- runScript:
+    file: registration.js
+    env:
+      ACTION: member
+      WHO: ${WHO}
+- scrollUntilVisible:
+    element: "Household Overview"
+    direction: UP
+    timeout: 15000
+    optional: true
+    label: "Back to the top of the household"
+- scrollUntilVisible:
+    element:
+      text: "Redose"
+      below: ${output.m.id}
+    direction: DOWN
+    timeout: 15000
+    optional: true
+    label: "Find the child's Redose"
+- runFlow:
+    when:
+      notVisible:
+        text: "Redose"
+        below: ${output.m.id}
+    commands:
+      - takeScreenshot: artifacts/registration-no-redose-${WHO}
+      - runFlow:
+          file: ../fail.yaml
+          env:
+            MESSAGE: "${STEP + ' - no Redose on ' + output.m.label + ' card after its dose.'}"
+          label: "Redose is offered after the dose"
+- tapOn:
+    text: "Redose"
+    below: ${output.m.id}
+    label: "Redose"
+- extendedWaitUntil:
+    visible: "Redose Details"
+    timeout: 15000
+    label: "Redose Details opens"
+
+# --- Product and quantity ---------------------------------------------------------
+- runFlow: read-products.yaml
+- takeScreenshot: artifacts/registration-redose-${WHO}
+- runFlow:
+    when:
+      true: ${output.reg.productFailure}
+    file: ../fail.yaml
+    env:
+      MESSAGE: "${output.reg.productFailure.replace('delivery screen', 'redose screen')}"
+    label: "The age-product rule holds for the redose"
+- copyTextFrom:
+    text: "\\d+"
+    below: "Quantity Distributed"
+    above: "Add Items"
+    label: "Read the redose quantity"
+- runScript:
+    file: registration.js
+    env:
+      ACTION: dose
+      FIELD: redose
+
+# --- Reason -----------------------------------------------------------------------------
+- tapOn:
+    below: "Reason \\*"
+    index: 0
+    label: "Open the Reason dropdown"
+- extendedWaitUntil:
+    visible:
+      text: ".+"
+      below: "Reason \\*"
+      above: "Submit"
+    timeout: 10000
+    optional: true
+    label: "The reasons are listed"
+- runFlow:
+    when:
+      true: ${output.reg.redoseReason == ''}
+    commands:
+      # The first option: the nearest text under the field.
+      - copyTextFrom:
+          text: ".+"
+          below: "Reason \\*"
+          index: 0
+          label: "Read the first reason"
+      - evalScript: ${output.m.redoseReason = maestro.copiedText}
+- runFlow:
+    when:
+      true: ${output.reg.redoseReason != ''}
+    commands:
+      - evalScript: ${output.m.redoseReason = output.reg.redoseReason}
+- tapOn:
+    text: ${output.m.redoseReason}
+    below: "Reason \\*"
+    label: "Pick the reason"
+- runFlow:
+    when:
+      visible:
+        id: "android:id/input_method_nav_back"
+    commands:
+      - tapOn:
+          id: "android:id/input_method_nav_back"
+          label: "Close the keyboard"
+- assertVisible:
+    text: ${output.m.redoseReason}
+    below: "Reason \\*"
+    label: "The reason is chosen"
+- takeScreenshot: artifacts/registration-redose-reason-${WHO}
+
+# --- Submit -------------------------------------------------------------------------
+- tapOn:
+    text: "Submit"
+    below: "Reason \\*"
+    label: "Submit the redose"
+- extendedWaitUntil:
+    visible: "Data recorded Successfully"
+    timeout: 30000
+    optional: true
+    label: "The redose is recorded"
+- runFlow:
+    when:
+      notVisible: "Data recorded Successfully"
+    commands:
+      - takeScreenshot: artifacts/registration-redose-not-recorded-${WHO}
+      - runFlow:
+          file: ../fail.yaml
+          env:
+            MESSAGE: "${STEP + ' - the redose was not recorded (no Data recorded Successfully).'}"
+          label: "The redose is recorded"
+- copyTextFrom:
+    text: ".+"
+    below: "Data recorded Successfully"
+    above: "View Household Details"
+    label: "Read the success message"
+- evalScript: ${output.m.redoseMessage = maestro.copiedText}
+- takeScreenshot: artifacts/registration-redose-recorded-${WHO}
+- tapOn:
+    text: "View Household Details"
+    label: "View Household Details"
+- extendedWaitUntil:
+    visible: "Household Overview|Edit Individual"
+    timeout: 15000
+    label: "Household Overview opens"
+
+# --- The card, and no second redose ---------------------------------------------
+- scrollUntilVisible:
+    element:
+      text: "Redose Completed"
+      below: ${output.m.id}
+    direction: DOWN
+    timeout: 15000
+    optional: true
+    label: "Find Redose Completed on the card"
+- runFlow:
+    when:
+      notVisible:
+        text: "Redose Completed"
+        below: ${output.m.id}
+    commands:
+      - takeScreenshot: artifacts/registration-redose-not-shown-${WHO}
+      - runFlow:
+          file: ../fail.yaml
+          env:
+            MESSAGE: "${STEP + ' - the card does not show Redose Completed after the redose.'}"
+          label: "The card shows Redose Completed"
+- tapOn:
+    text: "Redose"
+    below: ${output.m.id}
+    label: "Try a second redose"
+- extendedWaitUntil:
+    visible: "Redose Details"
+    timeout: 4000
+    optional: true
+    label: "A second redose opens - or not"
+- evalScript: ${output.m.secondRedose = false}
+- runFlow:
+    when:
+      visible: "Redose Details"
+    commands:
+      - evalScript: ${output.m.secondRedose = true}
+      - takeScreenshot: artifacts/registration-second-redose-${WHO}
+      - tapOn:
+          text: "Back"
+          above: "Redose Details"
+          label: "Back without a second redose"
+      - extendedWaitUntil:
+          visible: "Household Overview|Edit Individual"
+          timeout: 15000
+          label: "Back on Household Overview"
+- runScript:
+    file: registration.js
+    env:
+      ACTION: step
+      STEP: ${STEP}
+      RESULT: PASSED
+      DETAIL: "${output.m.label + ' (' + output.m.months + ' months): offered ' + output.m.products.join(', ') + ', redose ' + output.m.redose + ', reason ' + output.m.redoseReason + '; ' + output.m.redoseMessage + '; card Redose Completed'}"
+- runScript:
+    file: registration.js
+    env:
+      ACTION: step
+      STEP: "${STEP + ' - redose limit'}"
+      RESULT: "${output.m.secondRedose ? 'DEVIATION' : 'PASSED'}"
+      DETAIL: "${output.m.secondRedose ? 'a second redose is offered (Redose Details opened again)' : 'Redose is shown but opens nothing - a second redose is not offered'}"

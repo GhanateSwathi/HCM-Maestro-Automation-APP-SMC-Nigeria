@@ -1,0 +1,83 @@
+appId: ${HCM_APP_ID}
+name: referral-pick-option
+---
+# On Referral Details: open the dropdown under FIELD (a label regex, fenced
+# above by NEXT, the next field's label) and pick TARGET (a selector; blank
+# takes the first option), recording it as WHAT (cycle | gender) in
+# output.ref. A TARGET not offered fails the record with MISSING.
+#
+# The options open under the field (Select cycle: Cycle 01, Cycle 02,
+# Cycle 03; Gender: Female, Male - 2026-10-21); the pattern leaves out the
+# form's own labels, which end in " *" or are the optional ones.
+- tapOn:
+    below: ${FIELD}
+    above: ${NEXT}
+    label: "Open the dropdown"
+- extendedWaitUntil:
+    visible:
+      text: "(?!.*\\*$)(?!Beneficiary id$|Referral code$|version \\d+$|Next$).+"
+      below: ${FIELD}
+    timeout: 10000
+    label: "The dropdown lists options"
+- runFlow:
+    when:
+      true: ${TARGET != '' && TARGET != 'undefined'}
+    commands:
+      - runFlow:
+          when:
+            notVisible:
+              text: ${TARGET}
+              below: ${FIELD}
+          commands:
+            - runScript:
+                file: referral.js
+                env:
+                  ACTION: fail
+                  WHY: ${MISSING}
+      - runFlow:
+          when:
+            true: ${!output.ref.skip}
+          commands:
+            - copyTextFrom:
+                text: ${TARGET}
+                below: ${FIELD}
+                label: "Read the configured option"
+- runFlow:
+    when:
+      true: ${TARGET == '' || TARGET == 'undefined'}
+    commands:
+      - copyTextFrom:
+          text: "(?!.*\\*$)(?!Beneficiary id$|Referral code$|version \\d+$|Next$).+"
+          below: ${FIELD}
+          index: 0
+          label: "Read the first option"
+- runFlow:
+    when:
+      true: ${!output.ref.skip}
+    commands:
+      - runScript:
+          file: referral.js
+          env:
+            ACTION: picked
+            WHAT: ${WHAT}
+          label: "Record the option"
+      - tapOn:
+          text: ${output.ref[WHAT + 'Selector']}
+          below: ${FIELD}
+          label: "Choose the option"
+      - waitForAnimationToEnd:
+          timeout: 2000
+      # A search dropdown leaves the keyboard up.
+      - runFlow:
+          when:
+            visible:
+              id: "android:id/input_method_nav_back"
+          commands:
+            - tapOn:
+                id: "android:id/input_method_nav_back"
+                label: "Close the keyboard"
+      - assertVisible:
+          text: ${output.ref[WHAT + 'Selector']}
+          below: ${FIELD}
+          above: ${NEXT}
+          label: "The field shows the option"

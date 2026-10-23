@@ -1,0 +1,28 @@
+appId: ${HCM_APP_ID}
+name: dispatch-balance
+---
+# On the home screen: read the dispatched product's balance with the shared
+# ../read-stock-balance.yaml and check it per PHASE:
+#   current  becomes CURRENT_BALANCE
+#   check    must still equal CURRENT_BALANCE (nothing was dispatched)
+#   final    must equal REMAINING_BALANCE after Case 3
+- runFlow:
+    file: ../read-stock-balance.yaml
+    env:
+      VARIANT: ${output.dispatch.variant}
+- runScript:
+    file: dispatch.js
+    env:
+      ACTION: balance
+      PHASE: ${PHASE}
+    label: "Check the stock balance"
+- runFlow:
+    when:
+      true: ${output.dispatch.failure}
+    commands:
+      - takeScreenshot: artifacts/dispatch-balance-${PHASE}
+      - runFlow:
+          file: ../../fail.yaml
+          env:
+            MESSAGE: ${output.dispatch.failure}
+          label: "Stock balance as expected"

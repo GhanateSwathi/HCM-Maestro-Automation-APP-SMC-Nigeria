@@ -1,0 +1,26 @@
+appId: ${HCM_APP_ID}
+name: "Onboarding - health facility stock user selects the first facility"
+tags:
+  - regression
+  - onboarding
+  - hf-stock
+  - mhbase
+---
+# Needs HCM_HF_STOCK_USER_ID / HCM_HF_STOCK_PASSWORD (AU-HFS-001 on the
+# mhbase tenant) and a reachable environment.
+# Launches with no permissions granted, signs in, waits out the sync, grants
+# every permission on the Allow Permissions screen, ticks its checkbox and
+# continues to boundary selection.
+- runFlow: ../../subflows/sign-in/hf-stock.yaml
+
+# "ADMIN_Health Facility *" is the raw boundary code the mhbase tenant shows -
+# hence the mhbase tag. No particular facility is configured for this user, so
+# the first one offered is taken, whatever it is called; maestro.log records
+# which.
+- runFlow:
+    file: ../../subflows/dropdown/select-first-options.yaml
+    env:
+      FIELD: "ADMIN_Health Facility.*"
+      COUNT: "1"
+
+- takeScreenshot: artifacts/onboarding-hf-stock

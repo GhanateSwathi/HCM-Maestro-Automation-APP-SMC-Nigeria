@@ -1,0 +1,19 @@
+appId: ${HCM_APP_ID}
+name: init-variants
+---
+# Starts Case 2's book-keeping from PRODUCT_VARIANT_1 / PRODUCT_VARIANT_2 in
+# .env (SPAQ1, SPAQ2), and fails at once if either is unset.
+- runScript:
+    file: variants.js
+    env:
+      ACTION: init
+      VARIANT_1: ${PRODUCT_VARIANT_1}
+      VARIANT_2: ${PRODUCT_VARIANT_2}
+    label: "Read the product variants from the test data"
+- runFlow:
+    when:
+      true: ${output.variants.failure}
+    file: ../../fail.yaml
+    env:
+      MESSAGE: ${output.variants.failure}
+    label: "Product variants are set in .env"

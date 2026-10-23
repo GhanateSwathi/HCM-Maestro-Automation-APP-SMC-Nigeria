@@ -1,0 +1,92 @@
+appId: ${HCM_APP_ID}
+name: "Referral - health facility creates one beneficiary referral per reason and syncs them"
+tags:
+  - regression
+  - referral
+  - hf-stock
+  - mhbase
+  - consumes-data
+---
+# Prompt 10 (the specification's health_facility/hf_beneficiary_referral.yaml):
+# the health facility user creates four referrals directly - one for each of
+# REASON_1..REASON_4 - each with its reason's checklist, checks all four are
+# listed, then syncs them.
+#
+# Needs HCM_HF_STOCK_USER_ID / HCM_HF_STOCK_PASSWORD (AU-HFS-001), TEST_USER,
+# REASON_1..REASON_4, CHILD_AGE_MONTHS, CHECKLIST_TEXT_ANSWER, and
+# optionally REFERRAL_VILLAGE, REFERRAL_CYCLE, CHILD_GENDER (blank takes the
+# first offered). Child names are generated: AutoChild_<reason>_<run time>.
+# IRREVERSIBLE: every run creates four referral records - hence
+# consumes-data.
+#
+# A record that fails is reported and the next reason still runs; the run
+# fails at the end listing every failed record, a record missing from the
+# list, or a failed sync. Read off the app as AU-HFS-001, 2026-10-21.
+
+- runScript:
+    file: ../../subflows/referral/referral.js
+    env:
+      ACTION: init
+      TEST_USER: ${TEST_USER}
+      AGE: ${CHILD_AGE_MONTHS}
+      GENDER: ${CHILD_GENDER}
+      CYCLE: ${REFERRAL_CYCLE}
+      VILLAGE: ${REFERRAL_VILLAGE}
+      TEXT: ${CHECKLIST_TEXT_ANSWER}
+    label: "Read the referral test data"
+- runFlow:
+    when:
+      true: ${output.referral.failure}
+    file: ../../subflows/fail.yaml
+    env:
+      MESSAGE: ${output.referral.failure}
+    label: "Referral test data is set in .env"
+# TEST_USER is reported as the account under test, so it must be the one
+# signing in. Only TEST_USER is named in the message.
+- evalScript: "${output.userCheck = (String(TEST_USER).trim() == '' || String(TEST_USER) == 'undefined' || String(TEST_USER).trim().toLowerCase() == String(HCM_HF_STOCK_USER_ID).trim().toLowerCase()) ? '' : 'TEST_USER ' + TEST_USER + ' is not the health facility stock user .env signs in with (HCM_HF_STOCK_USER_ID).'}"
+- runFlow:
+    when:
+      true: ${output.userCheck}
+    file: ../../subflows/fail.yaml
+    env:
+      MESSAGE: ${output.userCheck}
+    label: "TEST_USER is the account signing in"
+
+- runFlow: ../../subflows/home/hf-stock.yaml
+- runFlow: ../../subflows/referral/open-referral.yaml
+
+# Test Cases 1-4, in order; a failed one does not stop the next.
+- runFlow:
+    file: ../../subflows/referral/create-referral.yaml
+    env:
+      REASON: ${REASON_1}
+- runFlow:
+    file: ../../subflows/referral/create-referral.yaml
+    env:
+      REASON: ${REASON_2}
+- runFlow:
+    file: ../../subflows/referral/create-referral.yaml
+    env:
+      REASON: ${REASON_3}
+- runFlow:
+    file: ../../subflows/referral/create-referral.yaml
+    env:
+      REASON: ${REASON_4}
+
+# All four found before sync, then sync.
+- runFlow: ../../subflows/referral/verify-list.yaml
+- runFlow: ../../subflows/referral/go-home.yaml
+- runFlow: ../../subflows/referral/sync-referrals.yaml
+
+- runScript:
+    file: ../../subflows/referral/referral.js
+    env:
+      ACTION: summary
+    label: "Log the referral report"
+- runFlow:
+    when:
+      true: ${output.referral.failure}
+    file: ../../subflows/fail.yaml
+    env:
+      MESSAGE: ${output.referral.failure}
+    label: "All four referrals created, listed and synced"

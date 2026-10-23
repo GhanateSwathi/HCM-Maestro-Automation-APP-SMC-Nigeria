@@ -1,0 +1,27 @@
+appId: ${HCM_APP_ID}
+name: cdd-balances
+---
+# On home: read PRODUCT_VARIANT_1's and _2's Stock Balance into
+# output.reg.balances[PHASE] (read-stock-balance.yaml fails an unreadable
+# line).
+- runFlow:
+    file: ../stock/read-stock-balance.yaml
+    env:
+      VARIANT: ${output.reg.variant1}
+- runScript:
+    file: registration.js
+    env:
+      ACTION: balance
+      PHASE: ${PHASE}
+      INDEX: "0"
+- runFlow:
+    file: ../stock/read-stock-balance.yaml
+    env:
+      VARIANT: ${output.reg.variant2}
+- runScript:
+    file: registration.js
+    env:
+      ACTION: balance
+      PHASE: ${PHASE}
+      INDEX: "1"
+- takeScreenshot: artifacts/registration-balance-${PHASE}

@@ -1,0 +1,42 @@
+appId: ${HCM_APP_ID}
+name: hf-tc2-incoming
+---
+# Test Case 2 - from home: Manage Stock -> Record Stock Receipt lists at least
+# one incoming transaction with a real MRN, and its MRN is captured.
+# Otherwise
+#   BLOCKED - Test Cases 3 to 6: No incoming transactions for Health Facility; State dispatch not received.
+# Ends on Incoming Transactions.
+- runFlow: ../open-incoming-transactions.yaml
+- runFlow:
+    when:
+      true: ${output.incoming == 'absent'}
+    commands:
+      - takeScreenshot: artifacts/hf-tc2-no-incoming
+      - runFlow:
+          file: ../../fail.yaml
+          env:
+            MESSAGE: "BLOCKED - Test Cases 3 to 6: No incoming transactions for Health Facility; State dispatch not received."
+          label: "Test Case 2 - incoming transactions are listed"
+
+# A dispatch carries its MRN ("MRN 67E0-282C-1890", 2026-10-19). Older test
+# data showed a placeholder instead - "MRN null_0", its place in the list -
+# which is not an MRN.
+- runFlow:
+    when:
+      notVisible: "MRN (?!null(_\\d+)?$).+"
+    commands:
+      - takeScreenshot: artifacts/hf-tc2-no-mrn
+      - runFlow:
+          file: ../../fail.yaml
+          env:
+            MESSAGE: "BLOCKED - Test Cases 3 to 6: No incoming transaction with an MRN number is listed."
+          label: "Test Case 2 - an incoming transaction has an MRN"
+- copyTextFrom:
+    text: "MRN (?!null(_\\d+)?$).+"
+    index: 0
+    label: "Test Case 2 - capture the first incoming MRN"
+- evalScript: ${output.hf.firstMrn = maestro.copiedText}
+# Logs the first card in full: MRN, product, date, sender and status.
+- runFlow: ../read-first-transaction.yaml
+- takeScreenshot: artifacts/hf-tc2-incoming
+- evalScript: ${console.log('Test Case 2 PASSED - incoming transactions listed; first ' + output.hf.firstMrn)}

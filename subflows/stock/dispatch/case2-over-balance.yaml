@@ -1,0 +1,11 @@
+appId: ${HCM_APP_ID}
+name: case2-over-balance
+---
+# Case 2 - a dispatch of CURRENT_BALANCE + 1 is refused. On Product Details;
+# no stock moves.
+- runFlow:
+    file: expect-blocked.yaml
+    env:
+      CASE: "2"
+      QUANTITY: ${output.dispatch.over}
+- evalScript: ${console.log('Case 2 PASSED - Dispatch above stock balance blocked as expected. Quantity ' + output.dispatch.over + ' against balance ' + output.dispatch.balance + '. Message - ' + output.dispatch.errors['2'])}

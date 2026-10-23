@@ -1,0 +1,66 @@
+appId: ${HCM_APP_ID}
+name: recon-enter-count
+---
+# On the reconciliation form: replace Manual count with COUNT and close the
+# keyboard. Ends with the field showing COUNT.
+#
+# Clearing the field re-lays the form - "Manual count is required" takes the
+# hint's place and Comments appears - and on 2026-10-19 the field lost focus
+# with it, so the digits went nowhere. The field is focused again before
+# typing. The label is matched in full ("Manual count *") so the error text,
+# which also starts "Manual count", never stands in for it.
+#
+# Just after a variant is picked the field sits under the Submit bar, its
+# hint off screen, so scroll first.
+- scrollUntilVisible:
+    element:
+      text: "Enter the physical count of stock after manual verification|Manual count is required"
+    direction: DOWN
+    timeout: 10000
+    label: "Scroll Manual count into view"
+- tapOn:
+    below: "Manual count \\*"
+    above: "Enter the physical count of stock after manual verification|Manual count is required"
+    label: "Focus Manual count"
+- assertVisible:
+    focused: true
+    below: "Manual count \\*"
+    above: "Enter the physical count of stock after manual verification|Manual count is required"
+    label: "Manual count has focus"
+- eraseText
+- waitForAnimationToEnd:
+    timeout: 2000
+- runFlow:
+    when:
+      notVisible:
+        focused: true
+        below: "Manual count \\*"
+        above: "Enter the physical count of stock after manual verification|Manual count is required"
+    commands:
+      - tapOn:
+          below: "Manual count \\*"
+          above: "Enter the physical count of stock after manual verification|Manual count is required"
+          label: "Focus Manual count again after the form re-laid"
+- assertVisible:
+    focused: true
+    below: "Manual count \\*"
+    above: "Enter the physical count of stock after manual verification|Manual count is required"
+    label: "Manual count has focus"
+- inputText: ${COUNT}
+# The keyboard's own Back key closes it (hideKeyboard is not used - see
+# login.yaml); Comments and Submit sit under the keyboard otherwise.
+- runFlow:
+    when:
+      visible:
+        id: "android:id/input_method_nav_back"
+    commands:
+      - tapOn:
+          id: "android:id/input_method_nav_back"
+          label: "Close the keyboard"
+      - waitForAnimationToEnd:
+          timeout: 2000
+- assertVisible:
+    text: ${COUNT}
+    below: "Manual count \\*"
+    above: "Enter the physical count of stock after manual verification"
+    label: "Manual count shows the count"

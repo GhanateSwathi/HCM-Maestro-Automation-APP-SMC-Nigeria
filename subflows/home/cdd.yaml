@@ -1,0 +1,95 @@
+appId: ${HCM_APP_ID}
+name: home-cdd
+---
+# Takes the CDD user from a cold start to the home screen: the onboarding
+# path of ONB-04 (sign in, sync, Allow Permissions, the first
+# ADMIN_Health Facility, the first three ADMIN_Community) plus Submit. Every
+# flow that works from the CDD's home screen starts here. Leaves the
+# communities chosen in output.dropdown.options (also logged).
+- runFlow: ../sign-in/cdd.yaml
+- runFlow:
+    file: ../dropdown/select-first-options.yaml
+    env:
+      FIELD: "ADMIN_Health Facility.*"
+      COUNT: "1"
+- evalScript: ${output.cddFacility = output.dropdown.options[0]}
+- runFlow:
+    file: ../dropdown/select-first-options.yaml
+    env:
+      FIELD: "ADMIN_Community.*"
+      COUNT: "3"
+- evalScript: "${console.log('CDD boundaries - ' + output.cddFacility + '; communities ' + output.dropdown.options.join(', '))}"
+
+- tapOn:
+    text: "Submit"
+    label: "Submit the boundary selection"
+
+# As for the health facility user, Submit may first report the boundary's
+# records: "No data found!" (Go Back) or "Data found!" (Download, ending on
+# Go To Home Screen). For AU-CDD-001 on 2026-10-21 it answered "Failed to
+# check data in server" (Proceed Without Downloading / Retry) instead, and
+# twice more on Retry. A field user then proceeds without the boundary's
+# existing records; registering a new household does not need them, and
+# stock comes down separately (Download Stock Data). The outcome is logged.
+- evalScript: ${output.cddBoundaryData = 'checked'}
+- extendedWaitUntil:
+    visible: "Registration & Delivery|Stock Balance|No data found!|Data found!|Failed to check data in server"
+    timeout: 300000
+    label: "Home screen, or the boundary's records notice"
+- repeat:
+    times: 2
+    while:
+      visible: "Failed to check data in server"
+    label: "Retry the boundary records check"
+    commands:
+      - tapOn:
+          text: "Retry"
+          label: "Retry the check"
+      - extendedWaitUntil:
+          notVisible: "Failed to check data in server"
+          timeout: 5000
+          optional: true
+          label: "The check restarts"
+      - extendedWaitUntil:
+          visible: "Registration & Delivery|Stock Balance|No data found!|Data found!|Failed to check data in server"
+          timeout: 300000
+          label: "The check answers"
+- runFlow:
+    when:
+      visible: "Failed to check data in server"
+    commands:
+      - evalScript: ${output.cddBoundaryData = 'Failed to check data in server (3 tries) - proceeded without downloading'}
+      - takeScreenshot: artifacts/cdd-boundary-check-failed
+      - tapOn:
+          text: "Proceed Without Downloading"
+          label: "Proceed without the boundary's records"
+- runFlow:
+    when:
+      visible: "No data found!"
+    commands:
+      - evalScript: ${output.cddBoundaryData = 'No data found!'}
+      - tapOn:
+          text: "Go Back"
+          label: "Dismiss the no-records notice"
+- runFlow:
+    when:
+      visible: "Data found!"
+    commands:
+      - evalScript: ${output.cddBoundaryData = 'Data found! - downloaded'}
+      - tapOn:
+          text: "Download"
+          below: "Data found!"
+          label: "Download the boundary's records"
+      - extendedWaitUntil:
+          visible: "Go To Home Screen"
+          timeout: 300000
+          label: "Boundary records downloaded"
+      - tapOn:
+          text: "Go To Home Screen"
+          label: "Go to the home screen"
+- extendedWaitUntil:
+    visible: "Registration & Delivery|Stock Balance"
+    timeout: 60000
+    label: "Home screen loads after boundary selection"
+- evalScript: "${console.log('CDD boundary records - ' + output.cddBoundaryData)}"
+- takeScreenshot: artifacts/cdd-home

@@ -1,0 +1,22 @@
+appId: ${HCM_APP_ID}
+name: case2-popup
+---
+# The Accept Confirmation popup offers both answers - the state user's Case 2,
+# the health facility user's Test Case 4. Expects the popup to be up for
+# PRODUCT_VARIANT_1's transaction (open-accept-confirmation.yaml). A missing
+# button fails here, so neither Cancel nor Confirm is tried. Strings read off
+# the app 2026-10-15.
+- assertVisible:
+    text: "Accept Confirmation"
+    label: "Popup titled Accept Confirmation"
+- assertVisible:
+    text: "Are you sure you want to accept this stock\\?"
+    label: "Popup asks for confirmation"
+- assertVisible:
+    text: "Confirm"
+    label: "Popup offers Confirm"
+- assertVisible:
+    text: "Cancel"
+    label: "Popup offers Cancel"
+- takeScreenshot: artifacts/stock-accept-confirmation
+- evalScript: ${console.log(output.variants.cases.popup + ' PASSED - Accept Confirmation for the ' + output.v.name + ' transaction (' + output.txn.mrnLabel + ') shows Confirm and Cancel')}

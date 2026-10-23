@@ -1,0 +1,21 @@
+appId: ${HCM_APP_ID}
+name: enter-quantity
+---
+# On Product Details: replace the quantity - "Quantity sent" (Issue) or
+# "Quantity returned" (Return) - with QUANTITY. The app validates as you type,
+# so any message for the value is up when this returns.
+# Fenced between the label and Submit, which keeps the keyboard's keys out;
+# focus is checked before typing so the value cannot land in another field.
+- tapOn:
+    below: "Quantity (sent|returned).*"
+    above: "Submit"
+    label: "Focus the quantity field"
+- assertVisible:
+    focused: true
+    below: "Quantity (sent|returned).*"
+    above: "Submit"
+    label: "The quantity field has focus"
+- eraseText
+- inputText: ${QUANTITY}
+- waitForAnimationToEnd:
+    timeout: 2000

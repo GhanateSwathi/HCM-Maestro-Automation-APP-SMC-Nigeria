@@ -1,0 +1,42 @@
+appId: ${HCM_APP_ID}
+name: case2b-confirm
+---
+# Case 2b - accept one transaction per product variant, PRODUCT_VARIANT_1
+# first, then check the home balances. Expects Incoming Transactions after
+# Case 2a, with the counts in output.variants.countsBefore and the home
+# balances in balanceBefore.
+# IRREVERSIBLE: consumes two incoming transactions, so every run needs fresh
+# incoming stock - one for each variant.
+
+# Steps 1 and 2 - SPAQ1, then SPAQ2.
+- runFlow: accept-both.yaml
+
+# Step 3 - final verification: each product's Stock Balance rose by the
+# quantity received.
+- tapOn:
+    text: "Back"
+    label: "Case 2b - back to Manage Stock"
+- tapOn:
+    text: "Back"
+    label: "Case 2b - back to home"
+- extendedWaitUntil:
+    visible: "Stock Balance"
+    timeout: 15000
+    label: "Case 2b - home screen"
+- runFlow:
+    file: read-balances.yaml
+    env:
+      PHASE: after
+- takeScreenshot: artifacts/stock-case2b-final-balance
+- runScript:
+    file: variants.js
+    env:
+      ACTION: final
+    label: "Case 2b - compare the balances"
+- runFlow:
+    when:
+      true: ${output.variants.failure}
+    file: ../../fail.yaml
+    env:
+      MESSAGE: ${output.variants.failure}
+    label: "Case 2b - Stock Balance rose by the quantities accepted"

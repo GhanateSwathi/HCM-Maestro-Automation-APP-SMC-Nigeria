@@ -1,0 +1,61 @@
+appId: ${HCM_APP_ID}
+name: "Stock - state stock user checks incoming stock receipts"
+tags:
+  - regression
+  - stock
+  - state-stock
+  - mhbase
+---
+# Needs HCM_STATE_STOCK_USER_ID / HCM_STATE_STOCK_PASSWORD (AU-SAT-001 on the
+# mhbase tenant) and a reachable environment. Optional:
+# HCM_STATE_STOCK_INCOMING_RECEIPTS=present|absent fails the flow when the
+# screen shows the other outcome; blank accepts either.
+#
+# Signs in, selects the first state and lands on the home screen - the
+# onboarding flow plus Submit. The mhbase tag comes from that state field.
+- runFlow: ../../subflows/home/state-stock.yaml
+
+# Incoming transactions are read from records on the device, which sign-in
+# does not fetch on this build - without this the list stays empty.
+- runFlow: ../../subflows/stock/download-stock-data.yaml
+
+# Manage Stock card -> Record Stock Receipt -> Incoming Transactions, and
+# whether it lists anything (output.incoming).
+- runFlow: ../../subflows/stock/open-incoming-transactions.yaml
+
+# State B - the empty-state card.
+- runFlow:
+    when:
+      true: ${output.incoming == 'absent'}
+    commands:
+      - assertVisible:
+          text: "No incoming stock transactions found"
+          label: "No incoming transactions available."
+      - takeScreenshot: artifacts/stock-incoming-none
+
+# State A - transaction cards. Log the first one's details to maestro.log
+# and capture the list.
+- runFlow:
+    when:
+      true: ${output.incoming == 'present'}
+    commands:
+      - assertVisible:
+          text: "MRN .*"
+          below: "View and accept incoming stock transactions"
+          label: "Incoming transactions found."
+      - runFlow: ../../subflows/stock/read-first-transaction.yaml
+      - takeScreenshot: artifacts/stock-incoming-transactions
+
+- runScript:
+    file: ../../subflows/stock/incoming-receipts.js
+    env:
+      OBSERVED: ${output.incoming}
+      EXPECTED: ${HCM_STATE_STOCK_INCOMING_RECEIPTS}
+    label: "Compare the outcome with the test data"
+- runFlow:
+    when:
+      true: ${output.incomingFailure}
+    file: ../../subflows/fail.yaml
+    env:
+      MESSAGE: ${output.incomingFailure}
+    label: "Outcome matches the test data, if it names one"

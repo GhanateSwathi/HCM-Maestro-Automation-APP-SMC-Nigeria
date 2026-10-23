@@ -1,0 +1,115 @@
+appId: ${HCM_APP_ID}
+name: open-registration
+---
+# From the home screen: Registration & Delivery -> village -> the search
+# screen. REGISTRATION_VILLAGE when set, else the first village offered; a
+# later call reopens the village picked the first time.
+#
+# Read off the app as AU-CDD-001, 2026-10-21: the card opens "Select Your
+# Village", listing the communities chosen at sign-in (18Gammadadi,
+# 17Bunduryel, 16Buri buri rugan fulani) over "Want to choose another
+# Village?". A village opens "Search Beneficiary": the village's name,
+# "Near by households" / "Search by ID", a field with the hint "Name of the
+# individual", and "Register Beneficiary" at the foot.
+- runFlow:
+    when:
+      notVisible: "Registration & Delivery"
+    commands:
+      - scrollUntilVisible:
+          element: "Registration & Delivery"
+          direction: DOWN
+          timeout: 10000
+          optional: true
+          label: "Scroll down looking for the Registration & Delivery card"
+- runFlow:
+    when:
+      notVisible: "Registration & Delivery"
+    commands:
+      - takeScreenshot: artifacts/registration-card-missing
+      - runFlow:
+          file: ../fail.yaml
+          env:
+            MESSAGE: "${'Registration & Delivery card not displayed on home screen for ' + output.reg.user + '.'}"
+          label: "Registration & Delivery card is displayed"
+- tapOn:
+    text: "Registration & Delivery"
+    label: "Open Registration & Delivery"
+- extendedWaitUntil:
+    visible: "Select Your Village"
+    timeout: 15000
+    label: "Select Your Village opens"
+
+# --- Village (picked once, reopened by name afterwards) ----------------------
+- runFlow:
+    when:
+      true: ${output.reg.village == ''}
+    commands:
+      - extendedWaitUntil:
+          visible:
+            text: ".+"
+            below: "Select Your Village"
+            above: "Want to choose another Village\\?"
+          timeout: 10000
+          optional: true
+          label: "A village is offered"
+      - runFlow:
+          when:
+            notVisible:
+              text: ".+"
+              below: "Select Your Village"
+              above: "Want to choose another Village\\?"
+          commands:
+            - takeScreenshot: artifacts/registration-no-village
+            - runFlow:
+                file: ../fail.yaml
+                env:
+                  MESSAGE: "${'No villages available in Registration & Delivery for ' + output.reg.user + '.'}"
+                label: "A village is offered"
+      - runFlow:
+          when:
+            true: ${output.reg.villageTarget != ''}
+          commands:
+            - runFlow:
+                when:
+                  notVisible:
+                    text: ${output.reg.villagePattern}
+                    below: "Select Your Village"
+                    above: "Want to choose another Village\\?"
+                commands:
+                  - takeScreenshot: artifacts/registration-village-missing
+                  - runFlow:
+                      file: ../fail.yaml
+                      env:
+                        MESSAGE: "${'REGISTRATION_VILLAGE ' + output.reg.villageTarget + ' is not offered in Registration & Delivery.'}"
+                      label: "REGISTRATION_VILLAGE is offered"
+            - copyTextFrom:
+                text: ${output.reg.villagePattern}
+                below: "Select Your Village"
+                label: "Read REGISTRATION_VILLAGE"
+      - runFlow:
+          when:
+            true: ${output.reg.villageTarget == ''}
+          commands:
+            - copyTextFrom:
+                text: ".+"
+                below: "Select Your Village"
+                above: "Want to choose another Village\\?"
+                index: 0
+                label: "Read the first village"
+      - runScript:
+          file: registration.js
+          env:
+            ACTION: village
+          label: "Record the village"
+- tapOn:
+    text: ${output.reg.villageSelector}
+    below: "Select Your Village"
+    label: "Open the village"
+- extendedWaitUntil:
+    visible: "Name of the individual"
+    timeout: 15000
+    label: "Search Beneficiary opens, its field empty"
+- assertVisible:
+    text: ${output.reg.villageSelector}
+    above: "Search Beneficiary"
+    label: "The search screen names the village"

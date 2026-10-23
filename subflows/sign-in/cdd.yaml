@@ -1,0 +1,40 @@
+appId: ${HCM_APP_ID}
+name: sign-in-cdd
+---
+# Signs in as the CDD user and waits for the screen that role lands on.
+# Every CDD flow starts here.
+- runFlow: ../launch-app.yaml
+
+# login.yaml signs in whoever it is handed. Its LOGIN_* names are deliberately
+# absent from .env: the runner forwards every .env key as -e, which would
+# replace the role credentials passed here.
+- runFlow:
+    file: ../login.yaml
+    env:
+      LOGIN_USER_ID: ${HCM_CDD_USER_ID}
+      LOGIN_PASSWORD: ${HCM_CDD_PASSWORD}
+
+# Sign-in raises "Sync in progress" over the Projects screen and pulls the
+# whole project payload down - about 3 minutes on SMC-MC UAT, about 1 on the
+# mhbase tenant. The CDD test user has a single project, so the app skips
+# Projects on its own. With no permissions pre-granted (see launch-app.yaml)
+# it then holds on its Allow Permissions screen, and only after that lands on
+# facility selection.
+#
+# The facility field's label depends on the tenant build, both
+# com.digit.hcm 2.2.113: "Health Facility *" on SMC-MC UAT,
+# "ADMIN_Health Facility *" (the raw boundary code) on
+# file-based-download-mhbase-tenant. It is a hint, not text, but Maestro's
+# text matcher covers hints.
+- extendedWaitUntil:
+    visible: "Allow Permissions|(ADMIN_)?Health Facility.*"
+    timeout: 300000
+    label: "Post-login sync completes"
+- runFlow:
+    when:
+      visible: "Allow Permissions"
+    file: ../allow-permissions.yaml
+- extendedWaitUntil:
+    visible: "(ADMIN_)?Health Facility.*"
+    timeout: 60000
+    label: "Facility selection opens"

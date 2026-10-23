@@ -1,0 +1,60 @@
+appId: ${HCM_APP_ID}
+name: "Stock - state stock user dispatches stock to a health facility"
+tags:
+  - regression
+  - stock
+  - state-stock
+  - mhbase
+  - consumes-data
+---
+# Prompt 3. Needs HCM_STATE_STOCK_USER_ID / HCM_STATE_STOCK_PASSWORD
+# (AU-SAT-001), PRODUCT_VARIANT and REMAINING_BALANCE (10);
+# TARGET_HEALTH_FACILITY is optional.
+#
+# PRODUCT_VARIANT is one product (SPAQ1) or several, comma-separated
+# (SPAQ1,SPAQ2). Several run one after another in this one session, not as
+# separate runs: the balance lives on the device, every run starts by wiping
+# the app, and Download Stock Data sends each record only once - a second
+# fresh run would find No Data Found and a balance of 0 (2026-10-19).
+#
+# Per product, Case 1 and 2 move no stock and run first. Case 3 dispatches
+# for real - hence consumes-data - and is BLOCKED while the balance is 10 or
+# less. Maestro has passed and failed but no "blocked": a blocked Case 3
+# fails with a reason starting "BLOCKED -", stopping any later products.
+
+- runFlow: ../../subflows/home/state-stock.yaml
+# Fetch the warehouse's stock records - the balance is built from them.
+- runFlow: ../../subflows/stock/download-stock-data.yaml
+
+- runScript:
+    file: ../../subflows/stock/dispatch/dispatch.js
+    env:
+      ACTION: plan
+      VARIANTS: ${PRODUCT_VARIANT}
+    label: "Read the products to dispatch"
+- runFlow:
+    when:
+      true: ${output.plan.failure}
+    file: ../../subflows/fail.yaml
+    env:
+      MESSAGE: ${output.plan.failure}
+    label: "PRODUCT_VARIANT is set in .env"
+
+- repeat:
+    times: ${output.plan.variants.length}
+    label: "Dispatch each product"
+    commands:
+      - runFlow:
+          file: ../../subflows/stock/dispatch/dispatch-variant.yaml
+          env:
+            VARIANT: ${output.plan.variants[output.plan.next]}
+            TARGET: ${TARGET_HEALTH_FACILITY}
+            TEAM_CODE: ""
+            MISSING: "Facility To does not offer the health facility to dispatch to (TARGET_HEALTH_FACILITY, or any)."
+            ROLE: "State User"
+
+- runScript:
+    file: ../../subflows/stock/dispatch/dispatch.js
+    env:
+      ACTION: summary
+    label: "Log the dispatch summary"

@@ -1,0 +1,47 @@
+appId: ${HCM_APP_ID}
+name: registration-init
+---
+# Reads the Prompt 11 test data before anything touches the device and fails
+# at once if any of it is missing or out of range (see .env.example). Also
+# generates this run's names: AutoHead<stamp>, AutoChild1<stamp>,
+# AutoChild2<stamp>, last name Test; the search text is the head's first name.
+- runScript:
+    file: registration.js
+    env:
+      ACTION: init
+      TEST_USER: ${TEST_USER}
+      VILLAGE: ${REGISTRATION_VILLAGE}
+      LATITUDE: ${TEST_LATITUDE}
+      LONGITUDE: ${TEST_LONGITUDE}
+      MEMBERS: ${HOUSEHOLD_MEMBERS}
+      HEAD_YEARS: ${HEAD_AGE_YEARS}
+      HEAD_MONTHS: ${HEAD_AGE_MONTHS}
+      HEAD_GENDER: ${HEAD_GENDER}
+      MOBILE: ${HEAD_MOBILE}
+      CHILD_1_MONTHS: ${CHILD_1_AGE_MONTHS}
+      CHILD_1_GENDER: ${CHILD_1_GENDER}
+      CHILD_2_MONTHS: ${CHILD_2_AGE_MONTHS}
+      CHILD_2_GENDER: ${CHILD_2_GENDER}
+      VARIANT_1: ${PRODUCT_VARIANT_1}
+      VARIANT_2: ${PRODUCT_VARIANT_2}
+      QTY_1: ${EXPECTED_CDD_RECEIVED_SPAQ1}
+      QTY_2: ${EXPECTED_CDD_RECEIVED_SPAQ2}
+      MRNS: ${CDD_INCOMING_MRNS}
+    label: "Read the Prompt 11 test data"
+- runFlow:
+    when:
+      true: ${output.reg.failure}
+    file: ../fail.yaml
+    env:
+      MESSAGE: ${output.reg.failure}
+    label: "Prompt 11 test data is set in .env"
+# TEST_USER is reported as the account under test, so it must be the one
+# signing in. Only TEST_USER is named in the message.
+- evalScript: "${output.userCheck = (String(TEST_USER).trim().toLowerCase() == String(HCM_CDD_USER_ID).trim().toLowerCase()) ? '' : 'TEST_USER ' + TEST_USER + ' is not the CDD user .env signs in with (HCM_CDD_USER_ID).'}"
+- runFlow:
+    when:
+      true: ${output.userCheck}
+    file: ../fail.yaml
+    env:
+      MESSAGE: ${output.userCheck}
+    label: "TEST_USER is the account signing in"

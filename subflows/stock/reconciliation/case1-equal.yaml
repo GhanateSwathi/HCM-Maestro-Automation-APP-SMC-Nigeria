@@ -1,0 +1,48 @@
+appId: ${HCM_APP_ID}
+name: recon-case1-equal
+---
+# Test Case 1 - a count equal to stock in hand needs no comment. On the form
+# (open-variant.yaml); ends on it again, re-read.
+#
+# Seen 2026-10-19: with the count equal to stock in hand the form shows no
+# Comments field at all.
+- runFlow:
+    file: enter-count.yaml
+    env:
+      COUNT: ${output.rv.original}
+- evalScript: ${output.rv.shown = false}
+- runFlow:
+    when:
+      visible: "Comments \\*"
+    commands:
+      - evalScript: ${output.rv.shown = true}
+- runScript:
+    file: recon.js
+    env:
+      ACTION: mandatory
+      CASE: "1"
+      SHOWN: ${output.rv.shown}
+    label: "Case 1 - Comments is not mandatory"
+- takeScreenshot: artifacts/recon-${output.rv.variant}-case1-form
+- runFlow:
+    file: submit.yaml
+    env:
+      CONFIRM: "true"
+      WAIT: "30000"
+- runFlow:
+    when:
+      true: ${!output.recon.submitted}
+    commands:
+      - takeScreenshot: artifacts/recon-${output.rv.variant}-case1-not-submitted
+      - runFlow:
+          file: ../../fail.yaml
+          env:
+            MESSAGE: "${output.rv.variant + ' Case 1 - the reconciliation with a matching count, without a comment, was not submitted.'}"
+          label: "Case 1 - submitted"
+- takeScreenshot: artifacts/recon-${output.rv.variant}-case1-submitted
+- runFlow: back-home.yaml
+- runFlow:
+    file: open-variant.yaml
+    env:
+      PHASE: case1
+- evalScript: ${console.log(output.rv.variant + ' Case 1 - Reconciliation with matching count submitted without a comment. Stock in hand ' + output.rv.original + ' -> ' + output.rv.after.case1)}

@@ -1,0 +1,18 @@
+appId: ${HCM_APP_ID}
+name: back-to-home
+---
+# From anywhere in Manage Stock: Android Back until the home screen. The first
+# Back closes the keyboard if one is up; each after that leaves one screen.
+# Stops as soon as home shows - Back on home would leave the app.
+- repeat:
+    times: 8
+    while:
+      notVisible: "Stock Balance"
+    label: "Back to the home screen"
+    commands:
+      - back
+      - waitForAnimationToEnd:
+          timeout: 2000
+- assertVisible:
+    text: "Stock Balance"
+    label: "On the home screen"

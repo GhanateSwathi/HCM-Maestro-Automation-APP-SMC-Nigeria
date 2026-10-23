@@ -1,0 +1,47 @@
+appId: ${HCM_APP_ID}
+name: reconcile-variant
+---
+# The specification's common/stock_reconciliation.yaml, for one product
+# VARIANT, from the home screen back to it: read stock in hand, then Case 1
+# (equal count), Case 2 (one less), Case 3 (one more than stock in hand as
+# read after Case 2). Expects recon.js init to have run.
+- runScript:
+    file: recon.js
+    env:
+      ACTION: begin
+      VARIANT: ${VARIANT}
+    label: "Start on the variant"
+- runFlow:
+    when:
+      true: ${output.recon.failure}
+    file: ../../fail.yaml
+    env:
+      MESSAGE: ${output.recon.failure}
+    label: "Product variant is set in .env"
+- runFlow:
+    file: open-variant.yaml
+    env:
+      PHASE: initial
+- takeScreenshot: artifacts/recon-${output.rv.variant}-initial
+# Below 0 stock in hand the variant is BLOCKED (recon.js) and nothing is
+# submitted.
+- runFlow:
+    when:
+      true: ${!output.rv.skip}
+    commands:
+      - runFlow: case1-equal.yaml
+      - runFlow:
+          file: differing-count.yaml
+          env:
+            CASE: "2"
+      - runFlow:
+          file: differing-count.yaml
+          env:
+            CASE: "3"
+      - takeScreenshot: artifacts/recon-${output.rv.variant}-final
+- runScript:
+    file: recon.js
+    env:
+      ACTION: done
+    label: "Record the variant's results"
+- runFlow: ../back-to-home.yaml

@@ -1,0 +1,48 @@
+appId: ${HCM_APP_ID}
+name: accept-both
+---
+# Accepts one transaction per product variant, PRODUCT_VARIANT_1 first - the
+# state user's Case 2b, the health facility user's Test Case 5. Expects
+# Incoming Transactions, with the counts in output.variants.countsBefore
+# (check-variants.yaml). Ends on Incoming Transactions.
+# IRREVERSIBLE: consumes two incoming transactions, so every run needs fresh
+# incoming stock - one for each variant.
+
+# Step 1 - the first variant; the second must still be pending afterwards.
+# A failure here stops the flow before the second variant is touched.
+- runFlow:
+    file: accept-transaction.yaml
+    env:
+      INDEX: "0"
+    label: "Step 1 - accept the first product variant"
+- runFlow:
+    file: count-transactions.yaml
+    env:
+      INDEX: "1"
+- runFlow:
+    when:
+      true: ${output.variants.counts[1] != output.variants.countsBefore[1]}
+    file: ../../fail.yaml
+    env:
+      MESSAGE: "${'Partial acceptance: ' + output.variants.names[0] + ' accepted, ' + output.variants.names[1] + ' failed – its incoming transactions went from ' + output.variants.countsBefore[1] + ' to ' + output.variants.counts[1] + ' without being accepted.'}"
+    label: "Step 1 - second product variant still pending"
+- takeScreenshot: artifacts/stock-accept-step1-list
+
+# Step 2 - the second variant; the first stays accepted.
+- runFlow:
+    file: accept-transaction.yaml
+    env:
+      INDEX: "1"
+    label: "Step 2 - accept the second product variant"
+- runFlow:
+    file: count-transactions.yaml
+    env:
+      INDEX: "0"
+- runFlow:
+    when:
+      true: ${output.variants.counts[0] != output.variants.countsBefore[0] - 1}
+    file: ../../fail.yaml
+    env:
+      MESSAGE: "${output.variants.cases.accept + ' - ' + output.variants.names[0] + ' incoming transactions changed again after accepting ' + output.variants.names[1] + ': ' + (output.variants.countsBefore[0] - 1) + ' expected, ' + output.variants.counts[0] + ' listed.'}"
+    label: "Step 2 - first product variant stays accepted"
+- takeScreenshot: artifacts/stock-accept-step2-list

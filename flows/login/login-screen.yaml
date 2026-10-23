@@ -1,0 +1,25 @@
+appId: ${HCM_APP_ID}
+name: "Login - login screen renders"
+tags:
+  - smoke
+  - login
+---
+# Cheapest possible health check: the app installs, launches and paints its
+# login form. Hits no backend, so it stays green even when UAT is down.
+- runFlow: ../../subflows/launch-app.yaml
+
+- assertVisible:
+    text: "User ID.*"
+    label: "User ID field is present"
+- assertVisible:
+    text: "Password.*"
+    label: "Password field is present"
+- assertVisible:
+    text: "Login"
+    below: "Password.*"
+    label: "Login button is present"
+- assertVisible:
+    text: "Forgot Password.*"
+    label: "Forgot Password link is present"
+
+- takeScreenshot: artifacts/smoke-login-screen

@@ -1,0 +1,41 @@
+appId: ${HCM_APP_ID}
+name: dose-and-redose
+---
+# Prompt 14, one test case - from Household Overview, for child WHO (TC: the
+# test case number): its dose (deliver-dose.yaml), home and the balances
+# (the dosed variant down by the dose, the other unchanged), back to the
+# household, its redose (redose.yaml), home and the balances again. Ends on
+# home. IRREVERSIBLE: a dose and a redose recorded.
+- runFlow:
+    file: deliver-dose.yaml
+    env:
+      WHO: ${WHO}
+      STEP: "${'Test Case ' + TC + ' Step 1 - dose'}"
+- runFlow: go-home.yaml
+- runFlow:
+    file: cdd-balances.yaml
+    env:
+      PHASE: ${'afterDose' + TC}
+- runScript:
+    file: registration.js
+    env:
+      ACTION: check-balance
+      KIND: dose
+      PHASE: ${'afterDose' + TC}
+- runFlow: open-household.yaml
+- runFlow:
+    file: redose.yaml
+    env:
+      WHO: ${WHO}
+      STEP: "${'Test Case ' + TC + ' Step 2 - redose'}"
+- runFlow: go-home.yaml
+- runFlow:
+    file: cdd-balances.yaml
+    env:
+      PHASE: ${'afterRedose' + TC}
+- runScript:
+    file: registration.js
+    env:
+      ACTION: check-balance
+      KIND: redose
+      PHASE: ${'afterRedose' + TC}

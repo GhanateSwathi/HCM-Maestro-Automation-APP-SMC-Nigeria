@@ -1,0 +1,53 @@
+appId: ${HCM_APP_ID}
+name: open-view-reports
+---
+# From the home screen: the View Reports card, and all four reports offered.
+# A missing one fails with "<Report> not available in View Reports for
+# <role>." Read off the app 2026-10-19: View Reports is a home card; its
+# screen lists Stock Received, Stock Issued, Stock Returned and Stock
+# Reconciliation, each over "View stock <...> reports".
+- runFlow:
+    when:
+      notVisible: "View Reports"
+    commands:
+      - scrollUntilVisible:
+          element: "View Reports"
+          direction: DOWN
+          timeout: 10000
+          optional: true
+          label: "Scroll down looking for the View Reports card"
+- runFlow:
+    when:
+      notVisible: "View Reports"
+    commands:
+      - takeScreenshot: artifacts/reports-card-missing
+      - runFlow:
+          file: ../../fail.yaml
+          env:
+            MESSAGE: "${'View Reports card not displayed on home screen for ' + output.reports.role + '.'}"
+          label: "View Reports card is displayed"
+- tapOn:
+    text: "View Reports"
+    label: "Open View Reports"
+- extendedWaitUntil:
+    visible: "View stock received reports"
+    timeout: 15000
+    optional: true
+    label: "View Reports opens"
+- runFlow:
+    file: report-offered.yaml
+    env:
+      REPORT: "Stock Received"
+- runFlow:
+    file: report-offered.yaml
+    env:
+      REPORT: "Stock Issued"
+- runFlow:
+    file: report-offered.yaml
+    env:
+      REPORT: "Stock Returned"
+- runFlow:
+    file: report-offered.yaml
+    env:
+      REPORT: "Stock Reconciliation"
+- takeScreenshot: artifacts/reports-view-reports

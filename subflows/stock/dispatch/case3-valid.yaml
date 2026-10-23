@@ -1,0 +1,87 @@
+appId: ${HCM_APP_ID}
+name: case3-valid
+---
+# Case 3 - dispatch CURRENT_BALANCE - REMAINING_BALANCE, leaving
+# REMAINING_BALANCE. Starts and ends on the home screen. IRREVERSIBLE: stock
+# leaves for the chosen recipient (a health facility, or a CDD's delivery
+# team).
+#
+# BLOCKED, touching nothing, unless CURRENT_BALANCE > REMAINING_BALANCE:
+#   BLOCKED - Case 3: Insufficient stock: balance 0; cannot dispatch while leaving 10.
+#
+# After Submit, seen on 2026-10-19 (dispatching 490 SPAQ 1 and 490 SPAQ 2,
+# 500 -> 10 each; QA to confirm as the intended behaviour): no confirmation
+# popup - Submit dispatches at once - then a "Stock recorded successfully"
+# screen reading "Stock has been recorded successfully. MRN: <mrn>" with
+# View Transaction and Create New Transaction. The dispatch then shows in
+# Manage Stock > View Transactions under that MRN, with the facility as
+# Receiver. Confirm is still tapped if a popup ever offers it; the case
+# requires the form to go away and the balance to come out right, and logs
+# the MRN.
+- runScript:
+    file: dispatch.js
+    env:
+      ACTION: case3
+    label: "Case 3 - work out the quantity"
+- runFlow:
+    when:
+      true: ${output.dispatch.failure}
+    commands:
+      - takeScreenshot: artifacts/dispatch-case3-blocked
+      - runFlow:
+          file: ../../fail.yaml
+          env:
+            MESSAGE: ${output.dispatch.failure}
+          label: "Case 3 - enough stock to dispatch"
+
+- runFlow:
+    file: ../open-stock-form.yaml
+    env:
+      TRANSACTION_TYPE: "Issue"
+- runFlow:
+    file: ../enter-quantity.yaml
+    env:
+      QUANTITY: ${output.dispatch.quantity}
+- assertNotVisible:
+    text: "(?!\\d+$).+"
+    below: "Quantity sent.*"
+    above: "Submit"
+    label: "Case 3 - the quantity raises no validation message"
+- tapOn:
+    text: "Submit"
+    label: "Case 3 - Submit the dispatch (irreversible)"
+- waitForAnimationToEnd:
+    timeout: 3000
+- runFlow:
+    when:
+      visible: "Confirm"
+    commands:
+      - takeScreenshot: artifacts/dispatch-case3-popup
+      - tapOn:
+          text: "Confirm"
+          label: "Case 3 - Confirm the dispatch"
+# Known to be on screen at Submit, so this cannot pass vacuously.
+- extendedWaitUntil:
+    notVisible: "Quantity sent.*"
+    timeout: 30000
+    label: "Case 3 - the dispatch went through (the form closed)"
+- takeScreenshot: artifacts/dispatch-case3-${output.dispatch.variant}-result
+# The success screen names the dispatch's MRN - log it for the report.
+- setClipboard: "none"
+- runFlow:
+    when:
+      visible: ".*MRN: .*"
+    commands:
+      - copyTextFrom:
+          text: ".*MRN: .*"
+          label: "Case 3 - read the dispatch's MRN"
+      - evalScript: ${output.dispatch.mrn = String(maestro.copiedText).replace(/^.*MRN:\s*/, '').trim()}
+- evalScript: "${console.log('Case 3 - ' + output.dispatch.variant + ' dispatch confirmation: ' + maestro.copiedText)}"
+
+- runFlow: ../back-to-home.yaml
+- runFlow:
+    file: dispatch-balance.yaml
+    env:
+      PHASE: final
+- takeScreenshot: artifacts/dispatch-case3-${output.dispatch.variant}-final-balance
+- evalScript: ${console.log('Case 3 PASSED - dispatched ' + output.dispatch.quantity + ' ' + output.dispatch.variant + ' to ' + output.form.facility + '; balance ' + output.dispatch.balance + ' -> ' + output.dispatch.finalBalance)}

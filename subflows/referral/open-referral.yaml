@@ -1,0 +1,110 @@
+appId: ${HCM_APP_ID}
+name: open-referral
+---
+# From the home screen: Beneficiary Referral -> village -> the referral
+# screen ("Create New Referral"). REFERRAL_VILLAGE when set, else the first
+# village offered, recorded.
+#
+# Read off the app as AU-HFS-001, 2026-10-21: the home card "Beneficiary
+# Referral" opens "Select Your Village", listing the user's village as a card
+# ("03ba Buri-Buri Health Post") over "Want to choose another Village?" /
+# "Choose Another Village". The card opens the village's referrals: its name,
+# "Search Referrals", the list, "Create New Referral" and "Scan Beneficiary".
+- runFlow:
+    when:
+      notVisible: "Beneficiary Referral"
+    commands:
+      - scrollUntilVisible:
+          element: "Beneficiary Referral"
+          direction: DOWN
+          timeout: 10000
+          optional: true
+          label: "Scroll down looking for the Beneficiary Referral card"
+- runFlow:
+    when:
+      notVisible: "Beneficiary Referral"
+    commands:
+      - takeScreenshot: artifacts/referral-card-missing
+      - runFlow:
+          file: ../fail.yaml
+          env:
+            MESSAGE: "${'Beneficiary Referral card not displayed on home screen for ' + output.referral.user + '.'}"
+          label: "Beneficiary Referral card is displayed"
+- tapOn:
+    text: "Beneficiary Referral"
+    label: "Open Beneficiary Referral"
+- extendedWaitUntil:
+    visible: "Select Your Village"
+    timeout: 15000
+    label: "Select Your Village opens"
+
+# --- Village -----------------------------------------------------------------
+- extendedWaitUntil:
+    visible:
+      text: ".+"
+      below: "Select Your Village"
+      above: "Want to choose another Village\\?"
+    timeout: 10000
+    optional: true
+    label: "A village is offered"
+- runFlow:
+    when:
+      notVisible:
+        text: ".+"
+        below: "Select Your Village"
+        above: "Want to choose another Village\\?"
+    commands:
+      - takeScreenshot: artifacts/referral-no-village
+      - runFlow:
+          file: ../fail.yaml
+          env:
+            MESSAGE: "${'No villages available in Beneficiary Referral for ' + output.referral.user + '.'}"
+          label: "A village is offered"
+- runFlow:
+    when:
+      true: ${output.referral.villageTarget != ''}
+    commands:
+      - runFlow:
+          when:
+            notVisible:
+              text: ${output.referral.villagePattern}
+              below: "Select Your Village"
+              above: "Want to choose another Village\\?"
+          commands:
+            - takeScreenshot: artifacts/referral-village-missing
+            - runFlow:
+                file: ../fail.yaml
+                env:
+                  MESSAGE: "${'REFERRAL_VILLAGE ' + output.referral.villageTarget + ' is not offered in Beneficiary Referral.'}"
+                label: "REFERRAL_VILLAGE is offered"
+      - copyTextFrom:
+          text: ${output.referral.villagePattern}
+          below: "Select Your Village"
+          label: "Read REFERRAL_VILLAGE"
+- runFlow:
+    when:
+      true: ${output.referral.villageTarget == ''}
+    commands:
+      - copyTextFrom:
+          text: ".+"
+          below: "Select Your Village"
+          above: "Want to choose another Village\\?"
+          index: 0
+          label: "Read the first village"
+- runScript:
+    file: referral.js
+    env:
+      ACTION: village
+    label: "Record the village"
+- tapOn:
+    text: ${output.referral.villageSelector}
+    below: "Select Your Village"
+    label: "Open the village"
+- extendedWaitUntil:
+    visible: "Create New Referral"
+    timeout: 15000
+    label: "The village's referrals open"
+- assertVisible:
+    text: ${output.referral.villageSelector}
+    above: "Search Referrals"
+    label: "The referral screen names the village"

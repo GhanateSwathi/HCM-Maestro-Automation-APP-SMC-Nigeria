@@ -1,0 +1,22 @@
+appId: ${HCM_APP_ID}
+name: hf-tc3-details
+---
+# Test Case 3 - on Incoming Transactions: one transaction for each variant
+# is listed, and each one's Stock Receipt Details shows its card's product,
+# MRN and sender, and the quantity the state dispatched (DISPATCHED_QTY_*).
+# Both are checked before anything is accepted. Ends on Incoming
+# Transactions.
+#
+# The specification has one MRN carrying both variants. The app gives each
+# transaction one product and its own MRN (2026-10-19: SPAQ 1 and SPAQ 2 came
+# as two dispatches), so "both records" are two transactions.
+- runFlow: ../accept-receipt/check-variants.yaml
+- runFlow:
+    file: tc3-variant.yaml
+    env:
+      INDEX: "0"
+- runFlow:
+    file: tc3-variant.yaml
+    env:
+      INDEX: "1"
+- evalScript: ${console.log('Test Case 3 PASSED - received ' + output.variants.names[0] + ' ' + output.variants.received[0] + ', ' + output.variants.names[1] + ' ' + output.variants.received[1] + '; dispatched ' + output.variants.expected[0] + ', ' + output.variants.expected[1])}

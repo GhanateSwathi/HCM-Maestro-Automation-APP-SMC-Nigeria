@@ -1,0 +1,34 @@
+appId: ${HCM_APP_ID}
+name: consent-init
+---
+# Reads the consent-No registration's test data (Prompt 12) before anything
+# touches the device, and fails at once if any is missing (see .env.example).
+# Generates the head's name, AutoNoConsent<stamp>, which is also the search
+# text.
+- runScript:
+    file: registration.js
+    env:
+      ACTION: init-consent
+      TEST_USER: ${TEST_USER}
+      VILLAGE: ${REGISTRATION_VILLAGE}
+      LATITUDE: ${TEST_LATITUDE}
+      LONGITUDE: ${TEST_LONGITUDE}
+      REASON: ${CONSENT_REASON}
+    label: "Read the Prompt 12 test data"
+- runFlow:
+    when:
+      true: ${output.reg.failure}
+    file: ../fail.yaml
+    env:
+      MESSAGE: ${output.reg.failure}
+    label: "Prompt 12 test data is set in .env"
+# TEST_USER is reported as the account under test, so it must be the one
+# signing in. Only TEST_USER is named in the message.
+- evalScript: "${output.userCheck = (String(TEST_USER).trim().toLowerCase() == String(HCM_CDD_USER_ID).trim().toLowerCase()) ? '' : 'TEST_USER ' + TEST_USER + ' is not the CDD user .env signs in with (HCM_CDD_USER_ID).'}"
+- runFlow:
+    when:
+      true: ${output.userCheck}
+    file: ../fail.yaml
+    env:
+      MESSAGE: ${output.userCheck}
+    label: "TEST_USER is the account signing in"

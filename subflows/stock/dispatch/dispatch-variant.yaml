@@ -1,0 +1,42 @@
+appId: ${HCM_APP_ID}
+name: dispatch-variant
+---
+# Cases 1-3 for one product VARIANT, from the home screen back to it:
+# read its balance, refuse 0 and balance + 1 on one form, check the balance
+# did not move, then dispatch balance - REMAINING_BALANCE on a fresh form.
+# The recipient - TARGET, TEAM_CODE, MISSING, ROLE - comes from the caller;
+# see init-dispatch.yaml.
+- runFlow:
+    file: init-dispatch.yaml
+    env:
+      VARIANT: ${VARIANT}
+      TARGET: ${TARGET}
+      TEAM_CODE: ${TEAM_CODE}
+      MISSING: ${MISSING}
+      ROLE: ${ROLE}
+- runFlow:
+    file: dispatch-balance.yaml
+    env:
+      PHASE: current
+
+# Validation cases, on one dispatch form.
+- runFlow:
+    file: ../open-stock-form.yaml
+    env:
+      TRANSACTION_TYPE: "Issue"
+- runFlow: case1-zero.yaml
+- runFlow: case2-over-balance.yaml
+# The balance shows only on home: back there, it must be unchanged.
+- runFlow: ../back-to-home.yaml
+- runFlow:
+    file: dispatch-balance.yaml
+    env:
+      PHASE: check
+
+# The real dispatch, on a fresh form. Ends on home.
+- runFlow: case3-valid.yaml
+- runScript:
+    file: dispatch.js
+    env:
+      ACTION: done
+    label: "Record this variant's results"

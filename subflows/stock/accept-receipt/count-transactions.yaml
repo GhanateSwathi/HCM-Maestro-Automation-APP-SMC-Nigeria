@@ -1,0 +1,19 @@
+appId: ${HCM_APP_ID}
+name: count-transactions
+---
+# On Incoming Transactions: count the cards carrying product variant INDEX
+# (0 or 1) into output.variants.counts[INDEX]. Each card has one product line
+# ("SPAQ 1: 100"), so cards and lines are one to one. Only cards on screen
+# are counted - three fit on the Pixel 9 Pro XL.
+- evalScript: ${output.variants.counts[parseInt(INDEX, 10)] = 0}
+- repeat:
+    times: 10
+    label: "Count the variant's incoming transactions"
+    commands:
+      - runFlow:
+          when:
+            visible:
+              text: ${output.variants.lines[parseInt(INDEX, 10)]}
+              index: ${output.variants.counts[parseInt(INDEX, 10)]}
+          commands:
+            - evalScript: ${output.variants.counts[parseInt(INDEX, 10)] = output.variants.counts[parseInt(INDEX, 10)] + 1}

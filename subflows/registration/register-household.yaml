@@ -1,0 +1,87 @@
+appId: ${HCM_APP_ID}
+name: register-household
+---
+# The specification's common/register_household.yaml - from the home screen:
+# village, search, Register Beneficiary, Beneficiary Location, then Care
+# giver's consent CONSENT:
+#   "Yes" (Prompt 11 Steps 2 to 8) - Household Details, the head of
+#         household, child 1, Submit. Ends on Household Overview with both
+#         listed.
+#   "No"  (Prompt 12) - No and the reason (consent-no.yaml). Ends on the
+#         "Ready to Submit?" popup, for the caller's Cancel / Submit.
+# CHECK_SHORT ("true" | "false") also taps Register Beneficiary with 2
+# characters typed (Prompt 11's 3-character rule). Creates the household -
+# IRREVERSIBLE.
+#
+# The search, the Low Beneficiary IDs fallback and the location are
+# start-registration.yaml's.
+
+# --- Steps 2 and 3: search, Register Beneficiary, location ------------------------
+- runFlow:
+    file: start-registration.yaml
+    env:
+      CHECK_SHORT: ${CHECK_SHORT}
+
+# --- Consent No: stop on Ready to Submit? ----------------------------------------
+- runFlow:
+    when:
+      true: ${CONSENT == 'No'}
+    file: consent-no.yaml
+
+# --- Consent Yes: Steps 4 to 8 -------------------------------------------------------
+- runFlow:
+    when:
+      true: ${CONSENT == 'Yes'}
+    commands:
+      - runFlow:
+          file: consent.yaml
+          env:
+            CONSENT: ${CONSENT}
+      - runFlow: household-details.yaml
+      # Step 6: the head of household.
+      - runFlow:
+          file: member-form.yaml
+          env:
+            WHO: head
+            BOUNDS: "true"
+      - extendedWaitUntil:
+          visible: "Household Overview"
+          timeout: 15000
+          optional: true
+          label: "Household Overview opens"
+      - runFlow:
+          when:
+            notVisible: "Household Overview"
+          commands:
+            - takeScreenshot: artifacts/registration-head-not-saved
+            - runFlow:
+                file: ../fail.yaml
+                env:
+                  MESSAGE: "Save Beneficiary for the head of household did not open Household Overview."
+      - runScript:
+          file: registration.js
+          env:
+            ACTION: step
+            STEP: "Step 6 - head of household saved"
+            RESULT: PASSED
+            DETAIL: "${output.reg.head.first + ' ' + output.reg.head.last + ', ' + output.reg.head.age + ', ' + output.reg.head.gender}"
+      # Step 7: listed, then child 1.
+      - runFlow:
+          file: household-check.yaml
+          env:
+            STEP: "Step 7 - head of household listed on Household Overview"
+            CHILDREN: "0"
+      - runFlow:
+          file: add-member.yaml
+          env:
+            WHO: child1
+            BOUNDS: "true"
+      # Step 8: submitted; the household shows both.
+      - tapOn:
+          text: "View Household Details"
+          label: "View Household Details"
+      - runFlow:
+          file: household-check.yaml
+          env:
+            STEP: "Step 8 - household submitted; head of household and child 1 shown"
+            CHILDREN: "1"

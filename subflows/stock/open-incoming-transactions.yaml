@@ -1,0 +1,91 @@
+appId: ${HCM_APP_ID}
+name: open-incoming-transactions
+---
+# From the home screen: find the Manage Stock card, open Record Stock Receipt
+# and wait for its list to settle. Leaves output.incoming set to "present" or
+# "absent" for the caller to branch on, and stays on the screen.
+#
+# Record Stock Receipt opens a screen titled "Incoming Transactions",
+# subtitled "View and accept incoming stock transactions". Read off the mhbase
+# build as AU-SAT-001, 2026-10-15.
+
+# --- Manage Stock card -------------------------------------------------------
+# The home grid fits one screen on the Pixel 9 Pro XL, but on a smaller
+# screen the card could sit below the fold, so scroll before giving up.
+- runFlow:
+    when:
+      notVisible: "Manage Stock"
+    commands:
+      - scrollUntilVisible:
+          element: "Manage Stock"
+          direction: DOWN
+          timeout: 10000
+          optional: true
+          label: "Scroll down looking for the Manage Stock card"
+- runFlow:
+    when:
+      notVisible: "Manage Stock"
+    commands:
+      - takeScreenshot: artifacts/stock-manage-stock-card-missing
+      - runFlow:
+          file: ../fail.yaml
+          env:
+            MESSAGE: "Manage Stock card not displayed on home screen for State User."
+          label: "Manage Stock card is displayed"
+
+# --- Record Stock Receipt ----------------------------------------------------
+# Manage Stock opens a menu screen of its own, titled "Manage Stock", listing
+# "Record Stock Receipt" and "Record Stock Issued" plus a "View Transactions"
+# button.
+- tapOn:
+    text: "Manage Stock"
+    label: "Open Manage Stock"
+- extendedWaitUntil:
+    visible: "Record Stock Receipt"
+    timeout: 30000
+    label: "Manage Stock lists Record Stock Receipt"
+- tapOn:
+    text: "Record Stock Receipt"
+    label: "Open Record Stock Receipt"
+# The full-string match keeps the title apart from the empty state's
+# "No Incoming Transactions".
+- extendedWaitUntil:
+    visible: "Incoming Transactions"
+    timeout: 30000
+    label: "Record Stock Receipt opens Incoming Transactions"
+
+# --- Present or absent -------------------------------------------------------
+# Everything the list shows sits under the subtitle - the empty-state card, or
+# the transactions. The list comes from data already downloaded, so it painted
+# with the screen on 2026-10-15; the wait covers a slower device. The
+# "Background service started" banner that follows Submit can still be up
+# here, so it is excluded.
+- extendedWaitUntil:
+    visible:
+      text: "(?!Background service started$).+"
+      below: "View and accept incoming stock transactions"
+    timeout: 30000
+    optional: true
+    label: "Transaction list finished loading"
+- runFlow:
+    when:
+      notVisible:
+        text: "(?!Background service started$).+"
+        below: "View and accept incoming stock transactions"
+    commands:
+      - takeScreenshot: artifacts/stock-incoming-nothing-shown
+      - runFlow:
+          file: ../fail.yaml
+          env:
+            MESSAGE: "Record Stock Receipt screen did not show transactions or an empty state."
+          label: "Transaction list or empty state is shown"
+
+# The empty-state card was read off the app. Anything else under the subtitle
+# counts as a transaction list - its items have not been seen yet (no
+# incoming stock on 2026-10-15).
+- evalScript: ${output.incoming = 'present'}
+- runFlow:
+    when:
+      visible: "No Incoming Transactions"
+    commands:
+      - evalScript: ${output.incoming = 'absent'}

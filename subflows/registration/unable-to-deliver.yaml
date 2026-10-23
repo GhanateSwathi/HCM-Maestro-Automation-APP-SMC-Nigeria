@@ -1,0 +1,165 @@
+appId: ${HCM_APP_ID}
+name: unable-to-deliver
+---
+# The specification's common/unable_to_deliver.yaml - from Household
+# Overview, for child WHO (child1 .. child4): Unable to Deliver with its
+# reason, then the card's status. Ends on Household Overview. Records an
+# unsuccessful delivery - IRREVERSIBLE ("This action cannot be changed
+# later").
+#
+# Read off the app as AU-CDD-001, 2026-10-22:
+#   - Unable To Deliver is a button on the member's card, under Dose - not on
+#     Delivery Details. Earlier versions went Dose -> eligibility checklist
+#     -> Delivery Details to read the product first; that submitted a
+#     checklist per child and checked nothing Prompt 11 does not, so it was
+#     dropped (2026-10-22, at the user's request).
+#   - Unable to Deliver: "Please capture the following details to record an
+#     unsuccesful delivery." / "Select a reason for unable to deliver. *" -
+#     four radios: Beneficiary died, Beneficiary migrated, Beneficiary
+#     absent, Beneficiary refused - then "Lat/Long" (the fix's accuracy),
+#     "Comment" (optional, left empty), Proceed.
+#   - Proceed asks "Are you sure you want to proceed?" / "Based on your
+#     response, the beneficiary will be reported as 'Died'. This action
+#     cannot be changed later. Do you want to proceed?" (Submit / Cancel).
+#     Submit returns straight to Household Overview - no success screen -
+#     where the card reads "Beneficiary Died" with no Dose or Unable To
+#     Deliver left.
+# Household Overview comes back scrolled to where it was, its title often off
+# screen, so a member card's "Edit Individual" counts as being there.
+# A missing reason or a wrong status fails this child only (recorded); a
+# missing screen still stops the run.
+- runScript:
+    file: registration.js
+    env:
+      ACTION: member
+      WHO: ${WHO}
+- evalScript: ${output.m.utdFailure = ''}
+- evalScript: ${output.m.confirm = ''}
+- evalScript: ${output.m.status = ''}
+
+# --- Unable to Deliver -------------------------------------------------------------
+- scrollUntilVisible:
+    element: "Household Overview"
+    direction: UP
+    timeout: 15000
+    optional: true
+    label: "Back to the top of the household"
+- scrollUntilVisible:
+    element:
+      text: "Unable To Deliver"
+      below: ${output.m.id}
+    direction: DOWN
+    timeout: 15000
+    label: "Find the child's Unable To Deliver"
+- tapOn:
+    text: "Unable To Deliver"
+    below: ${output.m.id}
+    label: "Unable To Deliver"
+- extendedWaitUntil:
+    visible: "Select a reason for unable to deliver\\. \\*"
+    timeout: 15000
+    label: "Unable to Deliver opens"
+- evalScript: ${output.reg.utdLabels = []}
+- evalScript: ${output.m.k = 0}
+- repeat:
+    times: 8
+    while:
+      visible:
+        text: ".+"
+        below: "Select a reason for unable to deliver\\. \\*"
+        above: "Lat/Long"
+        index: ${output.m.k}
+    commands:
+      - copyTextFrom:
+          text: ".+"
+          below: "Select a reason for unable to deliver\\. \\*"
+          above: "Lat/Long"
+          index: ${output.m.k}
+          label: "Read a reason offered"
+      - runScript:
+          file: registration.js
+          env:
+            ACTION: utd-label
+            INDEX: ${output.m.k}
+      - evalScript: ${output.m.k = output.m.k + 1}
+- runScript:
+    file: registration.js
+    env:
+      ACTION: utd-pick
+- runFlow:
+    when:
+      true: ${output.m.position < 0}
+    commands:
+      - takeScreenshot: artifacts/registration-utd-no-reason-${WHO}
+      - tapOn:
+          text: "Back"
+          above: "Unable to Deliver"
+          label: "Back without recording"
+      - extendedWaitUntil:
+          visible: "Household Overview|Edit Individual"
+          timeout: 15000
+          label: "Back on Household Overview"
+- runFlow:
+    when:
+      true: ${output.m.position >= 0}
+    commands:
+      # The reason's radio: the position-th clickable below the question and
+      # left of the labels - text-less, no state reported.
+      - tapOn:
+          below: "Select a reason for unable to deliver\\. \\*"
+          leftOf: ${output.reg.utdFirst}
+          index: ${output.m.position}
+          label: "Pick the reason"
+      - takeScreenshot: artifacts/registration-utd-reason-${WHO}
+      - tapOn:
+          text: "Proceed"
+          label: "Proceed"
+      - extendedWaitUntil:
+          visible: "Are you sure you want to proceed\\?"
+          timeout: 10000
+          label: "The confirmation"
+      - copyTextFrom:
+          text: ".+"
+          below: "Are you sure you want to proceed\\?"
+          above: "Submit"
+          index: 0
+          label: "Read the confirmation"
+      - evalScript: ${output.m.confirm = maestro.copiedText}
+      - tapOn:
+          text: "Submit"
+          below: "Are you sure you want to proceed\\?"
+          label: "Submit - records the unsuccessful delivery"
+      - extendedWaitUntil:
+          visible: "Household Overview|Edit Individual"
+          timeout: 15000
+          label: "Back on Household Overview"
+      # The card's status, under its gender and age line.
+      - scrollUntilVisible:
+          element: "Household Overview"
+          direction: UP
+          timeout: 15000
+          optional: true
+          label: "Back to the top of the household"
+      - scrollUntilVisible:
+          element:
+            text: ${output.m.card}
+            below: ${output.m.id}
+          direction: DOWN
+          timeout: 15000
+          label: "Find the child's card"
+      - copyTextFrom:
+          text: ".+"
+          below:
+            text: ${output.m.card}
+            below: ${output.m.id}
+          index: 0
+          label: "Read the child's status"
+      - runScript:
+          file: registration.js
+          env:
+            ACTION: utd-status
+      - takeScreenshot: artifacts/registration-utd-status-${WHO}
+- runScript:
+    file: registration.js
+    env:
+      ACTION: utd-done

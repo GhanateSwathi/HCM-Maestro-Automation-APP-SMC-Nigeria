@@ -1,0 +1,37 @@
+appId: ${HCM_APP_ID}
+name: read-products
+---
+# On Delivery Details or Redose Details: read every product offered for member
+# output.m (the texts between "Resource" - "Resources to be delivered" on
+# Redose Details - and "Quantity Distributed") and check the
+# age-product rule; a mismatch is left in output.reg.productFailure for the
+# caller. Shared by record-delivery.yaml (doses) and redose.yaml.
+#
+# Read off the app 2026-10-21/22: the product is one grey button ("SPAQ 1"
+# for 6 and 9 months, "SPAQ 2" for 24 to 48) that opens nothing.
+- evalScript: ${output.m.products = []}
+- evalScript: ${output.m.k = 0}
+- repeat:
+    times: 5
+    while:
+      visible:
+        text: ".+"
+        below: "Resources?( to be delivered)?"
+        above: "Quantity Distributed"
+        index: ${output.m.k}
+    commands:
+      - copyTextFrom:
+          text: ".+"
+          below: "Resources?( to be delivered)?"
+          above: "Quantity Distributed"
+          index: ${output.m.k}
+          label: "Read a product offered"
+      - runScript:
+          file: registration.js
+          env:
+            ACTION: product
+      - evalScript: ${output.m.k = output.m.k + 1}
+- runScript:
+    file: registration.js
+    env:
+      ACTION: products

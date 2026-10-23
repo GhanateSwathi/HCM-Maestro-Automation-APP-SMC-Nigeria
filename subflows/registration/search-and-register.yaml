@@ -1,0 +1,141 @@
+appId: ${HCM_APP_ID}
+name: search-and-register
+---
+# On Search Beneficiary, its field empty: type the search text and tap
+# Register Beneficiary. Ends on whatever Register Beneficiary opens - the
+# "Low Beneficiary IDs" popup or "Beneficiary Location" - with
+# output.reg.opened set to "popup" or "location".
+#
+# Read off the app 2026-10-21: Register Beneficiary does nothing while the
+# field is empty and works from the first character typed, not the third the
+# specification expects. Tapping it with the field empty is checked here;
+# CHECK_SHORT ("true") also taps it with only the first 2 characters typed -
+# used once beneficiary IDs are on the device, where the tap opens
+# Beneficiary Location and Back returns with the text kept.
+- evalScript: ${output.reg.opened = ''}
+- tapOn:
+    text: "Register Beneficiary"
+    label: "Tap Register Beneficiary with the field empty"
+- extendedWaitUntil:
+    visible: "Low Beneficiary IDs|Beneficiary Location"
+    timeout: 3000
+    optional: true
+    label: "Nothing opens"
+- runFlow:
+    when:
+      visible: "Low Beneficiary IDs|Beneficiary Location"
+    commands:
+      - takeScreenshot: artifacts/registration-enabled-when-empty
+      - runFlow:
+          file: ../fail.yaml
+          env:
+            MESSAGE: "Register Beneficiary is enabled with the search field empty."
+          label: "Register Beneficiary is disabled while the field is empty"
+
+- tapOn:
+    text: "Name of the individual"
+    label: "Focus the search field"
+- assertVisible:
+    focused: true
+    below: "Search by ID"
+    above: "Register Beneficiary"
+    label: "The search field has focus"
+
+- runFlow:
+    when:
+      true: ${typeof CHECK_SHORT !== 'undefined' && CHECK_SHORT == 'true'}
+    commands:
+      - inputText: ${output.reg.searchText.slice(0, 2)}
+      - tapOn:
+          id: "android:id/input_method_nav_back"
+          label: "Close the keyboard"
+      - tapOn:
+          text: "Register Beneficiary"
+          label: "Tap Register Beneficiary with 2 characters typed"
+      - extendedWaitUntil:
+          visible: "Low Beneficiary IDs|Beneficiary Location"
+          timeout: 3000
+          optional: true
+          label: "Register Beneficiary answers 2 characters"
+      - evalScript: ${output.reg.shortOpened = false}
+      - runFlow:
+          when:
+            visible: "Beneficiary Location"
+          commands:
+            - evalScript: ${output.reg.shortOpened = true}
+            - takeScreenshot: artifacts/registration-enabled-short
+            - runScript:
+                file: registration.js
+                env:
+                  ACTION: step
+                  STEP: "Register Beneficiary enabled after 3 characters"
+                  RESULT: DEVIATION
+                  DETAIL: "Register Beneficiary opens Beneficiary Location with 2 characters typed; the app enables it from the first character"
+            - tapOn:
+                text: "Back"
+                above: "Beneficiary Location"
+                label: "Back to the search"
+            - extendedWaitUntil:
+                visible: "Register Beneficiary"
+                timeout: 10000
+                label: "Back on Search Beneficiary"
+      - runFlow:
+          when:
+            true: ${!output.reg.shortOpened}
+          commands:
+            - runScript:
+                file: registration.js
+                env:
+                  ACTION: step
+                  STEP: "Register Beneficiary enabled after 3 characters"
+                  RESULT: PASSED
+                  DETAIL: "2 characters typed: Register Beneficiary opens nothing"
+      # Start the field over: Back keeps the typed text, and a tap drops
+      # the cursor anywhere in it, so it is erased in full.
+      - tapOn:
+          text: ${output.reg.searchText.slice(0, 2)}
+          below: "Search by ID"
+          above: "Register Beneficiary"
+          label: "Focus the search field"
+      - eraseText: 10
+      - assertVisible:
+          text: "Name of the individual"
+          label: "The search field is empty again"
+
+- inputText: ${output.reg.searchText}
+- tapOn:
+    id: "android:id/input_method_nav_back"
+    label: "Close the keyboard"
+- assertVisible:
+    text: ${output.reg.searchText}
+    below: "Search by ID"
+    above: "Register Beneficiary"
+    label: "The search text is typed"
+- tapOn:
+    text: "Register Beneficiary"
+    label: "Tap Register Beneficiary"
+- extendedWaitUntil:
+    visible: "Low Beneficiary IDs|Beneficiary Location"
+    timeout: 15000
+    optional: true
+    label: "Register Beneficiary opens the popup or the registration"
+- runFlow:
+    when:
+      visible: "Low Beneficiary IDs"
+    commands:
+      - evalScript: ${output.reg.opened = 'popup'}
+- runFlow:
+    when:
+      visible: "Beneficiary Location"
+    commands:
+      - evalScript: ${output.reg.opened = 'location'}
+- runFlow:
+    when:
+      true: ${output.reg.opened == ''}
+    commands:
+      - takeScreenshot: artifacts/registration-register-did-nothing
+      - runFlow:
+          file: ../fail.yaml
+          env:
+            MESSAGE: "${'Register Beneficiary opened neither the Low Beneficiary IDs popup nor Beneficiary Location after typing ' + output.reg.searchText + '.'}"
+          label: "Register Beneficiary opens something"

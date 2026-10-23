@@ -1,0 +1,94 @@
+appId: ${HCM_APP_ID}
+name: read-first-transaction
+---
+# On Incoming Transactions with at least one transaction: log the first
+# card's MRN, date, sender, status and product line to maestro.log
+# ("First incoming transaction - ...").
+#
+# Card layout, read off the app 2026-10-15: "MRN <mrn>" with the date to its
+# right; "Sender" over the sender's id, the status ("Dispatched") to their
+# right; one product line ("SPAQ 2: 100"); Select. Each read is fenced in
+# until one element alone can match - "nearest" favours clickable elements,
+# and "right of" alone reaches the status bar.
+- runScript:
+    file: accept-receipt/transaction.js
+    env:
+      ACTION: reset
+    label: "Start reading"
+# A plain match lists cards in screen order, so index 0 is the first card's.
+- copyTextFrom:
+    text: "MRN .*"
+    index: 0
+    label: "Read the first transaction's MRN"
+- runScript:
+    file: accept-receipt/transaction.js
+    env:
+      ACTION: here
+    label: "Fence the card at its MRN"
+- evalScript: ${output.first = maestro.copiedText}
+# "<product>: <quantity>" - fenced under the subtitle, or the status bar's
+# clock ("4:59") matches too. Relative matches rank by distance, so index 0
+# is the first card's.
+- copyTextFrom:
+    text: ".+:\\s*\\d+"
+    below: "View and accept incoming stock transactions"
+    index: 0
+    label: "Read its product line"
+- runScript:
+    file: accept-receipt/transaction.js
+    env:
+      ACTION: line
+    label: "Fence the card at its product line"
+- evalScript: ${output.first = output.first + ', product ' + maestro.copiedText}
+# The date sits on the MRN label's row, to its right.
+- copyTextFrom:
+    text: ".+"
+    rightOf:
+      text: ${output.scan.here}
+    below: "View and accept incoming stock transactions"
+    above:
+      text: "Sender"
+      below:
+        text: ${output.scan.here}
+      above:
+        text: ${output.scan.line}
+    label: "Read its date"
+- evalScript: ${output.first = output.first + ', date ' + maestro.copiedText}
+- copyTextFrom:
+    text: ".+"
+    below:
+      text: "Sender"
+      below:
+        text: ${output.scan.here}
+      above:
+        text: ${output.scan.line}
+    above:
+      text: ${output.scan.line}
+      below:
+        text: ${output.scan.here}
+    label: "Read its sender"
+- evalScript: ${output.first = output.first + ', sender ' + maestro.copiedText}
+# The status sits on the "Sender" row, to its right. Fenced below "Sender",
+# not just below the MRN label: "below" compares top edges, so the date - a
+# shade lower than the MRN label's top - would count as below the label too.
+- copyTextFrom:
+    text: ".+"
+    rightOf:
+      text: "Sender"
+      below:
+        text: ${output.scan.here}
+      above:
+        text: ${output.scan.line}
+    below:
+      text: "Sender"
+      below:
+        text: ${output.scan.here}
+      above:
+        text: ${output.scan.line}
+    above:
+      text: ${output.scan.line}
+      below:
+        text: ${output.scan.here}
+    label: "Read its status"
+- evalScript: ${output.first = output.first + ', status ' + maestro.copiedText}
+- evalScript: ${console.log('First incoming transaction - ' + output.first)}

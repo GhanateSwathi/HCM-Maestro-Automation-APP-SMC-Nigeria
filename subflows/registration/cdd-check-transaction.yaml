@@ -1,0 +1,31 @@
+appId: ${HCM_APP_ID}
+name: cdd-check-transaction
+---
+# Step 11, before accepting - on Incoming Transactions: open the first
+# transaction for variant INDEX (0 or 1), let open-transaction.yaml check
+# Stock Receipt Details (product, MRN, sender, quantity = the expected
+# receipt), check the MRN against CDD_INCOMING_MRNS, then Back without
+# accepting.
+- runFlow:
+    file: ../stock/accept-receipt/open-transaction.yaml
+    env:
+      INDEX: ${INDEX}
+- runScript:
+    file: registration.js
+    env:
+      ACTION: mrncheck
+- takeScreenshot: artifacts/registration-cdd-receipt-${output.v.name}
+- runFlow:
+    when:
+      true: ${output.reg.stockFailure}
+    file: ../fail.yaml
+    env:
+      MESSAGE: ${output.reg.stockFailure}
+    label: "The transaction is Prompt 6's dispatch"
+- tapOn:
+    text: "Back"
+    label: "Back to Incoming Transactions"
+- extendedWaitUntil:
+    visible: "Incoming Transactions"
+    timeout: 15000
+    label: "Incoming Transactions is back"

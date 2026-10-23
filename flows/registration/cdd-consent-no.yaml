@@ -1,0 +1,55 @@
+appId: ${HCM_APP_ID}
+name: "Registration - CDD registers a household whose caregiver refuses consent"
+tags:
+  - regression
+  - registration
+  - cdd
+  - mhbase
+  - consumes-data
+---
+# Prompt 12 (the specification's cdd/cdd_consent_no.yaml): the CDD
+# (AU-CDD-001) starts a new registration - village, search, Register
+# Beneficiary, Beneficiary Location - answers Care giver's consent No with
+# CONSENT_REASON, then Test Case 1 (Cancel in Ready to Submit? returns to the
+# consent screen, nothing submitted), Test Case 2 (Submit records the
+# household, success screen, no Household Details, Back To Search) and Test
+# Case 3 (how the household shows in search).
+#
+# Needs HCM_CDD_USER_ID / HCM_CDD_PASSWORD, TEST_USER (the same user),
+# CONSENT_REASON, and optionally REGISTRATION_VILLAGE, TEST_LATITUDE /
+# TEST_LONGITUDE. The head's name is generated: AutoNoConsent<run time>.
+# A fresh sign-in has no beneficiary IDs, so they are downloaded first (see
+# register-household.yaml). IRREVERSIBLE: records a consent-refused household
+# (and downloads IDs) - hence consumes-data.
+#
+# Read off the app as AU-CDD-001, 2026-10-22.
+- runFlow: ../../subflows/registration/consent-init.yaml
+- runFlow: ../../subflows/home/cdd.yaml
+
+# Village, search, Register Beneficiary, location, consent No + reason ->
+# Ready to Submit?.
+- runFlow:
+    file: ../../subflows/registration/register-household.yaml
+    env:
+      CONSENT: "No"
+      CHECK_SHORT: "false"
+# Test Cases 1 to 3.
+- runFlow: ../../subflows/registration/consent-no-submit.yaml
+# The household reaches the server: Sync Data until nothing is left.
+- runFlow:
+    file: ../../subflows/registration/sync-data.yaml
+    env:
+      STEP: "Sync Data"
+
+- runScript:
+    file: ../../subflows/registration/registration.js
+    env:
+      ACTION: consent-summary
+    label: "Log the execution report"
+- runFlow:
+    when:
+      true: ${output.reg.failure}
+    file: ../../subflows/fail.yaml
+    env:
+      MESSAGE: ${output.reg.failure}
+    label: "Every step passed"

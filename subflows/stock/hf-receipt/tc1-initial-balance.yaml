@@ -1,0 +1,45 @@
+appId: ${HCM_APP_ID}
+name: hf-tc1-initial-balance
+---
+# Test Case 1 - on home, both variants' Stock Balance equals
+# EXPECTED_INITIAL_BALANCE (0) before anything is accepted. Otherwise
+#   BLOCKED - Test Cases 2 to 6: Precondition not met: SPAQ1 initial balance is <actual>, expected 0.
+#
+# Read after Download Stock Data, so it counts every record the device holds.
+# The app lists a product with no stock as "0 SPAQ 1" (2026-10-19), so a
+# missing line is not taken as 0: read-stock-balance.yaml fails it with
+# "Unable to read stock balance for <variant>."
+- runFlow:
+    file: ../read-stock-balance.yaml
+    env:
+      VARIANT: ${output.variants.names[0]}
+- runScript:
+    file: hf-receipt.js
+    env:
+      ACTION: initial
+      INDEX: "0"
+    label: "Remember the first variant's initial balance"
+- runFlow:
+    file: ../read-stock-balance.yaml
+    env:
+      VARIANT: ${output.variants.names[1]}
+- runScript:
+    file: hf-receipt.js
+    env:
+      ACTION: initial
+      INDEX: "1"
+    label: "Remember the second variant's initial balance"
+- takeScreenshot: artifacts/hf-tc1-initial-balance
+- runScript:
+    file: hf-receipt.js
+    env:
+      ACTION: opening
+    label: "Test Case 1 - compare with EXPECTED_INITIAL_BALANCE"
+- runFlow:
+    when:
+      true: ${output.hf.failure}
+    file: ../../fail.yaml
+    env:
+      MESSAGE: ${output.hf.failure}
+    label: "Test Case 1 - initial balances are as expected"
+- evalScript: ${console.log('Test Case 1 PASSED - initial balance ' + output.variants.names[0] + ' ' + output.hf.initial[0] + ', ' + output.variants.names[1] + ' ' + output.hf.initial[1])}

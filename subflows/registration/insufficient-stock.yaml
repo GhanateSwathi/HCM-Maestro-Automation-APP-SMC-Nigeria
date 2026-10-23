@@ -1,0 +1,75 @@
+appId: ${HCM_APP_ID}
+name: insufficient-stock
+---
+# Step 10 - on a member's Beneficiary Details, with no stock on the CDD's
+# device: Record Cycle Dose is refused and nothing is recorded; then home.
+#
+# Read off the app as AU-CDD-001, 2026-10-21: Beneficiary Details ("Delivery
+# Overview of beneficiary") lists "Current Dose 1 | To be administered",
+# "Current Dose 2 | Pending", "Current Dose 3 | Pending" over Record Cycle
+# Dose. With a stock balance of 0, Record Cycle Dose raises a popup
+# "Insufficient Stock" / "Not enough stock" with Go Back, which returns to
+# Beneficiary Details with Dose 1 still "To be administered".
+- extendedWaitUntil:
+    visible: "Record Cycle Dose"
+    timeout: 15000
+    label: "Beneficiary Details offers Record Cycle Dose"
+# Each row is one element, its lines split by a line break.
+- assertVisible:
+    text: "Current Dose 1\\s+To be administered"
+    label: "Dose 1 is still to be administered"
+- tapOn:
+    text: "Record Cycle Dose"
+    label: "Record Cycle Dose with no stock"
+- extendedWaitUntil:
+    visible: "Insufficient Stock"
+    timeout: 10000
+    optional: true
+    label: "Insufficient Stock is shown"
+- runFlow:
+    when:
+      notVisible: "Insufficient Stock"
+    commands:
+      - takeScreenshot: artifacts/registration-no-insufficient-stock
+      - runFlow:
+          file: ../fail.yaml
+          env:
+            MESSAGE: "Dose recorded without stock; Insufficient Stock check failed."
+          label: "Insufficient Stock is shown"
+- copyTextFrom:
+    text: ".+"
+    below: "Insufficient Stock"
+    above: "Go Back"
+    label: "Read the message"
+- runScript:
+    file: registration.js
+    env:
+      ACTION: copied
+      WHAT: noStockMessage
+- takeScreenshot: artifacts/registration-insufficient-stock
+- tapOn:
+    text: "Go Back"
+    below: "Insufficient Stock"
+    label: "Go Back"
+- extendedWaitUntil:
+    visible: "Record Cycle Dose"
+    timeout: 10000
+    label: "Back on Beneficiary Details"
+- runFlow:
+    when:
+      notVisible: "Current Dose 1\\s+To be administered"
+    commands:
+      - takeScreenshot: artifacts/registration-dose-recorded-without-stock
+      - runFlow:
+          file: ../fail.yaml
+          env:
+            MESSAGE: "Dose recorded without stock; Insufficient Stock check failed."
+          label: "The dose is not recorded"
+- runScript:
+    file: registration.js
+    env:
+      ACTION: step
+      STEP: "Step 10 - Record Cycle Dose without stock"
+      RESULT: PASSED
+      DETAIL: "${'Insufficient Stock - ' + output.reg.noStockMessage + '; Dose 1 still To be administered'}"
+- runFlow: go-home.yaml

@@ -1,0 +1,166 @@
+appId: ${HCM_APP_ID}
+name: return-variant
+---
+# Returns RETURN_QUANTITY of product VARIANT to DESTINATION, from the home
+# screen back to it. IRREVERSIBLE: stock leaves this warehouse. Checks the
+# balance before (EXPECTED_START_BALANCE - nothing is submitted otherwise)
+# and after (EXPECTED_FINAL_BALANCE). From the caller:
+#   VARIANT          the product
+#   DESTINATION      the Facility To option to return to
+#   DESTINATION_KEY  the .env key DESTINATION came from, for messages
+#   ROLE             who is signed in, for messages
+#   PREREQUISITE     the prompt that leaves EXPECTED_START_BALANCE, named in
+#                    the precondition message
+#
+# Read off the app 2026-10-19: Record Stock Issued with Transaction type
+# Return - the same form as a dispatch, with "Quantity returned *" - and
+# Facility To offering one warehouse: whoever sent this one its stock. The
+# state user is offered Fac_f-2026-10-15-137945 (National); the health
+# facility user Fac_f-2026-10-15-137946 (the state).
+- runScript:
+    file: return.js
+    env:
+      ACTION: init
+      VARIANT: ${VARIANT}
+      QUANTITY: ${RETURN_QUANTITY}
+      START: ${EXPECTED_START_BALANCE}
+      FINAL: ${EXPECTED_FINAL_BALANCE}
+      DESTINATION: ${DESTINATION}
+      DESTINATION_KEY: ${DESTINATION_KEY}
+      PREREQUISITE: ${PREREQUISITE}
+    label: "Read the return test data"
+- runFlow:
+    when:
+      true: ${output.ret.failure}
+    file: ../../fail.yaml
+    env:
+      MESSAGE: ${output.ret.failure}
+    label: "Return test data is set in .env"
+
+# --- Starting balance --------------------------------------------------------
+- runFlow: ../back-to-home.yaml
+- runFlow:
+    file: ../read-stock-balance.yaml
+    env:
+      VARIANT: ${VARIANT}
+- runScript:
+    file: return.js
+    env:
+      ACTION: balance
+      PHASE: start
+    label: "Check the starting balance"
+- runFlow:
+    when:
+      true: ${output.ret.failure}
+    commands:
+      - takeScreenshot: artifacts/return-${VARIANT}-precondition
+      - runFlow:
+          file: ../../fail.yaml
+          env:
+            MESSAGE: ${output.ret.failure}
+          label: "Starting balance as expected"
+
+# --- The return --------------------------------------------------------------
+- runScript:
+    file: ../stock-form.js
+    env:
+      ACTION: init
+      VARIANT: ${VARIANT}
+      TARGET: ${DESTINATION}
+      MISSING: "${output.ret.prefix + 'Return destination ' + output.ret.destination + ' not available.'}"
+      ROLE: ${ROLE}
+    label: "Set up the Return form"
+- runFlow:
+    file: ../open-stock-form.yaml
+    env:
+      TRANSACTION_TYPE: "Return"
+- runFlow:
+    file: ../enter-quantity.yaml
+    env:
+      QUANTITY: ${RETURN_QUANTITY}
+- runFlow:
+    when:
+      visible:
+        text: "(?!\\d+$).+"
+        below: "Quantity returned.*"
+        above: "Submit"
+    commands:
+      - takeScreenshot: artifacts/return-${VARIANT}-quantity-refused
+      - copyTextFrom:
+          text: "(?!\\d+$).+"
+          below: "Quantity returned.*"
+          above: "Submit"
+      - runFlow:
+          file: ../../fail.yaml
+          env:
+            MESSAGE: "${output.ret.prefix + 'the return quantity was refused - ' + maestro.copiedText}"
+          label: "The return quantity is accepted"
+- tapOn:
+    text: "Submit"
+    label: "Submit the return (irreversible)"
+- waitForAnimationToEnd:
+    timeout: 3000
+# A dispatch on this form raised no popup (2026-10-19); Confirm is tapped if
+# a return ever does.
+- runFlow:
+    when:
+      visible: "Confirm"
+    commands:
+      - takeScreenshot: artifacts/return-${VARIANT}-popup
+      - tapOn:
+          text: "Confirm"
+          label: "Confirm the return"
+# Known to be on screen at Submit, so this cannot pass vacuously.
+- extendedWaitUntil:
+    notVisible: "Quantity returned.*"
+    timeout: 30000
+    optional: true
+    label: "The return went through (the form closed)"
+- runFlow:
+    when:
+      visible: "Quantity returned.*"
+    commands:
+      - takeScreenshot: artifacts/return-${VARIANT}-not-submitted
+      - runFlow:
+          file: ../../fail.yaml
+          env:
+            MESSAGE: "${output.ret.prefix + 'the return form was still up 30 s after Submit.'}"
+          label: "The return went through"
+- takeScreenshot: artifacts/return-${VARIANT}-result
+- setClipboard: "none"
+- runFlow:
+    when:
+      visible: ".*MRN: .*"
+    commands:
+      - copyTextFrom:
+          text: ".*MRN: .*"
+          label: "Read the return's MRN"
+      - evalScript: ${output.ret.mrn = String(maestro.copiedText).replace(/^.*MRN:\s*/, '').trim()}
+- evalScript: "${console.log('Return ' + output.ret.variant + ' confirmation: ' + maestro.copiedText)}"
+
+# --- Final balance -----------------------------------------------------------
+- runFlow: ../back-to-home.yaml
+- runFlow:
+    file: ../read-stock-balance.yaml
+    env:
+      VARIANT: ${VARIANT}
+- runScript:
+    file: return.js
+    env:
+      ACTION: balance
+      PHASE: final
+    label: "Check the final balance"
+- takeScreenshot: artifacts/return-${VARIANT}-final-balance
+- runFlow:
+    when:
+      true: ${output.ret.failure}
+    file: ../../fail.yaml
+    env:
+      MESSAGE: ${output.ret.failure}
+    label: "Final balance as expected"
+- runScript:
+    file: return.js
+    env:
+      ACTION: done
+    label: "Record this variant's return"
+- evalScript: ${console.log('Return PASSED - ' + output.ret.variant + ' returned ' + output.ret.quantity + ' to ' + output.form.facility + '; balance ' + output.ret.startBalance + ' -> ' + output.ret.finalBalance)}

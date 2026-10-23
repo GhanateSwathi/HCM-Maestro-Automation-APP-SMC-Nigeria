@@ -1,0 +1,61 @@
+appId: ${HCM_APP_ID}
+name: deliver-dose
+---
+# Steps 12 and 14 - from Household Overview: give member WHO (child1 |
+# child2) its cycle dose and check the age-product rule - 3 to 11 months
+# PRODUCT_VARIANT_1 only, 12 to 59 months PRODUCT_VARIANT_2 only. STEP names
+# the report line. Records the quantity in output.reg[WHO].dose and ends on
+# "Delivery Successful".
+#
+# Read off the app as AU-CDD-001, 2026-10-21: Dose on the member's card opens
+# the eligibility checklist again, each time (eligibility-checklist.yaml),
+# then Beneficiary Details with Record Cycle Dose. With stock, Record Cycle
+# Dose opens "Delivery Details": "Date of delivery" (today), "Resource" -
+# the product chosen for the age, one grey button that opens nothing - then
+# "Quantity Distributed" (a - 1 + stepper), "Add Items" (disabled),
+# "Delivery Comments", Save Delivery. Save Delivery asks "Please check you
+# have done the following" - three required boxes ("Give 2 AQ tablets to
+# caregiver *", "Have you written this ID in the child card (To be used in
+# the next cycle) *", "Given health talk on the use of SPAQ on day 2 and day
+# 3 *" for a 6-month-old) - and Next ends on "Delivery Successful" /
+# "Resources has been delivered successfully.". The product is checked
+# before anything is saved.
+- runFlow:
+    file: start-dose.yaml
+    env:
+      WHO: ${WHO}
+- runFlow:
+    when:
+      visible: "Eligibility Assessment"
+    file: eligibility-checklist.yaml
+    env:
+      ANSWER: "No"
+      STEP: "${STEP + ' - eligibility checklist'}"
+- extendedWaitUntil:
+    visible: "Record Cycle Dose"
+    timeout: 15000
+    label: "Beneficiary Details offers Record Cycle Dose"
+- tapOn:
+    text: "Record Cycle Dose"
+    label: "Record Cycle Dose"
+- extendedWaitUntil:
+    visible: "Delivery Details|Insufficient Stock"
+    timeout: 15000
+    label: "Delivery Details opens"
+- runFlow:
+    when:
+      visible: "Insufficient Stock"
+    commands:
+      - takeScreenshot: artifacts/registration-no-stock-${WHO}
+      - runFlow:
+          file: ../fail.yaml
+          env:
+            MESSAGE: "${STEP + ' - Insufficient Stock although the CDD received stock.'}"
+
+
+# --- Products, quantity, Save Delivery, the checks ----------------------------
+- runFlow:
+    file: record-delivery.yaml
+    env:
+      WHO: ${WHO}
+      STEP: ${STEP}

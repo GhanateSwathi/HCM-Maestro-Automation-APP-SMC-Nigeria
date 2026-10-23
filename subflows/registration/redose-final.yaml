@@ -1,0 +1,59 @@
+appId: ${HCM_APP_ID}
+name: redose-final
+---
+# Prompt 14's final verification - on Household Overview: every child dosed
+# in the run shows "Administered success" and "Redose Completed" under its
+# gender and age line, every other child "Not Administered" (with Dose).
+# Ends on Household Overview.
+- evalScript: ${output.reg.ci = 0}
+- repeat:
+    times: ${output.reg.children.length}
+    label: "Each child's card"
+    commands:
+      - scrollUntilVisible:
+          element: "Household Overview"
+          direction: UP
+          timeout: 15000
+          optional: true
+          label: "Back to the top of the household"
+      # Scrolled to the card's last button ("Dose" or "Redose"), so both
+      # status lines above it are on screen; centring overshoots.
+      - scrollUntilVisible:
+          element:
+            text: "Redose|Dose"
+            below:
+              text: ${output.reg.children[output.reg.ci].card}
+              below: ${output.reg.children[output.reg.ci].id}
+          direction: DOWN
+          timeout: 15000
+          optional: true
+          label: "Find the child's card"
+      - copyTextFrom:
+          text: ".+"
+          below:
+            text: ${output.reg.children[output.reg.ci].card}
+            below: ${output.reg.children[output.reg.ci].id}
+          index: 0
+          label: "Read the card's first status"
+      - evalScript: ${output.reg.first = maestro.copiedText}
+      - copyTextFrom:
+          text: ".+"
+          below:
+            text: ${output.reg.children[output.reg.ci].card}
+            below: ${output.reg.children[output.reg.ci].id}
+          index: 1
+          label: "Read the card's next line"
+      - runScript:
+          file: registration.js
+          env:
+            ACTION: final-card
+            FIRST: ${output.reg.first}
+      - evalScript: ${output.reg.ci = output.reg.ci + 1}
+- takeScreenshot: artifacts/registration-redose-household
+- runScript:
+    file: registration.js
+    env:
+      ACTION: step
+      STEP: "Final verification - the household's cards"
+      RESULT: "${output.reg.cardProblems.length ? 'FAILED' : 'PASSED'}"
+      DETAIL: ${output.reg.cards.join('; ')}

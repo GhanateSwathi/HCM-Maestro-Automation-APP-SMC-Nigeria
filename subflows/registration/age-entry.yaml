@@ -1,0 +1,93 @@
+appId: ${HCM_APP_ID}
+name: age-entry
+---
+# On Beneficiary / Member Details: put VALUE in the age field FIELD (a
+# regex for its hint: "Year\\(s\\)" or "Month\\(s\\)"; NAME is how the report
+# calls it). With EXPECTED ("rejected" | "accepted") the outcome is recorded
+# as a boundary row; "info" logs it without judging it; blank records
+# nothing.
+#
+# Read off the app as AU-CDD-001, 2026-10-21: an out-of-range age shows at
+# once under the fields - "Age should be from 18 years to 150 years." (head
+# of household), "Age should be from 3 months to 5 years." (other members) -
+# and Date of birth follows the age typed. Save is never pressed with an
+# age under test: it would store the member.
+#
+# Clearing: a tap drops the cursor wherever it lands, and eraseText deletes
+# only before it. Right-arrow (Remote Dpad Right) moves it to the end
+# first, so the erase takes the whole value.
+- tapOn:
+    text: ${FIELD}
+    below: "Age"
+    label: "Focus the age field"
+- repeat:
+    times: 4
+    commands:
+      - pressKey: Remote Dpad Right
+- eraseText: 4
+- runFlow:
+    when:
+      true: ${VALUE != ''}
+    commands:
+      - inputText: ${VALUE}
+- runFlow:
+    when:
+      visible:
+        id: "android:id/input_method_nav_back"
+    commands:
+      - tapOn:
+          id: "android:id/input_method_nav_back"
+          label: "Close the keyboard"
+- runFlow:
+    when:
+      true: ${typeof EXPECTED !== 'undefined' && EXPECTED != ''}
+    commands:
+      - evalScript: ${output.ageError = false}
+      - setClipboard: "none"
+      - runFlow:
+          when:
+            visible: "Age should be from.*"
+          commands:
+            - evalScript: ${output.ageError = true}
+            - copyTextFrom:
+                text: "Age should be from.*"
+                label: "Read the age error"
+      - evalScript: ${output.ageMessage = maestro.copiedText}
+      - setClipboard: "none"
+      - runFlow:
+          when:
+            visible:
+              text: "\\d{1,2} \\w{3} \\d{4}"
+              below: "Date of birth"
+              above: "\\(or\\)"
+          commands:
+            - copyTextFrom:
+                text: "\\d{1,2} \\w{3} \\d{4}"
+                below: "Date of birth"
+                above: "\\(or\\)"
+                label: "Read the date of birth it gives"
+      - runFlow:
+          when:
+            true: ${EXPECTED != 'info'}
+          commands:
+            - runScript:
+                file: registration.js
+                env:
+                  ACTION: age
+                  FIELD: ${NAME}
+                  VALUE: ${VALUE}
+                  EXPECTED: ${EXPECTED}
+                  SHOWN: ${output.ageError}
+                  MESSAGE: ${output.ageMessage}
+                  DOB: ${maestro.copiedText}
+      - runFlow:
+          when:
+            true: ${EXPECTED == 'info'}
+          commands:
+            - runScript:
+                file: registration.js
+                env:
+                  ACTION: step
+                  STEP: "${output.m.label + ' age ' + VALUE + ' ' + NAME}"
+                  RESULT: INFO
+                  DETAIL: "${output.ageError ? 'rejected - ' + output.ageMessage : 'accepted - no error, date of birth ' + maestro.copiedText}"

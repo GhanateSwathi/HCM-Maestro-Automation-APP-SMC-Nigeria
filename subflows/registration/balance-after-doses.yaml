@@ -1,0 +1,55 @@
+appId: ${HCM_APP_ID}
+name: balance-after-doses
+---
+# Step 15 - back home: each variant's Stock Balance is the balance after the
+# receipt (Step 11) less the dose given (Steps 12 and 14), else
+#   CDD balance mismatch for <variant>: expected <expected>, found <actual>.
+# The balance is the device's own figure, read straight after the doses.
+- runFlow: go-home.yaml
+- runFlow:
+    file: ../stock/read-stock-balance.yaml
+    env:
+      VARIANT: ${output.reg.variant1}
+- runScript:
+    file: registration.js
+    env:
+      ACTION: balance
+      PHASE: doses
+      INDEX: "0"
+- runFlow:
+    file: ../stock/read-stock-balance.yaml
+    env:
+      VARIANT: ${output.reg.variant2}
+- runScript:
+    file: registration.js
+    env:
+      ACTION: balance
+      PHASE: doses
+      INDEX: "1"
+- takeScreenshot: artifacts/registration-cdd-balance-after-doses
+- runScript:
+    file: registration.js
+    env:
+      ACTION: doses
+- runFlow:
+    when:
+      true: ${output.reg.stockFailure}
+    commands:
+      - runScript:
+          file: registration.js
+          env:
+            ACTION: step
+            STEP: "Step 15 - CDD balances after the doses"
+            RESULT: FAILED
+            DETAIL: ${output.reg.stockFailure}
+- runFlow:
+    when:
+      true: ${!output.reg.stockFailure}
+    commands:
+      - runScript:
+          file: registration.js
+          env:
+            ACTION: step
+            STEP: "Step 15 - CDD balances after the doses"
+            RESULT: PASSED
+            DETAIL: "${output.reg.variant1 + ' ' + output.reg.balances.after[0] + ' - ' + output.reg.child1.dose + ' = ' + output.reg.balances.doses[0] + ', ' + output.reg.variant2 + ' ' + output.reg.balances.after[1] + ' - ' + output.reg.child2.dose + ' = ' + output.reg.balances.doses[1]}"

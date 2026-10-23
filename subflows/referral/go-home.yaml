@@ -1,0 +1,18 @@
+appId: ${HCM_APP_ID}
+name: referral-go-home
+---
+# From the referral screens to home, through the side menu's Home. Android
+# Back does not get there: Go Back on the success screen lays the referral
+# screen over the finished form's pages, and Back walks into them
+# (2026-10-21). The menu also holds Logout, so Home is fenced above it.
+- tapOn:
+    text: "Open navigation menu"
+    label: "Open the side menu"
+- tapOn:
+    text: "Home"
+    above: "Logout"
+    label: "Home"
+- extendedWaitUntil:
+    visible: "Stock Balance"
+    timeout: 15000
+    label: "Home screen"

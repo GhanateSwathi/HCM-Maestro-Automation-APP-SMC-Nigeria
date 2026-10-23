@@ -1,0 +1,140 @@
+appId: ${HCM_APP_ID}
+name: eligibility-checklist
+---
+# On "Eligibility Assessment" (Dose on a member's card): answer every
+# question ANSWER ("Yes" or "No"), then Save Delivery and Submit on "Ready
+# to submit ?". STEP names the report line. Ends where Submit leads.
+#
+# Read off the app as AU-CDD-001, 2026-10-21, for a 6-month-old: "Is the
+# child sick? *", "Is the child having fever? *", "Is the child given SPAQ
+# for the first time?(Not administered in the previous cycle) *" - answering
+# No there adds "Is there any side effect to SPAQ which was administered
+# last cycle? *" - and "Child has taken SP or CTX containing drugs in the
+# past 28 days? *". Each has radio buttons Yes and No: text-less elements
+# left of their labels, which report no state. The form outgrows the screen,
+# and Save Delivery with a question unanswered gives "Fill the required
+# fields" / "This field is required".
+#
+# So questions are answered one at a time, top to bottom: the first question
+# on screen not answered yet is centred, then its radio - the ANSWER-th
+# clickable below it, left of the "No" labels - is tapped. Questions a
+# follow-up adds are picked up the same way. The form ends at its
+# "version <n>" line.
+- runScript:
+    file: registration.js
+    env:
+      ACTION: checklist
+      ANSWER: ${ANSWER}
+- extendedWaitUntil:
+    visible: "Eligibility Assessment|Save Delivery"
+    timeout: 15000
+    label: "Eligibility Assessment opens"
+# From the top, in case the form was scrolled.
+- scrollUntilVisible:
+    element: "Eligibility Assessment"
+    direction: UP
+    timeout: 10000
+    label: "Start at the top of the checklist"
+- repeat:
+    times: 15
+    while:
+      true: ${!output.reg.elig.done}
+    label: "Answer each question"
+    commands:
+      - evalScript: ${output.reg.elig.k = 0}
+      - evalScript: ${output.reg.elig.next = ''}
+      - repeat:
+          times: 8
+          while:
+            visible:
+              text: "(?s).+\\s\\*"
+              index: ${output.reg.elig.k}
+          commands:
+            - copyTextFrom:
+                text: "(?s).+\\s\\*"
+                index: ${output.reg.elig.k}
+                label: "Read a question on screen"
+            - runScript:
+                file: registration.js
+                env:
+                  ACTION: seen
+            - evalScript: ${output.reg.elig.k = output.reg.elig.k + 1}
+      - runFlow:
+          when:
+            true: ${output.reg.elig.next != ''}
+          commands:
+            - scrollUntilVisible:
+                element:
+                  text: ${output.reg.elig.nextSelector}
+                direction: DOWN
+                centerElement: true
+                timeout: 10000
+                # The last questions cannot be centred - the form ends.
+                optional: true
+                label: "Centre the next question"
+            - tapOn:
+                below: ${output.reg.elig.nextSelector}
+                leftOf: "No"
+                index: ${output.reg.elig.position}
+                label: "Answer the question"
+            - runScript:
+                file: registration.js
+                env:
+                  ACTION: answered
+      - runFlow:
+          when:
+            true: ${output.reg.elig.next == ''}
+          commands:
+            - runFlow:
+                when:
+                  visible: "version \\d+"
+                commands:
+                  - evalScript: ${output.reg.elig.done = true}
+            - runFlow:
+                when:
+                  notVisible: "version \\d+"
+                commands:
+                  - scroll
+- runFlow:
+    when:
+      true: ${!output.reg.elig.done}
+    commands:
+      - takeScreenshot: artifacts/registration-checklist-unfinished
+      - runFlow:
+          file: ../fail.yaml
+          env:
+            MESSAGE: "${STEP + ' - the eligibility checklist did not reach its end after 15 questions.'}"
+- takeScreenshot: artifacts/registration-checklist-${ANSWER}
+
+- tapOn:
+    text: "Save Delivery"
+    label: "Save Delivery"
+- extendedWaitUntil:
+    visible: "Ready to submit \\?|Fill the required fields"
+    timeout: 10000
+    optional: true
+    label: "Ready to submit"
+- runFlow:
+    when:
+      notVisible: "Ready to submit \\?"
+    commands:
+      - takeScreenshot: artifacts/registration-checklist-not-accepted
+      - runFlow:
+          file: ../fail.yaml
+          env:
+            MESSAGE: "${STEP + ' - Save Delivery did not offer Ready to submit after answering ' + output.reg.elig.answered.length + ' questions ' + ANSWER + '.'}"
+- tapOn:
+    text: "Submit"
+    below: "Ready to submit \\?"
+    label: "Submit the checklist"
+- extendedWaitUntil:
+    notVisible: "Ready to submit \\?"
+    timeout: 15000
+    label: "The checklist is submitted"
+- runScript:
+    file: registration.js
+    env:
+      ACTION: step
+      STEP: ${STEP}
+      RESULT: PASSED
+      DETAIL: "${'all ' + output.reg.elig.answered.length + ' questions answered ' + ANSWER + ' (' + output.reg.elig.summary + '); Ready to submit -> Submit'}"

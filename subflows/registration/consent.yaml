@@ -1,0 +1,58 @@
+appId: ${HCM_APP_ID}
+name: caregiver-consent
+---
+# Step 4 - on "Care giver's consent": answer CONSENT ("Yes" or "No") and
+# Submit.
+#
+# Read off the app as AU-CDD-001, 2026-10-21: the question "Did the care
+# giver allow for registration and distribution of SMC medicines? *" with
+# radio buttons Yes and No, and Submit. Each radio is a separate text-less
+# element left of its label, and none reports its state (checked stays
+# false), so the choice is tapped by fencing: Yes's radio is left of "Yes"
+# and above "No"; No's is left of "No" and below "Yes". The screenshot
+# records the choice.
+- extendedWaitUntil:
+    visible: "Care giver's consent"
+    timeout: 15000
+    label: "Care giver's consent opens"
+- assertVisible:
+    text: "Yes"
+    below: "Did the care giver allow.*"
+    label: "Yes is offered"
+- assertVisible:
+    text: "No"
+    below: "Yes"
+    label: "No is offered"
+- runFlow:
+    when:
+      true: ${CONSENT == 'Yes'}
+    commands:
+      - tapOn:
+          leftOf: "Yes"
+          below: "Did the care giver allow.*"
+          above: "No"
+          label: "Consent - Yes"
+- runFlow:
+    when:
+      true: ${CONSENT == 'No'}
+    commands:
+      - tapOn:
+          leftOf: "No"
+          below: "Yes"
+          label: "Consent - No"
+- takeScreenshot: artifacts/registration-consent
+- tapOn:
+    text: "Submit"
+    below: "Care giver's consent"
+    label: "Submit the consent"
+- extendedWaitUntil:
+    notVisible: "Care giver's consent"
+    timeout: 15000
+    label: "The consent is accepted"
+- runScript:
+    file: registration.js
+    env:
+      ACTION: step
+      STEP: "Step 4 - care giver's consent"
+      RESULT: PASSED
+      DETAIL: "${CONSENT + ' selected and submitted'}"

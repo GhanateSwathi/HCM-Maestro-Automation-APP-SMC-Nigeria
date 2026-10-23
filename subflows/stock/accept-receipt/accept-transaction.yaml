@@ -1,0 +1,102 @@
+appId: ${HCM_APP_ID}
+name: accept-transaction
+---
+# Accepts the first incoming transaction for product variant INDEX (0 or 1):
+# Select -> Stock Receipt Details -> Accept Stock -> Confirm. Starts and ends
+# on Incoming Transactions. IRREVERSIBLE: Confirm accepts the stock.
+#
+# What Confirm does, read off the app 2026-10-15 (QA to confirm as the
+# expected outcome):
+#   - a green "Stock accepted successfully" banner, gone after a few seconds
+#   - back to the Manage Stock screen
+#   - the transaction leaves Incoming Transactions; the rest renumber
+#     ("MRN null_2" became "MRN null_1")
+#   - the product's Stock Balance on home rises by the quantity (checked by
+#     the caller at the end)
+#
+# Any failure stops the flow, so the second variant is never tried after the
+# first fails; once the first is accepted, a failure on the second reads
+#   Partial acceptance: SPAQ1 accepted, SPAQ2 failed – <reason>
+- runFlow:
+    file: open-transaction.yaml
+    env:
+      INDEX: ${INDEX}
+- runFlow: open-accept-confirmation.yaml
+- tapOn:
+    text: "Confirm"
+    label: "Accept - tap Confirm (accepts this transaction's stock)"
+
+# The banner lasts a few seconds; record it the moment it shows.
+- evalScript: ${output.v.banner = false}
+- extendedWaitUntil:
+    visible: "Stock accepted successfully"
+    timeout: 15000
+    optional: true
+    label: "Accept - success banner"
+- runFlow:
+    when:
+      visible: "Stock accepted successfully"
+    commands:
+      - evalScript: ${output.v.banner = true}
+      - takeScreenshot: artifacts/stock-accepted-${output.v.name}
+- extendedWaitUntil:
+    visible: "Record Stock Receipt"
+    timeout: 15000
+    optional: true
+    label: "Accept - back on Manage Stock"
+- runFlow:
+    when:
+      notVisible: "Record Stock Receipt"
+    file: ../../fail.yaml
+    env:
+      MESSAGE: "${output.v.prefix + 'after Confirm the app did not return to Manage Stock.'}"
+    label: "Accept - back on Manage Stock"
+- runFlow:
+    when:
+      true: ${!output.v.banner}
+    file: ../../fail.yaml
+    env:
+      MESSAGE: "${output.v.prefix + 'no \"Stock accepted successfully\" banner after Confirm.'}"
+    label: "Accept - success banner shown"
+
+# The transaction has left the incoming list.
+- tapOn:
+    text: "Record Stock Receipt"
+    label: "Accept - reopen Record Stock Receipt"
+- extendedWaitUntil:
+    visible: "Incoming Transactions"
+    timeout: 15000
+    label: "Accept - Incoming Transactions is back"
+- waitForAnimationToEnd:
+    timeout: 3000
+- runFlow:
+    file: count-transactions.yaml
+    env:
+      INDEX: ${INDEX}
+- runFlow:
+    when:
+      true: ${output.variants.counts[output.v.index] != output.variants.countsBefore[output.v.index] - 1}
+    file: ../../fail.yaml
+    env:
+      MESSAGE: "${output.v.prefix + 'the ' + output.v.name + ' transaction is still listed after Confirm (' + output.variants.countsBefore[output.v.index] + ' before, ' + output.variants.counts[output.v.index] + ' after).'}"
+    label: "Accept - the transaction left the incoming list"
+# A real MRN names this transaction alone, so it must be gone. A placeholder
+# ("MRN null_0") passes to the next transaction as the list renumbers.
+- runFlow:
+    when:
+      true: ${!output.txn.mrnMissing}
+    commands:
+      - runFlow:
+          when:
+            visible:
+              text: ${output.txn.labelPattern}
+          file: ../../fail.yaml
+          env:
+            MESSAGE: "${output.v.prefix + output.txn.mrnLabel + ' is still listed in Incoming Transactions after Confirm.'}"
+          label: "Accept - the accepted MRN left the incoming list"
+- runScript:
+    file: variants.js
+    env:
+      ACTION: accepted
+      COUNT_AFTER: ${output.variants.counts[output.v.index]}
+    label: "Record the accepted variant"

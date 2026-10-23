@@ -1,0 +1,93 @@
+appId: ${HCM_APP_ID}
+name: referral-reason
+---
+# Create New Referral, step 3 - the reason, then Next to its checklist.
+#
+# Each reason is a radio button with its label to the right (2026-10-21):
+# the label's own text does not tick it, and the radio carries no text. So
+# the labels are read top to bottom, the reason's position found, and the
+# radio at that position ticked - Maestro ranks matches below an anchor
+# nearest first, i.e. top to bottom. "Left of <reason>" alone would reach
+# the navigation menu button instead.
+#
+# The checklist that opens must be the reason's (its title is checked).
+# A reason not offered, or the wrong checklist, fails the record and the
+# run moves on.
+- scrollUntilVisible:
+    element: "version \\d+"
+    direction: DOWN
+    timeout: 10000
+    label: "Scroll the reasons into view"
+- evalScript: ${output.ref.i = 0}
+- repeat:
+    times: 10
+    while:
+      true: ${output.ref.i < 10}
+    label: "Read the reasons, top to bottom"
+    commands:
+      - runFlow:
+          when:
+            visible:
+              text: "(?!This field is required$).+"
+              below: "What is the reason for referral.*"
+              index: ${output.ref.i}
+          commands:
+            - copyTextFrom:
+                text: "(?!This field is required$).+"
+                below: "What is the reason for referral.*"
+                index: ${output.ref.i}
+                label: "Read a reason"
+            - runScript:
+                file: referral.js
+                env:
+                  ACTION: label
+                  INDEX: ${output.ref.i}
+      - runFlow:
+          when:
+            notVisible:
+              text: "(?!This field is required$).+"
+              below: "What is the reason for referral.*"
+              index: ${output.ref.i}
+          commands:
+            - evalScript: ${output.ref.i = 99}
+      - evalScript: ${output.ref.i = output.ref.i + 1}
+- runScript:
+    file: referral.js
+    env:
+      ACTION: reason
+    label: "Find the reason's position"
+- runFlow:
+    when:
+      true: ${output.ref.skip}
+    commands:
+      - takeScreenshot: artifacts/referral-reason-missing
+- runFlow:
+    when:
+      true: ${!output.ref.skip}
+    commands:
+      - tapOn:
+          leftOf: ${output.ref.reasonPattern}
+          below: "What is the reason for referral.*"
+          index: ${output.ref.position}
+          label: "Tick the reason's radio button"
+      - waitForAnimationToEnd:
+          timeout: 2000
+      - takeScreenshot: artifacts/referral-${output.ref.slug}-details
+      - tapOn:
+          text: "Next"
+          label: "Next"
+      - extendedWaitUntil:
+          visible: ${output.ref.title}
+          timeout: 15000
+          optional: true
+          label: "The reason's checklist opens"
+      - runFlow:
+          when:
+            notVisible: ${output.ref.title}
+          commands:
+            - takeScreenshot: artifacts/referral-wrong-checklist
+            - runScript:
+                file: referral.js
+                env:
+                  ACTION: fail
+                  WHY: "${'The checklist for ' + output.ref.reason + ' did not open after Next.'}"

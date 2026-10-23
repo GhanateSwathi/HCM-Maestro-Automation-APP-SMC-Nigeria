@@ -1,0 +1,102 @@
+appId: ${HCM_APP_ID}
+name: mobile-number
+---
+# Step 6, on Beneficiary Details, when HEAD_MOBILE is set: the mobile number
+# takes exactly 11 digits - its first 10 must be refused, and a 12th digit
+# blocked or refused - then HEAD_MOBILE is typed.
+#
+# NOT YET RUN against the app: HEAD_MOBILE was blank on 2026-10-21, so the
+# field was left empty (it is optional). Read off the app that day: "Mobile
+# number" over the field and the hint "Enter a valid mobile number." - the
+# message an invalid number gives is not known yet, so "refused" is any text
+# under the field other than that hint, or the field not taking the digit.
+# Check this file against the app on its first run.
+- tapOn:
+    below: "Mobile number"
+    index: 0
+    label: "Focus Mobile number"
+- inputText: ${output.reg.mobileShort}
+- tapOn:
+    id: "android:id/input_method_nav_back"
+    label: "Close the keyboard"
+- evalScript: ${output.mobileError = false}
+- runFlow:
+    when:
+      visible:
+        text: "(?!Enter a valid mobile number\\.$).+"
+        below:
+          text: ${output.reg.mobileShort}
+        above: "Save Beneficiary"
+    commands:
+      - evalScript: ${output.mobileError = true}
+- runScript:
+    file: registration.js
+    env:
+      ACTION: boundary
+      FIELD: "Mobile number"
+      VALUE: "${output.reg.mobileShort + ' (10 digits)'}"
+      EXPECTED: "rejected"
+      ACTUAL: "${output.mobileError ? 'rejected' : 'no error shown'}"
+      OK: ${output.mobileError}
+- tapOn:
+    text: ${output.reg.mobileShort}
+    below: "Mobile number"
+    label: "Focus Mobile number"
+- repeat:
+    times: 13
+    commands:
+      - pressKey: Remote Dpad Right
+- inputText: ${output.reg.mobileLong.slice(10)}
+- tapOn:
+    id: "android:id/input_method_nav_back"
+    label: "Close the keyboard"
+- evalScript: ${output.mobileError = false}
+- runFlow:
+    when:
+      visible:
+        text: ${output.reg.mobileLong.slice(0, 12)}
+        below: "Mobile number"
+    commands:
+      - evalScript: ${output.mobileError = false}
+      - runFlow:
+          when:
+            visible:
+              text: "(?!Enter a valid mobile number\\.$).+"
+              below:
+                text: ${output.reg.mobileLong.slice(0, 12)}
+              above: "Save Beneficiary"
+          commands:
+            - evalScript: ${output.mobileError = true}
+- runFlow:
+    when:
+      notVisible:
+        text: ${output.reg.mobileLong.slice(0, 12)}
+        below: "Mobile number"
+    commands:
+      - evalScript: ${output.mobileError = true}
+- runScript:
+    file: registration.js
+    env:
+      ACTION: boundary
+      FIELD: "Mobile number"
+      VALUE: "${output.reg.mobileLong + ' (12 digits)'}"
+      EXPECTED: "blocked or rejected"
+      ACTUAL: "${output.mobileError ? 'blocked or rejected' : '12 digits taken, no error'}"
+      OK: ${output.mobileError}
+- tapOn:
+    below: "Mobile number"
+    index: 0
+    label: "Focus Mobile number"
+- repeat:
+    times: 14
+    commands:
+      - pressKey: Remote Dpad Right
+- eraseText: 14
+- inputText: ${output.reg.mobile}
+- tapOn:
+    id: "android:id/input_method_nav_back"
+    label: "Close the keyboard"
+- assertVisible:
+    text: ${output.reg.mobile}
+    below: "Mobile number"
+    label: "HEAD_MOBILE is typed"

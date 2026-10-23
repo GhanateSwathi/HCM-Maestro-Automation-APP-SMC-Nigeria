@@ -1,0 +1,36 @@
+appId: ${HCM_APP_ID}
+name: "Login - health facility stock user signs in"
+tags:
+  - regression
+  - login
+  - hf-stock
+---
+# Needs HCM_HF_STOCK_USER_ID / HCM_HF_STOCK_PASSWORD and a reachable
+# environment. Fails when the backend is down - check login-screen.yaml first.
+- runFlow: ../../subflows/sign-in/hf-stock.yaml
+
+# The CDD screen pairs a facility field with a community field, so prove this
+# is a stock user's screen: one boundary dropdown, not both. Which one depends
+# on the tenant - "Community *" on SMC-MC (it still selects the facility),
+# "ADMIN_Health Facility *" on mhbase - so check whichever is up has no
+# partner. On SMC-MC this screen looks identical to the state stock user's;
+# only the dropdown's options differ.
+- runFlow:
+    when:
+      visible: "(ADMIN_)?Community.*"
+    commands:
+      - assertNotVisible:
+          text: "(ADMIN_)?Health Facility.*"
+          label: "No separate facility picker for the stock role"
+- runFlow:
+    when:
+      visible: "(ADMIN_)?Health Facility.*"
+    commands:
+      - assertNotVisible:
+          text: "(ADMIN_)?Community.*"
+          label: "No separate community picker for the stock role"
+- assertVisible:
+    text: "Submit"
+    label: "Submit button is present"
+
+- takeScreenshot: artifacts/sign-in-hf-stock-boundary-selection

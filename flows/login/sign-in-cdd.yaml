@@ -1,0 +1,23 @@
+appId: ${HCM_APP_ID}
+name: "Login - CDD user signs in"
+tags:
+  - regression
+  - login
+  - cdd
+---
+# Needs HCM_CDD_USER_ID / HCM_CDD_PASSWORD and a reachable environment. Fails
+# when the backend is down - check login-screen.yaml first.
+# The subflow already waits for facility selection; this flow asserts the
+# rest of that screen.
+- runFlow: ../../subflows/sign-in/cdd.yaml
+
+# "Community *" on SMC-MC, "ADMIN_Community *" (the raw boundary code) on the
+# mhbase tenant.
+- assertVisible:
+    text: "(ADMIN_)?Community.*"
+    label: "Community field is present"
+- assertVisible:
+    text: "Submit"
+    label: "Submit button is present"
+
+- takeScreenshot: artifacts/sign-in-cdd-facility-selection

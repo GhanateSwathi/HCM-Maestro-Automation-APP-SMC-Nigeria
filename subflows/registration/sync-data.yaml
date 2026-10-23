@@ -1,0 +1,106 @@
+appId: ${HCM_APP_ID}
+name: registration-sync-data
+---
+# From any Registration & Delivery screen: home, then Sync Data until nothing
+# is left to sync, and record the result as a report line (STEP). Ends on
+# home.
+#
+# Sync Data answers (2026-10-19 to 22) with a "Sync in progress" banner, then
+# "Data Synced Successfully" (Close), or at once "No Data available for sync"
+# (Close) when the background Auto Sync already sent everything. A "There
+# are N transactions yet to be synced." notice on home is logged first - the
+# records still pending.
+#
+# On 2026-10-22, in a session signed in the day before, it answered "Sync Up
+# Failed" / "Session Expired" (Close / Retry; Retry gave the same): the sign-in
+# had expired, and nothing syncs until the user signs in again. That ends
+# the loop and is recorded as a failure with the app's words.
+- runFlow: go-home.yaml
+- evalScript: ${output.reg.synced = ''}
+- evalScript: ${output.reg.syncError = ''}
+- evalScript: ${output.reg.syncStop = false}
+- runFlow:
+    when:
+      visible: "There are .* yet to be synced\\.?"
+    commands:
+      - copyTextFrom:
+          text: "There are .* yet to be synced\\.?"
+          label: "Read the pending count"
+      - evalScript: ${output.reg.synced = maestro.copiedText + ' Then '}
+- repeat:
+    times: 4
+    while:
+      true: ${!output.reg.syncStop}
+    label: "Sync until nothing is left"
+    commands:
+      - extendedWaitUntil:
+          notVisible: "Sync in progress"
+          timeout: 180000
+          optional: true
+          label: "Any sync running finishes"
+      - runFlow:
+          when:
+            visible: "Sync Up Failed.*"
+          commands:
+            - copyTextFrom:
+                text: "Sync Up Failed.*"
+                label: "Read the sync error"
+            - evalScript: ${output.reg.syncError = maestro.copiedText.replace(/\s+/g, ' ')}
+            - takeScreenshot: artifacts/registration-sync-up-failed
+            - tapOn:
+                text: "Close"
+                below: "Sync Up Failed.*"
+                label: "Close the sync error"
+            - evalScript: ${output.reg.syncStop = true}
+      - runFlow:
+          when:
+            visible: "Data Synced Successfully"
+          commands:
+            - evalScript: ${output.reg.synced = output.reg.synced + 'Data Synced Successfully, then '}
+            - takeScreenshot: artifacts/registration-synced
+            - tapOn: "Close"
+      - runFlow:
+          when:
+            visible: "No Data available for sync"
+          commands:
+            - evalScript: ${output.reg.syncStop = true}
+      - runFlow:
+          when:
+            true: ${!output.reg.syncStop}
+          commands:
+            - tapOn:
+                text: "Sync Data"
+                label: "Sync Data"
+            - extendedWaitUntil:
+                visible: "No Data available for sync|Sync in progress|Data Synced Successfully|Sync Up Failed.*"
+                timeout: 60000
+                optional: true
+                label: "Sync Data answers"
+# The outcome is decided before Close takes the dialog away.
+- evalScript: ${output.reg.syncDone = false}
+- runFlow:
+    when:
+      visible: "No Data available for sync"
+    commands:
+      - evalScript: ${output.reg.syncDone = true}
+      - takeScreenshot: artifacts/registration-nothing-left-to-sync
+      - runScript:
+          file: registration.js
+          env:
+            ACTION: step
+            STEP: ${STEP}
+            RESULT: PASSED
+            DETAIL: "${output.reg.synced + 'No Data available for sync'}"
+      - tapOn: "Close"
+- runFlow:
+    when:
+      true: ${!output.reg.syncDone}
+    commands:
+      - takeScreenshot: artifacts/registration-sync-failed
+      - runScript:
+          file: registration.js
+          env:
+            ACTION: step
+            STEP: ${STEP}
+            RESULT: FAILED
+            DETAIL: "${output.reg.syncError ? output.reg.synced + output.reg.syncError + ' - sign in again to sync' : 'Sync Data did not reach No Data available for sync within the time allowed'}"

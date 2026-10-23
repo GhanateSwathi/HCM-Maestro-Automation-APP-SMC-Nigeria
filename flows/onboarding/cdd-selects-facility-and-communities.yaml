@@ -1,0 +1,34 @@
+appId: ${HCM_APP_ID}
+name: "Onboarding - CDD user selects a facility and the first three communities"
+tags:
+  - regression
+  - onboarding
+  - cdd
+  - mhbase
+---
+# Needs HCM_CDD_USER_ID / HCM_CDD_PASSWORD (AU-CDD-001 on the mhbase tenant)
+# and a reachable environment.
+# Launches with no permissions granted, signs in, waits out the sync, grants
+# every permission on the Allow Permissions screen, ticks its checkbox and
+# continues to facility selection.
+- runFlow: ../../subflows/sign-in/cdd.yaml
+
+# The CDD's facility field is a single-select search field, unlike the stock
+# users' multi-select. No particular facility is configured for this user, so
+# the first one offered is taken; maestro.log records which.
+- runFlow:
+    file: ../../subflows/dropdown/select-first-options.yaml
+    env:
+      FIELD: "ADMIN_Health Facility.*"
+      COUNT: "1"
+
+# Communities are a multi-select listing the facility's catchment. The first
+# three are taken by position. Fewer than three fails the flow, but only after
+# the ones available have been selected and verified.
+- runFlow:
+    file: ../../subflows/dropdown/select-first-options.yaml
+    env:
+      FIELD: "ADMIN_Community.*"
+      COUNT: "3"
+
+- takeScreenshot: artifacts/onboarding-cdd

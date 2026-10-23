@@ -1,0 +1,15 @@
+appId: ${HCM_APP_ID}
+name: report-offered
+---
+# On View Reports: REPORT is listed, else
+#   <REPORT> not available in View Reports for <role>.
+- runFlow:
+    when:
+      notVisible: ${REPORT}
+    commands:
+      - takeScreenshot: artifacts/reports-option-missing
+      - runFlow:
+          file: ../../fail.yaml
+          env:
+            MESSAGE: "${REPORT + ' not available in View Reports for ' + output.reports.role + '.'}"
+          label: "The report is offered"

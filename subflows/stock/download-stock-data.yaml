@@ -1,0 +1,45 @@
+appId: ${HCM_APP_ID}
+name: download-stock-data
+---
+# From the home screen: fetch new stock records, back to home. Starts and ends
+# on the home screen.
+#
+# Incoming transactions are read from records already on the device, and
+# this build ("file-based-download") does not fetch stock records at sign-in:
+# on 2026-10-15 Record Stock Receipt listed nothing until this ran, then three
+# transactions. Downloading copies records to the device; it changes nothing
+# on the server.
+#
+# The card opens one of two dialogs:
+#   "Data Found"    - "There are new stock records found. ..." with Download
+#                     and Go Back. Download ends on a "Download Stock Data"
+#                     dialog with "Go To Home Screen".
+#   "No Data Found" - "There are no new transactions created." with
+#                     "Go To Home Screen".
+# The full-string match keeps "Data Found" apart from "No Data Found".
+- tapOn:
+    text: "Download Stock Data"
+    label: "Open Download Stock Data"
+- extendedWaitUntil:
+    visible: "Data Found|No Data Found"
+    timeout: 60000
+    label: "Download Stock Data checks for new records"
+- runFlow:
+    when:
+      visible: "Data Found"
+    commands:
+      - tapOn:
+          text: "Download"
+          label: "Download the new stock records"
+      # Three transactions took about a second; a large backlog takes longer.
+      - extendedWaitUntil:
+          visible: "Go To Home Screen"
+          timeout: 300000
+          label: "Stock records downloaded"
+- tapOn:
+    text: "Go To Home Screen"
+    label: "Back to the home screen"
+- extendedWaitUntil:
+    visible: "Stock Balance"
+    timeout: 15000
+    label: "Home screen is back"

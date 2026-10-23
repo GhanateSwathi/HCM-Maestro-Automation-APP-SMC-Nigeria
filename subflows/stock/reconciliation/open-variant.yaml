@@ -1,0 +1,192 @@
+appId: ${HCM_APP_ID}
+name: recon-open-variant
+---
+# From the home screen: Stock Reconciliation -> warehouse -> output.rv's
+# product variant, then read the form's "Stock in hand" (recon.js sih,
+# PHASE). Ends on the form, Manual count prefilled with stock in hand.
+#
+# Read off the app 2026-10-19 (com.digit.hcm 2.2.113, mhbase):
+#   - "Stock Reconciliation" is a home card. Its screen, subtitled "Perform
+#     stock reconciliation for your facility", has "Select warehouse *",
+#     "Select product variant *", "Manual count *" and Submit.
+#   - Select warehouse lists the user's own warehouse (the health facility:
+#     Fac_f-2026-10-15-137947, alone); product variants read "Spaq 1",
+#     "Spaq 2".
+#   - Picking a variant shows "Stock metrics": Date, Stock Received, Stock
+#     Issued, Stock Returned, Stock in hand - the home balance - and fills
+#     Manual count with stock in hand.
+#
+# The first warehouse is taken unless RECON_FACILITY names one; whichever is
+# picked first is picked again on every later visit.
+- runFlow:
+    when:
+      notVisible: "Stock Reconciliation"
+    commands:
+      - scrollUntilVisible:
+          element: "Stock Reconciliation"
+          direction: DOWN
+          timeout: 10000
+          optional: true
+          label: "Scroll down looking for the Stock Reconciliation card"
+- runFlow:
+    when:
+      notVisible: "Stock Reconciliation"
+    commands:
+      - takeScreenshot: artifacts/recon-card-missing
+      - runFlow:
+          file: ../../fail.yaml
+          env:
+            MESSAGE: "${'Stock Reconciliation card not displayed on home screen for ' + output.recon.role + '.'}"
+          label: "Stock Reconciliation card is displayed"
+- tapOn:
+    text: "Stock Reconciliation"
+    label: "Open Stock Reconciliation"
+- extendedWaitUntil:
+    visible: "Perform stock reconciliation for your facility"
+    timeout: 15000
+    label: "Stock Reconciliation opens"
+
+# --- Warehouse ---------------------------------------------------------------
+# Options open under the field. The pattern leaves out everything else that
+# can sit below its label.
+- tapOn:
+    below: "Select warehouse.*"
+    above: "Select product variant.*"
+    label: "Open Select warehouse"
+- extendedWaitUntil:
+    visible:
+      text: "(?!Select product variant|Manual count|Enter the physical count|version \\d|Submit$).+"
+      below: "Select warehouse.*"
+    timeout: 10000
+    optional: true
+    label: "Select warehouse lists a warehouse"
+- runFlow:
+    when:
+      notVisible:
+        text: "(?!Select product variant|Manual count|Enter the physical count|version \\d|Submit$).+"
+        below: "Select warehouse.*"
+    commands:
+      - takeScreenshot: artifacts/recon-no-warehouse
+      - runFlow:
+          file: ../../fail.yaml
+          env:
+            MESSAGE: "${'No facilities available in Stock Reconciliation dropdown for ' + output.recon.role + '.'}"
+          label: "Select warehouse lists a warehouse"
+- runFlow:
+    when:
+      true: ${output.recon.facility == ''}
+    commands:
+      # RECON_FACILITY when set, else the first offered - the nearest row
+      # below the label (the empty field itself carries no text).
+      - runFlow:
+          when:
+            true: ${output.recon.target != ''}
+          commands:
+            - runFlow:
+                when:
+                  notVisible:
+                    text: ${output.recon.targetPattern}
+                    below: "Select warehouse.*"
+                commands:
+                  - takeScreenshot: artifacts/recon-facility-missing
+                  - runFlow:
+                      file: ../../fail.yaml
+                      env:
+                        MESSAGE: "${'RECON_FACILITY ' + output.recon.target + ' is not offered in Stock Reconciliation for ' + output.recon.role + '.'}"
+                      label: "RECON_FACILITY is offered"
+            - copyTextFrom:
+                text: ${output.recon.targetPattern}
+                below: "Select warehouse.*"
+                label: "Read the configured warehouse"
+      - runFlow:
+          when:
+            true: ${output.recon.target == ''}
+          commands:
+            - copyTextFrom:
+                text: "(?!Select product variant|Manual count|Enter the physical count|version \\d|Submit$).+"
+                below: "Select warehouse.*"
+                index: 0
+                label: "Read the first warehouse"
+      - runScript:
+          file: recon.js
+          env:
+            ACTION: facility
+          label: "Record the warehouse"
+      - evalScript: "${console.log('Stock Reconciliation warehouse - ' + output.recon.facility + (output.recon.target ? ' (RECON_FACILITY)' : ' (first available)'))}"
+- tapOn:
+    text: ${output.recon.facilityPattern}
+    below: "Select warehouse.*"
+    label: "Choose the warehouse"
+- assertVisible:
+    text: ${output.recon.facilityPattern}
+    below: "Select warehouse.*"
+    above: "Select product variant.*"
+    label: "Select warehouse shows the warehouse"
+
+# --- Product variant ---------------------------------------------------------
+- tapOn:
+    below: "Select product variant.*"
+    above: "Manual count \\*"
+    label: "Open Select product variant"
+- extendedWaitUntil:
+    visible:
+      text: ${output.rv.product}
+      below: "Select product variant.*"
+    timeout: 10000
+    optional: true
+    label: "Select product variant offers the variant"
+- runFlow:
+    when:
+      notVisible:
+        text: ${output.rv.product}
+        below: "Select product variant.*"
+    commands:
+      - takeScreenshot: artifacts/recon-variant-missing
+      - runFlow:
+          file: ../../fail.yaml
+          env:
+            MESSAGE: "${'Select product variant does not offer ' + output.rv.variant + '.'}"
+          label: "Select product variant offers the variant"
+- tapOn:
+    text: ${output.rv.product}
+    below: "Select product variant.*"
+    label: "Choose the variant"
+- extendedWaitUntil:
+    visible: "Stock in hand"
+    timeout: 10000
+    label: "Stock metrics show"
+
+# --- Stock in hand -----------------------------------------------------------
+# Its value sits to the right of the label, fenced between the row above and
+# Manual count below, or "right of" alone would reach the status bar.
+- setClipboard: "none"
+- runFlow:
+    when:
+      visible:
+        text: "-?\\d+"
+        rightOf: "Stock in hand"
+        below: "Stock Returned"
+        above: "Manual count \\*"
+    commands:
+      - copyTextFrom:
+          text: "-?\\d+"
+          rightOf: "Stock in hand"
+          below: "Stock Returned"
+          above: "Manual count \\*"
+          label: "Read Stock in hand"
+- runScript:
+    file: recon.js
+    env:
+      ACTION: sih
+      PHASE: ${PHASE}
+    label: "Parse Stock in hand"
+- runFlow:
+    when:
+      true: ${output.recon.failure}
+    commands:
+      - takeScreenshot: artifacts/recon-sih-unreadable
+      - runFlow:
+          file: ../../fail.yaml
+          env:
+            MESSAGE: ${output.recon.failure}
+          label: "Stock in hand read"

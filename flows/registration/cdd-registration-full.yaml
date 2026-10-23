@@ -1,0 +1,98 @@
+appId: ${HCM_APP_ID}
+name: "Registration - CDD registers a household, meets Insufficient Stock, receives stock and doses two children"
+tags:
+  - regression
+  - registration
+  - cdd
+  - mhbase
+  - consumes-data
+---
+# Prompt 11 (the specification's cdd/cdd_registration_full.yaml): the CDD
+# (AU-CDD-001) signs in with no beneficiary IDs on the device, meets the Low
+# Beneficiary IDs popup, downloads IDs, registers a household (head + child
+# 1), finds Record Cycle Dose refused for want of stock, accepts the health
+# facility's dispatch, doses child 1, adds child 2 and doses them, and
+# checks the age-product rule and the stock balances. Test Case 1, then
+# Steps 1 to 15, in order.
+#
+# Needs HCM_CDD_USER_ID / HCM_CDD_PASSWORD, TEST_USER (the same user) and the
+# Prompt 11 block of .env (see .env.example), and an unaccepted dispatch from
+# the health facility to the CDD for each variant (Prompt 6).
+# IRREVERSIBLE: downloads beneficiary IDs, registers a household of three,
+# accepts both dispatches and records two doses - hence consumes-data.
+#
+# What stops the run fails at once; the specification's boundary rules and
+# the names on Household Overview are checked softly (DEVIATION, listed at
+# the end). Read off the app as AU-CDD-001, 2026-10-21.
+
+- runFlow: ../../subflows/registration/init.yaml
+- runFlow: ../../subflows/home/cdd.yaml
+
+# Test Case 1 - the Low Beneficiary IDs popup.
+- runFlow: ../../subflows/registration/low-id-popup.yaml
+# Step 1 - download beneficiary IDs.
+- runFlow: ../../subflows/registration/download-ids.yaml
+# Steps 2 to 8 - register the household: head of household and child 1.
+- runFlow:
+    file: ../../subflows/registration/register-household.yaml
+    env:
+      CONSENT: "Yes"
+      CHECK_SHORT: "true"
+# Steps 9 and 10 - child 1's checklist, then Insufficient Stock; home.
+- runFlow: ../../subflows/registration/first-dose.yaml
+# Step 11 - accept the health facility's dispatch. IRREVERSIBLE.
+- runFlow: ../../subflows/registration/cdd-accept-stock.yaml
+# Step 12 - child 1's dose: PRODUCT_VARIANT_1 only.
+- runFlow: ../../subflows/registration/open-household.yaml
+- runFlow:
+    file: ../../subflows/registration/deliver-dose.yaml
+    env:
+      WHO: child1
+      STEP: "Step 12 - dose for child 1"
+# Step 13 - add child 2; the household shows all three.
+- tapOn:
+    text: "View Household Details"
+    label: "View Household Details"
+- extendedWaitUntil:
+    visible: "Household Overview"
+    timeout: 15000
+    label: "Household Overview opens"
+- runFlow:
+    file: ../../subflows/registration/add-member.yaml
+    env:
+      WHO: child2
+      BOUNDS: "false"
+- tapOn:
+    text: "View Household Details"
+    label: "View Household Details"
+- runFlow:
+    file: ../../subflows/registration/household-check.yaml
+    env:
+      STEP: "Step 13 - household shows the head, child 1 and child 2"
+      CHILDREN: "2"
+# Step 14 - child 2's dose: PRODUCT_VARIANT_2 only.
+- runFlow:
+    file: ../../subflows/registration/deliver-dose.yaml
+    env:
+      WHO: child2
+      STEP: "Step 14 - dose for child 2"
+# Step 15 - the balances fell by the doses.
+- runFlow: ../../subflows/registration/balance-after-doses.yaml
+# The household, doses and acceptances reach the server.
+- runFlow:
+    file: ../../subflows/registration/sync-data.yaml
+    env:
+      STEP: "Sync Data"
+
+- runScript:
+    file: ../../subflows/registration/registration.js
+    env:
+      ACTION: summary
+    label: "Log the execution report"
+- runFlow:
+    when:
+      true: ${output.reg.failure}
+    file: ../../subflows/fail.yaml
+    env:
+      MESSAGE: ${output.reg.failure}
+    label: "Every step passed, no deviation"

@@ -1,0 +1,63 @@
+appId: ${HCM_APP_ID}
+name: household-with-children
+---
+# From the home screen: register a household with consent Yes and
+# output.reg.members members - the head of household, then every child in
+# output.reg.children, each saved and submitted - and check Household
+# Overview lists them all. No bounds are tried (Prompt 11 covers them).
+# Ends on Household Overview. Shared by Prompts 13 and 14; creates the
+# household - IRREVERSIBLE.
+#
+# Read off the app as AU-CDD-001, 2026-10-22: each member added is submitted
+# on its own ("Ready to submit ?" -> Submit -> "Data recorded Successfully",
+# Token ID -> View Household Details), and the household may be submitted with
+# fewer members registered than its total (5 of 20).
+- runFlow:
+    file: start-registration.yaml
+    env:
+      CHECK_SHORT: "false"
+- runFlow:
+    file: consent.yaml
+    env:
+      CONSENT: "Yes"
+- runFlow:
+    file: household-details.yaml
+    env:
+      BOUNDS: "false"
+- runFlow:
+    file: member-form.yaml
+    env:
+      WHO: head
+      BOUNDS: "false"
+- extendedWaitUntil:
+    visible: "Household Overview"
+    timeout: 15000
+    label: "Household Overview opens"
+- runFlow:
+    file: household-check.yaml
+    env:
+      STEP: "Head of household listed"
+      CHILDREN: "0"
+- evalScript: ${output.reg.ai = 0}
+- repeat:
+    times: ${output.reg.children.length}
+    label: "Add each child"
+    commands:
+      - runFlow:
+          file: add-member.yaml
+          env:
+            WHO: ${'child' + (output.reg.ai + 1)}
+            BOUNDS: "false"
+      - tapOn:
+          text: "View Household Details"
+          label: "View Household Details"
+      - extendedWaitUntil:
+          visible: "Household Overview"
+          timeout: 15000
+          label: "Household Overview opens"
+      - evalScript: ${output.reg.ai = output.reg.ai + 1}
+- runFlow:
+    file: household-check.yaml
+    env:
+      STEP: "${'Household Overview shows the head and ' + output.reg.children.length + ' children (' + (output.reg.children.length + 1) + ' of ' + output.reg.members + ' registered)'}"
+      CHILDREN: ${String(output.reg.children.length)}

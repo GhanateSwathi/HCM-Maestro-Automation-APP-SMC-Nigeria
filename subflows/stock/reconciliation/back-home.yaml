@@ -1,0 +1,11 @@
+appId: ${HCM_APP_ID}
+name: recon-back-home
+---
+# From the success screen: Back To Home.
+- tapOn:
+    text: "Back To Home"
+    label: "Back To Home"
+- extendedWaitUntil:
+    visible: "Stock Balance"
+    timeout: 15000
+    label: "Home screen is back"

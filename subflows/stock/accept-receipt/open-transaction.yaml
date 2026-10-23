@@ -1,0 +1,279 @@
+appId: ${HCM_APP_ID}
+name: open-transaction
+---
+# From Incoming Transactions: open the first transaction for product variant
+# INDEX (0 = PRODUCT_VARIANT_1, 1 = PRODUCT_VARIANT_2) and check Stock Receipt
+# Details describes the same transaction - product, MRN, sender and quantity.
+# Leaves output.v (the variant), output.txn (MRN, sender) and
+# output.variants.received[INDEX] for the caller.
+#
+# Read off the app 2026-10-15. Each card shows, top to bottom: "MRN <mrn>",
+# the date, "Sender" over the sender's id, the status ("Dispatched"), one
+# product line ("SPAQ 1: 100"), and Select. MRN labels differ per card, so a
+# card is the stretch from its MRN label down to the next card's: everything
+# below is read inside that stretch, and the Select tapped is its own.
+- runScript:
+    file: variants.js
+    env:
+      ACTION: begin
+      INDEX: ${INDEX}
+    label: "Pick the product variant"
+- runScript:
+    file: transaction.js
+    env:
+      ACTION: reset
+    label: "Start a new transaction"
+
+# --- Find the first card carrying this variant -------------------------------
+# Cards are walked top to bottom by their MRN labels (a plain text match lists
+# them in screen order). Only cards on screen are seen - three fit on the
+# Pixel 9 Pro XL.
+- repeat:
+    times: 10
+    label: "Look for the variant's first transaction"
+    commands:
+      - runFlow:
+          when:
+            true: ${!output.scan.found}
+          commands:
+            - runFlow:
+                when:
+                  visible:
+                    text: "MRN .*"
+                    index: ${output.scan.k}
+                commands:
+                  - copyTextFrom:
+                      text: "MRN .*"
+                      index: ${output.scan.k}
+                      label: "Read this card's MRN label"
+                  - runScript:
+                      file: transaction.js
+                      env:
+                        ACTION: here
+                  - runFlow:
+                      when:
+                        visible:
+                          text: "MRN .*"
+                          index: ${output.scan.k + 1}
+                      commands:
+                        - copyTextFrom:
+                            text: "MRN .*"
+                            index: ${output.scan.k + 1}
+                            label: "Read the next card's MRN label"
+                        - runScript:
+                            file: transaction.js
+                            env:
+                              ACTION: next
+                  - runFlow:
+                      when:
+                        true: ${output.scan.next != ''}
+                      commands:
+                        - runFlow:
+                            when:
+                              visible:
+                                text: ${output.v.line}
+                                below:
+                                  text: ${output.scan.here}
+                                above:
+                                  text: ${output.scan.next}
+                            commands:
+                              - evalScript: ${output.scan.found = true}
+                  - runFlow:
+                      when:
+                        true: ${output.scan.next == ''}
+                      commands:
+                        - runFlow:
+                            when:
+                              visible:
+                                text: ${output.v.line}
+                                below:
+                                  text: ${output.scan.here}
+                            commands:
+                              - evalScript: ${output.scan.found = true}
+            - runFlow:
+                when:
+                  true: ${!output.scan.found}
+                commands:
+                  - evalScript: ${output.scan.k = output.scan.k + 1}
+- runFlow:
+    when:
+      true: ${!output.scan.found}
+    commands:
+      - takeScreenshot: artifacts/stock-receipt-variant-missing
+      - runFlow:
+          file: ../../fail.yaml
+          env:
+            MESSAGE: "${output.v.prefix + 'no incoming transaction for ' + output.v.name + ' is listed.'}"
+          label: "An incoming transaction carries the variant"
+
+# --- Read the card -----------------------------------------------------------
+# Every read is fenced in until one element alone can match. "Nearest" is no
+# guide: among several matches Maestro favours a clickable one ("below
+# Sender" returns Select), and "right of" reaches the status bar.
+- copyTextFrom:
+    text: "MRN .*"
+    index: ${output.scan.k}
+    label: "Read the transaction's MRN"
+- runScript:
+    file: transaction.js
+    env:
+      ACTION: mrn
+    label: "Remember the MRN"
+# The product line: inside this card.
+- runFlow:
+    when:
+      true: ${output.scan.next != ''}
+    commands:
+      - copyTextFrom:
+          text: ${output.v.line}
+          below:
+            text: ${output.scan.here}
+          above:
+            text: ${output.scan.next}
+          label: "Read the transaction's product line"
+- runFlow:
+    when:
+      true: ${output.scan.next == ''}
+    commands:
+      - copyTextFrom:
+          text: ${output.v.line}
+          below:
+            text: ${output.scan.here}
+          label: "Read the transaction's product line"
+- runScript:
+    file: variants.js
+    env:
+      ACTION: quantity
+    label: "Remember the quantity"
+# The sender's id: between this card's "Sender" label and its product line.
+- runScript:
+    file: transaction.js
+    env:
+      ACTION: line
+    label: "Fence the card at its product line"
+- copyTextFrom:
+    text: ".+"
+    below:
+      text: "Sender"
+      below:
+        text: ${output.scan.here}
+      above:
+        text: ${output.scan.line}
+    above:
+      text: ${output.scan.line}
+      below:
+        text: ${output.scan.here}
+    label: "Read the transaction's sender"
+- runScript:
+    file: transaction.js
+    env:
+      ACTION: sender
+    label: "Remember the sender"
+- evalScript: "${console.log('Selecting ' + output.v.name + ' transaction - ' + output.txn.mrnLabel + ', sender ' + output.txn.sender + ', quantity ' + output.variants.quantities[output.v.index])}"
+
+# --- Open it -----------------------------------------------------------------
+- runFlow:
+    when:
+      true: ${output.scan.next != ''}
+    commands:
+      - tapOn:
+          text: "Select"
+          below:
+            text: ${output.scan.here}
+          above:
+            text: ${output.scan.next}
+          label: "Select the transaction"
+- runFlow:
+    when:
+      true: ${output.scan.next == ''}
+    commands:
+      - tapOn:
+          text: "Select"
+          below:
+            text: ${output.scan.here}
+          label: "Select the transaction"
+- extendedWaitUntil:
+    visible: "Stock Receipt Details"
+    timeout: 30000
+    label: "Stock Receipt Details opens"
+
+# --- Same transaction? -------------------------------------------------------
+# Details lists Resource, Material issue number and Received from, top to
+# bottom, each value to the right of its label - and fenced between the rows
+# above and below it, or "right of" would reach the status bar.
+- assertVisible:
+    text: ${output.v.resource}
+    rightOf: "Resource"
+    above: "Material issue number"
+    label: "Stock Receipt Details is for the selected product"
+- copyTextFrom:
+    text: ".+"
+    rightOf: "Material issue number"
+    below: "Resource"
+    above: "Received from"
+    label: "Read the Material issue number (MRN)"
+- runScript:
+    file: transaction.js
+    env:
+      ACTION: compare
+      WHAT: mrn
+    label: "Compare it with the card's MRN"
+- runFlow:
+    when:
+      true: ${output.txn.failure}
+    file: ../../fail.yaml
+    env:
+      MESSAGE: ${output.v.prefix + output.txn.failure}
+    label: "Stock Receipt Details shows the selected MRN"
+- copyTextFrom:
+    text: ".+"
+    rightOf: "Received from"
+    below: "Material issue number"
+    above: "Waybill number"
+    label: "Read Received from"
+- runScript:
+    file: transaction.js
+    env:
+      ACTION: compare
+      WHAT: sender
+    label: "Compare it with the card's sender"
+- runFlow:
+    when:
+      true: ${output.txn.failure}
+    file: ../../fail.yaml
+    env:
+      MESSAGE: ${output.v.prefix + output.txn.failure}
+    label: "Stock Receipt Details shows the selected sender"
+
+# The quantity sent sits in the form below: "Quantity *", a read-only field
+# prefilled with it, and the hint "Enter the quantity sent by warehouse"
+# (read off the app 2026-10-19). It must match the card - and, when the flow
+# knows what was dispatched (output.variants.expected), that too.
+- setClipboard: "none"
+- runFlow:
+    when:
+      visible:
+        text: "\\d+"
+        below: "Quantity.*"
+        above: "Enter the quantity sent by warehouse"
+    commands:
+      - copyTextFrom:
+          text: "\\d+"
+          below: "Quantity.*"
+          above: "Enter the quantity sent by warehouse"
+          label: "Read the quantity received"
+- runScript:
+    file: variants.js
+    env:
+      ACTION: received
+    label: "Compare it with the card and the quantity dispatched"
+- runFlow:
+    when:
+      true: ${output.variants.failure}
+    commands:
+      - takeScreenshot: artifacts/stock-receipt-quantity-mismatch
+      - runFlow:
+          file: ../../fail.yaml
+          env:
+            MESSAGE: ${output.v.prefix + output.variants.failure}
+          label: "Stock Receipt Details shows the quantity dispatched"

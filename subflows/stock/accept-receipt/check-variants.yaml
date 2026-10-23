@@ -1,0 +1,36 @@
+appId: ${HCM_APP_ID}
+name: check-variants
+---
+# Precondition for Case 2, 2a and 2b, on Incoming Transactions before
+# anything is accepted: at least one incoming transaction for each product
+# variant (init-variants.yaml has run). Otherwise BLOCKED with
+#   Expected product variants SPAQ1 and SPAQ2; found <the ones listed>.
+# so a partial set is never accepted. Leaves the counts in
+# output.variants.countsBefore for Case 2a and 2b.
+#
+# The app gives each transaction one product (2026-10-15), so the two
+# variants come from two transactions, not two records of one.
+- runFlow:
+    file: count-transactions.yaml
+    env:
+      INDEX: "0"
+- runFlow:
+    file: count-transactions.yaml
+    env:
+      INDEX: "1"
+- runScript:
+    file: variants.js
+    env:
+      ACTION: precheck
+    label: "Check both variants are listed"
+- runFlow:
+    when:
+      true: ${output.variants.failure}
+    commands:
+      - takeScreenshot: artifacts/stock-case2-variants-missing
+      - runFlow:
+          file: ../../fail.yaml
+          env:
+            MESSAGE: ${output.variants.failure}
+          label: "Incoming transactions exist for both product variants"
+- evalScript: ${output.variants.countsBefore = output.variants.counts.slice()}

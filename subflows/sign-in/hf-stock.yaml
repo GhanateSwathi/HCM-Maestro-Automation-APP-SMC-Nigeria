@@ -1,0 +1,38 @@
+appId: ${HCM_APP_ID}
+name: sign-in-hf-stock
+---
+# Signs in as the health facility stock user and waits for the screen that
+# role lands on. Every hf-stock flow starts here.
+- runFlow: ../launch-app.yaml
+
+# login.yaml signs in whoever it is handed. Its LOGIN_* names are deliberately
+# absent from .env: the runner forwards every .env key as -e, which would
+# replace the role credentials passed here.
+- runFlow:
+    file: ../login.yaml
+    env:
+      LOGIN_USER_ID: ${HCM_HF_STOCK_USER_ID}
+      LOGIN_PASSWORD: ${HCM_HF_STOCK_PASSWORD}
+
+# Sign-in raises "Sync in progress" and pulls the project payload down. With no
+# permissions pre-granted (see launch-app.yaml) the app then holds on its
+# Allow Permissions screen, and only after that lands on boundary selection.
+#
+# For this role the boundary screen has a single dropdown whose label depends
+# on the tenant build, both com.digit.hcm 2.2.113:
+#   SMC-MC UAT                         "Community *" (it selects the facility)
+#   file-based-download-mhbase-tenant  "ADMIN_Health Facility *"
+# Text matches the whole string, so each label is listed in full. The label is
+# a content-desc here, which the text matcher covers.
+- extendedWaitUntil:
+    visible: "Allow Permissions|Community.*|ADMIN_Health Facility.*"
+    timeout: 300000
+    label: "Post-login sync completes"
+- runFlow:
+    when:
+      visible: "Allow Permissions"
+    file: ../allow-permissions.yaml
+- extendedWaitUntil:
+    visible: "Community.*|ADMIN_Health Facility.*"
+    timeout: 60000
+    label: "Boundary selection opens"

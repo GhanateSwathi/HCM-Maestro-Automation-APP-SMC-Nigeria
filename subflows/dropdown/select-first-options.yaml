@@ -1,0 +1,153 @@
+appId: ${HCM_APP_ID}
+name: select-first-options
+---
+# Selects the first COUNT options of one boundary dropdown, by their position
+# in the menu - never by name, so it keeps working when the boundary data
+# changes. Called with:
+#   FIELD  full-string regex for the field's label, e.g. "ADMIN_State.*"
+#   COUNT  how many options to select, counting from the top of the menu
+# Leaves the chosen names in output.dropdown.options for the caller, and logs
+# them to the run's maestro.log.
+#
+# Works for both dropdown kinds on the boundary screen: the multi-select ones
+# (a ticked row per option, an "N Selected" summary and one chip per pick,
+# and the menu stays open between picks) and the single-select search field
+# (the menu closes on a pick and the field takes the option's name).
+#
+# Assumes nothing is selected yet, which holds after launch-app's clearState.
+#
+# Labels here are plain text on purpose: Maestro 2.10 prints them verbatim,
+# without resolving ${...}. Option names show up in the "Run flow when ..."
+# lines, which Maestro does print resolved, and in maestro.log.
+
+- runScript:
+    file: dropdown.js
+    env:
+      ACTION: reset
+      FIELD: ${FIELD}
+      COUNT: ${COUNT}
+    label: "Start a new dropdown selection"
+
+# The field box carries no text or id; it is the clickable child of the view
+# that carries the label (or, for the search field, its dropdown arrow).
+- tapOn:
+    childOf:
+      text: ${FIELD}
+    label: "Open the dropdown"
+- extendedWaitUntil:
+    visible:
+      text: ${output.dropdown.optionPattern}
+      below: ${FIELD}
+      above: "Submit"
+    timeout: 10000
+    label: "Dropdown lists at least one option"
+
+# Read the names of the first COUNT rows while nothing is selected. Order
+# matters: once something is picked, its chip and the "N Selected" summary
+# also sit below the label and would be counted as rows. Relative matches are
+# ranked by distance from the label, so index 0 is the row nearest the field -
+# the top of the menu.
+- repeat:
+    times: ${COUNT}
+    label: "Read the names of the first options"
+    commands:
+      - runFlow:
+          when:
+            visible:
+              text: ${output.dropdown.optionPattern}
+              below: ${FIELD}
+              above: "Submit"
+              index: ${output.dropdown.options.length}
+          commands:
+            - copyTextFrom:
+                text: ${output.dropdown.optionPattern}
+                below: ${FIELD}
+                above: "Submit"
+                index: ${output.dropdown.options.length}
+                label: "Read the next option's name"
+            - runScript:
+                file: dropdown.js
+                env:
+                  ACTION: remember
+                label: "Remember it"
+
+# Pick each one by name. While the menu is open a picked option shows twice -
+# its row and its chip - and tapping it again would untick it, so an option
+# already showing twice is left alone.
+- repeat:
+    times: ${output.dropdown.options.length}
+    label: "Select each option"
+    commands:
+      - runFlow:
+          when:
+            notVisible:
+              text: ${output.dropdown.patterns[output.dropdown.next]}
+              index: 1
+          commands:
+            - tapOn:
+                text: ${output.dropdown.patterns[output.dropdown.next]}
+                below: ${FIELD}
+                label: "Tick the option (it was not selected yet)"
+            - waitForAnimationToEnd:
+                timeout: 2000
+      - evalScript: ${output.dropdown.next = output.dropdown.next + 1}
+
+# A multi-select menu stays open after the picks. Collapse it through the
+# "N Selected" summary: it sits above the menu, whereas the label's own
+# centre can land on a menu row once chips push the label box down.
+- runFlow:
+    when:
+      visible:
+        text: ${output.dropdown.patterns[0]}
+        index: 1
+    commands:
+      - tapOn:
+          text: "\\d+ Selected"
+          childOf:
+            text: ${FIELD}
+          label: "Collapse the menu"
+      - extendedWaitUntil:
+          notVisible:
+            text: ${output.dropdown.patterns[0]}
+            index: 1
+          timeout: 5000
+          label: "Menu collapsed"
+
+# With the menu closed, each name left on screen is a chip (multi-select) or
+# the field's own value (single-select) - proof the pick held.
+- evalScript: ${output.dropdown.next = 0}
+- repeat:
+    times: ${output.dropdown.options.length}
+    label: "Verify each selection survived the collapse"
+    commands:
+      - assertVisible:
+          text: ${output.dropdown.patterns[output.dropdown.next]}
+          label: "Option is still selected"
+      - evalScript: ${output.dropdown.next = output.dropdown.next + 1}
+- runFlow:
+    when:
+      visible:
+        text: "\\d+ Selected"
+        childOf:
+          text: ${FIELD}
+    commands:
+      - assertVisible:
+          text: "${output.dropdown.options.length} Selected"
+          childOf:
+            text: ${FIELD}
+          label: "Selected-count summary matches the picks"
+
+# Last, so a short menu still gets every available option selected and
+# verified before the flow is failed for it.
+- runScript:
+    file: dropdown.js
+    env:
+      ACTION: check
+    label: "Count the options selected"
+- runFlow:
+    when:
+      true: ${output.dropdown.failure}
+    file: ../fail.yaml
+    env:
+      MESSAGE: ${output.dropdown.failure}
+    label: "Dropdown offered enough options"

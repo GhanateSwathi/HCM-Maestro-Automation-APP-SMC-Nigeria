@@ -1,0 +1,78 @@
+appId: ${HCM_APP_ID}
+name: hf-tc6-final-balance
+---
+# Test Case 6 - after both acceptances: each variant's home Stock Balance is
+# its initial balance plus the quantity received, else
+#   Balance mismatch for <variant>: expected <expected>, found <actual>.
+# and neither accepted MRN is still listed under Record Stock Receipt.
+# Starts on Incoming Transactions, ends there.
+#
+# The balance is the device's own figure, updated as each Confirm lands, so
+# there is no sync to wait for first. The background service uploads the
+# acceptances on its own (Sync Data showed nothing pending after the state
+# user's, 2026-10-15).
+- runFlow: ../back-to-home.yaml
+- runFlow:
+    file: ../read-stock-balance.yaml
+    env:
+      VARIANT: ${output.variants.names[0]}
+- runScript:
+    file: hf-receipt.js
+    env:
+      ACTION: final
+      INDEX: "0"
+    label: "Remember the first variant's final balance"
+- runFlow:
+    file: ../read-stock-balance.yaml
+    env:
+      VARIANT: ${output.variants.names[1]}
+- runScript:
+    file: hf-receipt.js
+    env:
+      ACTION: final
+      INDEX: "1"
+    label: "Remember the second variant's final balance"
+- takeScreenshot: artifacts/hf-tc6-final-balance
+- runScript:
+    file: hf-receipt.js
+    env:
+      ACTION: closing
+    label: "Test Case 6 - compare with initial + received"
+- runFlow:
+    when:
+      true: ${output.hf.failure}
+    file: ../../fail.yaml
+    env:
+      MESSAGE: ${output.hf.failure}
+    label: "Test Case 6 - balances rose by the quantities received"
+
+# The accepted MRNs are gone from the incoming list. accept-transaction.yaml
+# checked each right after its Confirm; this is the list as the user finds it
+# afterwards. A placeholder MRN was recorded as '' and is skipped.
+- runFlow: ../open-incoming-transactions.yaml
+- runFlow:
+    when:
+      true: ${output.variants.acceptedLabels[0] != ''}
+    commands:
+      - runFlow:
+          when:
+            visible:
+              text: ${output.variants.acceptedLabels[0]}
+          file: ../../fail.yaml
+          env:
+            MESSAGE: "${output.variants.acceptedMrns[0] + ' is still listed in Incoming Transactions after it was accepted.'}"
+          label: "Test Case 6 - the first accepted MRN is not listed"
+- runFlow:
+    when:
+      true: ${output.variants.acceptedLabels[1] != ''}
+    commands:
+      - runFlow:
+          when:
+            visible:
+              text: ${output.variants.acceptedLabels[1]}
+          file: ../../fail.yaml
+          env:
+            MESSAGE: "${output.variants.acceptedMrns[1] + ' is still listed in Incoming Transactions after it was accepted.'}"
+          label: "Test Case 6 - the second accepted MRN is not listed"
+- takeScreenshot: artifacts/hf-tc6-incoming-after
+- evalScript: ${console.log('Test Case 6 PASSED - balance ' + output.variants.names[0] + ' ' + output.hf.final[0] + ', ' + output.variants.names[1] + ' ' + output.hf.final[1] + '; accepted MRNs no longer listed')}

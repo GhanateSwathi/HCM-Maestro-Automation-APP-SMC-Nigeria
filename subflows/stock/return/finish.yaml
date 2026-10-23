@@ -1,0 +1,33 @@
+appId: ${HCM_APP_ID}
+name: return-finish
+---
+# After both returns: the second return must not have moved the first
+# product's balance - VARIANT (PRODUCT_VARIANT_1) must still be
+# EXPECTED_FINAL_BALANCE, else
+#   SPAQ1 balance changed after a later return: expected 5, found <actual>.
+# Then the closing screenshot and the summary. Ends on home.
+- runFlow: ../back-to-home.yaml
+- runFlow:
+    file: ../read-stock-balance.yaml
+    env:
+      VARIANT: ${VARIANT}
+- runScript:
+    file: return.js
+    env:
+      ACTION: recheck
+      VARIANT: ${VARIANT}
+      FINAL: ${EXPECTED_FINAL_BALANCE}
+    label: "Re-check the first product's balance"
+- runFlow:
+    when:
+      true: ${output.returns.recheckFailure}
+    file: ../../fail.yaml
+    env:
+      MESSAGE: ${output.returns.recheckFailure}
+    label: "The first product's balance is unchanged"
+- takeScreenshot: artifacts/return-final-balances
+- runScript:
+    file: return.js
+    env:
+      ACTION: summary
+    label: "Log the return summary"

@@ -1,0 +1,16 @@
+appId: ${HCM_APP_ID}
+name: hf-tc4-cancel
+---
+# Test Case 4 - on PRODUCT_VARIANT_1's transaction, Accept Stock raises
+# Accept Confirmation with Confirm and Cancel; Cancel closes it, leaves
+# Stock Receipt Details up with Accept Stock still offered, and both
+# variants' transactions stay listed. The same steps as the state user's
+# Case 2 and 2a. Starts and ends on Incoming Transactions.
+- runFlow:
+    file: ../accept-receipt/open-transaction.yaml
+    env:
+      INDEX: "0"
+- runFlow: ../accept-receipt/open-accept-confirmation.yaml
+- runFlow: ../accept-receipt/case2-popup.yaml
+- runFlow: ../accept-receipt/case2a-cancel.yaml
+- evalScript: ${output.hf.cancel = 'popup closed, still on Stock Receipt Details, ' + output.variants.names.join(' and ') + ' both still pending'}

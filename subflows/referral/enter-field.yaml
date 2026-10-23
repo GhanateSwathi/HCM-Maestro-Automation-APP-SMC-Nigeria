@@ -1,0 +1,30 @@
+appId: ${HCM_APP_ID}
+name: referral-enter-field
+---
+# On Referral Details: type VALUE into the text field under FIELD (a label
+# regex), fenced above by NEXT; focus checked first, keyboard closed after,
+# and the field must show VALUE.
+- tapOn:
+    below: ${FIELD}
+    above: ${NEXT}
+    label: "Focus the field"
+- assertVisible:
+    focused: true
+    below: ${FIELD}
+    above: ${NEXT}
+    label: "The field has focus"
+- eraseText
+- inputText: ${VALUE}
+- runFlow:
+    when:
+      visible:
+        id: "android:id/input_method_nav_back"
+    commands:
+      - tapOn:
+          id: "android:id/input_method_nav_back"
+          label: "Close the keyboard"
+- assertVisible:
+    text: ${VALUE}
+    below: ${FIELD}
+    above: ${NEXT}
+    label: "The field shows the value"

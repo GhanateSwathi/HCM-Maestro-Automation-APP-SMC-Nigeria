@@ -1,0 +1,90 @@
+appId: ${HCM_APP_ID}
+name: recon-differing-count-run
+---
+# The body of differing-count.yaml: output.rv.count, first without a comment
+# (must be refused), then with RECON_COMMENT (must go through).
+#
+# Seen 2026-10-19: Comments shows without an asterisk, and Submit without a
+# comment goes through. Both are recorded as deviations (recon.js) and the
+# case carries on: the form is reopened and the count entered again with the
+# comment. Each submission records a reconciliation.
+
+# --- Without a comment -------------------------------------------------------
+- runFlow:
+    file: enter-count.yaml
+    env:
+      COUNT: ${output.rv.count}
+- evalScript: ${output.rv.shown = false}
+- runFlow:
+    when:
+      visible: "Comments \\*"
+    commands:
+      - evalScript: ${output.rv.shown = true}
+- runScript:
+    file: recon.js
+    env:
+      ACTION: mandatory
+      CASE: ${CASE}
+      SHOWN: ${output.rv.shown}
+    label: "Comments is mandatory"
+- takeScreenshot: artifacts/recon-${output.rv.variant}-case${CASE}-no-comment
+- runFlow:
+    file: submit.yaml
+    env:
+      CONFIRM: "false"
+      WAIT: "8000"
+- runScript:
+    file: recon.js
+    env:
+      ACTION: negative
+      CASE: ${CASE}
+      SUBMITTED: ${output.recon.submitted}
+      POPUP: ${output.recon.popup}
+    label: "Submit without a comment is refused"
+- runFlow:
+    when:
+      true: ${output.recon.submitted}
+    commands:
+      - takeScreenshot: artifacts/recon-${output.rv.variant}-case${CASE}-accepted-without-comment
+      - runFlow: back-home.yaml
+      - runFlow:
+          file: open-variant.yaml
+          env:
+            PHASE: reopen
+      - runFlow:
+          file: enter-count.yaml
+          env:
+            COUNT: ${output.rv.count}
+- runFlow:
+    when:
+      true: ${!output.recon.submitted}
+    commands:
+      - assertVisible:
+          text: "Manual count \\*"
+          label: "Still on the form - nothing was submitted"
+      - takeScreenshot: artifacts/recon-${output.rv.variant}-case${CASE}-refused
+
+# --- With the comment --------------------------------------------------------
+- runFlow: enter-comment.yaml
+- runFlow:
+    file: submit.yaml
+    env:
+      CONFIRM: "true"
+      WAIT: "30000"
+- runFlow:
+    when:
+      true: ${!output.recon.submitted}
+    commands:
+      - takeScreenshot: artifacts/recon-${output.rv.variant}-case${CASE}-not-submitted
+      - runFlow:
+          file: ../../fail.yaml
+          env:
+            MESSAGE: "${output.rv.variant + ' Case ' + CASE + ' - the reconciliation of ' + output.rv.count + ' with a comment was not submitted.'}"
+          label: "Submitted with a comment"
+- takeScreenshot: artifacts/recon-${output.rv.variant}-case${CASE}-submitted
+- runFlow: back-home.yaml
+- runFlow:
+    file: open-variant.yaml
+    env:
+      PHASE: case${CASE}
+- evalScript: ${console.log(output.rv.variant + ' Case ' + CASE + ' - count ' + output.rv.count + ' submitted with a comment; stock in hand now ' + output.rv.sih)}

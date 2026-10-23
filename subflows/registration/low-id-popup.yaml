@@ -1,0 +1,39 @@
+appId: ${HCM_APP_ID}
+name: low-id-popup
+---
+# Test Case 1 - from the home screen, with no beneficiary IDs on the device:
+# village, search, Register Beneficiary -> the "Low Beneficiary IDs" popup.
+# Ends on the popup.
+#
+# Read off the app as AU-CDD-001, 2026-10-21 (fresh sign-in): the popup reads
+# "Low Beneficiary IDs" / "Please download beneficiary IDs to register a new
+# household", with "Skip" and "Download" (and a close icon). Skip is never
+# tapped: it would carry on into a registration with no IDs.
+- runFlow: open-registration.yaml
+- runFlow: search-and-register.yaml
+- runFlow:
+    when:
+      true: ${output.reg.opened == 'location'}
+    commands:
+      - takeScreenshot: artifacts/registration-case1-no-popup
+      - runFlow:
+          file: ../fail.yaml
+          env:
+            MESSAGE: "Low Beneficiary ID popup not shown; beneficiary IDs may already be downloaded."
+          label: "The Low Beneficiary IDs popup is shown"
+- assertVisible:
+    text: "Please download beneficiary IDs to register a new household"
+    below: "Low Beneficiary IDs"
+    label: "The popup asks for a download"
+- assertVisible:
+    text: "Download"
+    below: "Low Beneficiary IDs"
+    label: "The popup offers Download"
+- takeScreenshot: artifacts/registration-case1-low-ids
+- runScript:
+    file: registration.js
+    env:
+      ACTION: step
+      STEP: "Test Case 1 - Low Beneficiary ID popup"
+      RESULT: PASSED
+      DETAIL: "Low Beneficiary IDs - Please download beneficiary IDs to register a new household (Skip / Download)"

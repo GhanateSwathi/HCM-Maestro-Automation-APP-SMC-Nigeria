@@ -1,0 +1,55 @@
+appId: ${HCM_APP_ID}
+name: read-stock-balance
+---
+# On the home screen: read product VARIANT's Stock Balance line ("10 SPAQ 1")
+# and parse its number into output.stockBalance.value. Fails with
+#   Unable to read stock balance for <VARIANT>.
+# when the line is missing or not a number. Callers compare the number
+# themselves (dispatch-balance.yaml, return-variant.yaml).
+#
+# The balance shows nowhere else - the Record Stock Issued form has no balance
+# field (read off the app 2026-10-19). It is the device's own figure, built
+# from records on the device: a fresh install starts at 0 until stock is
+# downloaded and received in that same session.
+- runScript:
+    file: stock-balance.js
+    env:
+      ACTION: pattern
+      VARIANT: ${VARIANT}
+    label: "Pick the product's balance line"
+- extendedWaitUntil:
+    visible: "Stock Balance"
+    timeout: 15000
+    label: "On the home screen"
+- extendedWaitUntil:
+    visible:
+      text: ${output.stockBalance.line}
+    timeout: 10000
+    optional: true
+    label: "The product's Stock Balance line is shown"
+# Cleared first, so a missing line parses as unreadable rather than as
+# whatever was copied last.
+- setClipboard: "none"
+- runFlow:
+    when:
+      visible:
+        text: ${output.stockBalance.line}
+    commands:
+      - copyTextFrom:
+          text: ${output.stockBalance.line}
+          label: "Read the product's stock balance"
+- runScript:
+    file: stock-balance.js
+    env:
+      ACTION: parse
+    label: "Parse the stock balance"
+- runFlow:
+    when:
+      true: ${output.stockBalance.failure}
+    commands:
+      - takeScreenshot: artifacts/stock-balance-unreadable
+      - runFlow:
+          file: ../fail.yaml
+          env:
+            MESSAGE: ${output.stockBalance.failure}
+          label: "Stock balance read"

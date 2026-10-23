@@ -1,0 +1,134 @@
+appId: ${HCM_APP_ID}
+name: household-bounds
+---
+# Prompt 11 Step 5's bounds, on Household Details: press "-" past 1 and "+"
+# past 30, record each outcome as a boundary row, and come back to Household
+# Details. The count ends wherever the presses left it - household-details.yaml
+# then sets HOUSEHOLD_MEMBERS. See household-details.yaml for the stepper.
+# --- Lower bound: press "-" until 0 would be reached ------------------------
+- runFlow:
+    file: household-count.yaml
+- runFlow:
+    when:
+      true: ${Number(output.reg.count) > 0}
+    commands:
+      - repeat:
+          times: ${Number(output.reg.count)}
+          commands:
+            - tapOn:
+                text: "-"
+                below: "Total household members \\*"
+                label: "Press - towards 0"
+- runFlow:
+    file: household-count.yaml
+- runFlow:
+    when:
+      true: ${output.reg.count != '0'}
+    commands:
+      - runScript:
+          file: registration.js
+          env:
+            ACTION: boundary
+            FIELD: "Total household members"
+            VALUE: "0"
+            EXPECTED: "rejected (minimum 1)"
+            ACTUAL: "${'the - button stops at ' + output.reg.count}"
+            OK: ${output.reg.count == '1'}
+- runFlow:
+    when:
+      true: ${output.reg.count == '0'}
+    commands:
+      - tapOn:
+          text: "Save Household Details"
+          label: "Try to save 0 members"
+      - extendedWaitUntil:
+          visible: "Beneficiary Details"
+          timeout: 5000
+          optional: true
+          label: "0 members is refused or accepted"
+      - evalScript: ${output.reg.accepted = false}
+      - runFlow:
+          when:
+            visible: "Beneficiary Details"
+          commands:
+            - evalScript: ${output.reg.accepted = true}
+            - takeScreenshot: artifacts/registration-members-0-accepted
+            - tapOn:
+                text: "Back"
+                above: "Beneficiary Details"
+                label: "Back to Household Details"
+            - extendedWaitUntil:
+                visible: "Total household members \\*"
+                timeout: 10000
+                label: "Back on Household Details"
+      - runScript:
+          file: registration.js
+          env:
+            ACTION: boundary
+            FIELD: "Total household members"
+            VALUE: "0"
+            EXPECTED: "rejected (minimum 1)"
+            ACTUAL: "${output.reg.accepted ? 'accepted - 0 shown, Save Household Details moved on to Beneficiary Details' : 'refused - Save Household Details stayed'}"
+            OK: ${!output.reg.accepted}
+
+# --- Upper bound: press "+" until 31 would be reached -----------------------
+- runFlow:
+    file: household-count.yaml
+- repeat:
+    times: ${31 - Number(output.reg.count)}
+    commands:
+      - tapOn:
+          text: "\\+"
+          below: "Total household members \\*"
+          label: "Press + towards 31"
+- runFlow:
+    file: household-count.yaml
+- runFlow:
+    when:
+      true: ${output.reg.count != '31'}
+    commands:
+      - runScript:
+          file: registration.js
+          env:
+            ACTION: boundary
+            FIELD: "Total household members"
+            VALUE: "31"
+            EXPECTED: "rejected (maximum 30)"
+            ACTUAL: "${'the + button stops at ' + output.reg.count}"
+            OK: ${output.reg.count == '30'}
+- runFlow:
+    when:
+      true: ${output.reg.count == '31'}
+    commands:
+      - tapOn:
+          text: "Save Household Details"
+          label: "Try to save 31 members"
+      - extendedWaitUntil:
+          visible: "Beneficiary Details"
+          timeout: 5000
+          optional: true
+          label: "31 members is refused or accepted"
+      - evalScript: ${output.reg.accepted = false}
+      - runFlow:
+          when:
+            visible: "Beneficiary Details"
+          commands:
+            - evalScript: ${output.reg.accepted = true}
+            - takeScreenshot: artifacts/registration-members-31-accepted
+            - tapOn:
+                text: "Back"
+                above: "Beneficiary Details"
+                label: "Back to Household Details"
+            - extendedWaitUntil:
+                visible: "Total household members \\*"
+                timeout: 10000
+                label: "Back on Household Details"
+      - runScript:
+          file: registration.js
+          env:
+            ACTION: boundary
+            FIELD: "Total household members"
+            VALUE: "31"
+            EXPECTED: "rejected (maximum 30)"
+            ACTUAL: "${output.reg.accepted ? 'accepted - Save Household Details moved on' : 'refused - Save Household Details stayed'}"
+            OK: ${!output.reg.accepted}

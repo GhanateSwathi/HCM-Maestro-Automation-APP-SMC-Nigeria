@@ -1,0 +1,72 @@
+appId: ${HCM_APP_ID}
+name: referral-facility
+---
+# Create New Referral, step 1 - Health Facility Details. From the referral
+# screen to Referral Details.
+#
+# Read off the app 2026-10-21: "Administrative unit *" (the village) and
+# "Date of evaluation *" (today) prefilled; "Health facility *" a dropdown
+# offering the user's own facility (Fac_f-2026-10-15-137947); "Referred by
+# (cdd team code)" optional, left empty; Next.
+- tapOn:
+    text: "Create New Referral"
+    label: "Create New Referral"
+- extendedWaitUntil:
+    visible: "Health Facility Details"
+    timeout: 15000
+    label: "Health Facility Details opens"
+- tapOn:
+    below: "Health facility \\*"
+    above: "Referred by.*"
+    label: "Open Health facility"
+- extendedWaitUntil:
+    visible:
+      text: "(?!.*\\*$)(?!Referred by.*$|version \\d+$|Next$).+"
+      below: "Health facility \\*"
+    timeout: 10000
+    optional: true
+    label: "Health facility lists a facility"
+- runFlow:
+    when:
+      notVisible:
+        text: "(?!.*\\*$)(?!Referred by.*$|version \\d+$|Next$).+"
+        below: "Health facility \\*"
+    commands:
+      - takeScreenshot: artifacts/referral-no-facility
+      - runScript:
+          file: referral.js
+          env:
+            ACTION: fail
+            WHY: "Health facility offered no facility on Health Facility Details."
+- runFlow:
+    when:
+      true: ${!output.ref.skip}
+    commands:
+      # The nearest row under the label: the only facility on 2026-10-21.
+      - copyTextFrom:
+          text: "(?!.*\\*$)(?!Referred by.*$|version \\d+$|Next$).+"
+          below: "Health facility \\*"
+          index: 0
+          label: "Read the facility"
+      - runScript:
+          file: referral.js
+          env:
+            ACTION: picked
+            WHAT: facility
+          label: "Record the facility"
+      - tapOn:
+          text: ${output.ref.facilitySelector}
+          below: "Health facility \\*"
+          label: "Choose the facility"
+      - assertVisible:
+          text: ${output.ref.facilitySelector}
+          below: "Health facility \\*"
+          above: "Referred by.*"
+          label: "Health facility shows the facility"
+      - tapOn:
+          text: "Next"
+          label: "Next"
+      - extendedWaitUntil:
+          visible: "Referral Details"
+          timeout: 15000
+          label: "Referral Details opens"

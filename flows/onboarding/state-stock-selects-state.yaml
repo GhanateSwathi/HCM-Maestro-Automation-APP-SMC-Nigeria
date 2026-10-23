@@ -1,0 +1,24 @@
+appId: ${HCM_APP_ID}
+name: "Onboarding - state stock user selects the first state"
+tags:
+  - regression
+  - onboarding
+  - state-stock
+  - mhbase
+---
+# Needs HCM_STATE_STOCK_USER_ID / HCM_STATE_STOCK_PASSWORD (AU-SAT-001 on the
+# mhbase tenant) and a reachable environment.
+# Launches with no permissions granted, signs in, waits out the sync, grants
+# every permission on the Allow Permissions screen, ticks its checkbox and
+# continues to boundary selection.
+- runFlow: ../../subflows/sign-in/state-stock.yaml
+
+# "ADMIN_State *" is the raw boundary code the mhbase tenant shows - hence the
+# mhbase tag. The first option is picked by position, whatever it is called.
+- runFlow:
+    file: ../../subflows/dropdown/select-first-options.yaml
+    env:
+      FIELD: "ADMIN_State.*"
+      COUNT: "1"
+
+- takeScreenshot: artifacts/onboarding-state-stock

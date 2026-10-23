@@ -1,0 +1,44 @@
+appId: ${HCM_APP_ID}
+name: start-dose
+---
+# On Household Overview: tap Dose on member WHO's card (found by its Token
+# ID) and wait for what it opens - the eligibility checklist, or Beneficiary
+# Details with Record Cycle Dose. Leaves output.m as the member.
+#
+# Read off the app as AU-CDD-001, 2026-10-21: a child not dosed yet shows
+# "Not Administered" with Dose and Unable To Deliver; once dosed,
+# "Administered success" with View Details and Redose.
+- runScript:
+    file: registration.js
+    env:
+      ACTION: member
+      WHO: ${WHO}
+# From the top: the list may be scrolled past the card (household-check.yaml
+# ends at the last child).
+- scrollUntilVisible:
+    element: "Household Overview"
+    direction: UP
+    timeout: 15000
+    optional: true
+    label: "Back to the top of the household"
+- scrollUntilVisible:
+    element:
+      text: ${output.m.id}
+    direction: DOWN
+    timeout: 15000
+    label: "Find the member's card"
+- scrollUntilVisible:
+    element:
+      text: "Dose"
+      below: ${output.m.id}
+    direction: DOWN
+    timeout: 10000
+    label: "Find the member's Dose button"
+- tapOn:
+    text: "Dose"
+    below: ${output.m.id}
+    label: "Dose"
+- extendedWaitUntil:
+    visible: "Eligibility Assessment|Record Cycle Dose"
+    timeout: 15000
+    label: "The eligibility checklist or Beneficiary Details opens"

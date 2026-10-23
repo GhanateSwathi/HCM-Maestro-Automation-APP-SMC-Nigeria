@@ -1,0 +1,78 @@
+appId: ${HCM_APP_ID}
+name: utd-final
+---
+# Prompt 13's final verification - on Household Overview: every child's card
+# shows its Unable to Deliver status (the reason chosen), then home: both
+# stock balances are where they started, else
+#   Stock reduced after Unable to Deliver for <variant>: expected <start>, found <actual>.
+- evalScript: ${output.reg.ci = 0}
+- evalScript: ${output.reg.statuses = ''}
+- repeat:
+    times: ${output.reg.children.length}
+    label: "Each child's status"
+    commands:
+      - scrollUntilVisible:
+          element: "Household Overview"
+          direction: UP
+          timeout: 15000
+          optional: true
+          label: "Back to the top of the household"
+      - scrollUntilVisible:
+          element:
+            text: ${output.reg.children[output.reg.ci].card}
+            below: ${output.reg.children[output.reg.ci].id}
+          direction: DOWN
+          timeout: 15000
+          label: "Find the child's card"
+      - copyTextFrom:
+          text: ".+"
+          below:
+            text: ${output.reg.children[output.reg.ci].card}
+            below: ${output.reg.children[output.reg.ci].id}
+          index: 0
+          label: "Read the child's status"
+      - evalScript: "${output.reg.statuses = output.reg.statuses + (output.reg.ci ? '; ' : '') + output.reg.children[output.reg.ci].label + ' ' + maestro.copiedText + (maestro.copiedText.trim().split(' ').pop().toLowerCase() == String(output.reg.children[output.reg.ci].reasonChosen).trim().split(' ').pop().toLowerCase() ? '' : ' (expected ' + output.reg.children[output.reg.ci].reasonChosen + ')')}"
+      - evalScript: ${output.reg.ci = output.reg.ci + 1}
+- takeScreenshot: artifacts/registration-utd-household
+- runScript:
+    file: registration.js
+    env:
+      ACTION: step
+      STEP: "Final verification - statuses on Household Overview"
+      RESULT: "${output.reg.statuses.indexOf('(expected') < 0 ? 'PASSED' : 'FAILED'}"
+      DETAIL: ${output.reg.statuses}
+
+# --- Stock unchanged ------------------------------------------------------------------
+- runFlow: go-home.yaml
+- runFlow:
+    file: ../stock/read-stock-balance.yaml
+    env:
+      VARIANT: ${output.reg.variant1}
+- runScript:
+    file: registration.js
+    env:
+      ACTION: balance
+      PHASE: end
+      INDEX: "0"
+- runFlow:
+    file: ../stock/read-stock-balance.yaml
+    env:
+      VARIANT: ${output.reg.variant2}
+- runScript:
+    file: registration.js
+    env:
+      ACTION: balance
+      PHASE: end
+      INDEX: "1"
+- takeScreenshot: artifacts/registration-utd-balance-end
+- runScript:
+    file: registration.js
+    env:
+      ACTION: unchanged
+- runScript:
+    file: registration.js
+    env:
+      ACTION: step
+      STEP: "Final verification - stock balances"
+      RESULT: "${output.reg.stockFailure ? 'FAILED' : 'PASSED'}"
+      DETAIL: "${output.reg.stockFailure || (output.reg.variant1 + ' ' + output.reg.balances.start[0] + ' -> ' + output.reg.balances.end[0] + ', ' + output.reg.variant2 + ' ' + output.reg.balances.start[1] + ' -> ' + output.reg.balances.end[1] + ' - unchanged')}"

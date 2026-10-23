@@ -1,0 +1,61 @@
+appId: ${HCM_APP_ID}
+name: launch-app
+---
+# Maestro's launchApp grants every runtime permission by default. A field
+# device starts with none, and the app reacts to that: it asks for
+# notifications at launch and, after sign-in, holds the user on an
+# "Allow Permissions" screen until each one is granted. Pre-granting would
+# skip both and test a path no real user takes, so start with none.
+- launchApp:
+    clearState: true
+    permissions:
+      all: unset
+    label: "Launch the app with cleared state and no permissions granted"
+
+# The notification prompt is raised before the login screen paints, and while
+# it is up the login screen is not in the hierarchy at all - so wait for
+# either, and answer the prompt before looking for the form.
+#
+# A starved emulator - typically just after boot, or with little free host
+# RAM - raises "System UI isn't responding" over everything. That is Android's
+# status-bar process, not the app under test, so answer Wait and carry on.
+# Matched on that exact title only: if the app itself stops responding, its
+# dialog names the app instead, and the flow must still fail.
+#
+# Likewise the emulator's Bluetooth service can crash just after a cold boot
+# (2026-10-21), raising "Bluetooth keeps stopping" over the notification
+# prompt. Close that system app and carry on; a crash of the app under test
+# names the app and still fails the flow.
+- extendedWaitUntil:
+    visible: "User ID.*|Allow .*\\?|Let app always run in background.*|Turn on|System UI isn't responding|Bluetooth keeps stopping"
+    timeout: 60000
+    label: "Wait for a launch prompt or the login screen"
+- runFlow:
+    when:
+      visible: "System UI isn't responding"
+    commands:
+      - tapOn:
+          id: "android:id/aerr_wait"
+          label: "Wait out a System UI ANR (emulator, not the app)"
+      - extendedWaitUntil:
+          visible: "User ID.*|Allow .*\\?|Let app always run in background.*|Turn on"
+          timeout: 60000
+          label: "Wait for a launch prompt or the login screen"
+- runFlow:
+    when:
+      visible: "Bluetooth keeps stopping"
+    commands:
+      - tapOn:
+          id: "android:id/aerr_close"
+          label: "Close the crashed Bluetooth service (emulator, not the app)"
+      - extendedWaitUntil:
+          visible: "User ID.*|Allow .*\\?|Let app always run in background.*|Turn on"
+          timeout: 60000
+          label: "Wait for a launch prompt or the login screen"
+
+- runFlow: accept-system-dialogs.yaml
+
+- extendedWaitUntil:
+    visible: "User ID.*"
+    timeout: 60000
+    label: "Wait for the login screen"

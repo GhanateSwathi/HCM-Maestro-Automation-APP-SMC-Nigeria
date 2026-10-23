@@ -1,0 +1,28 @@
+appId: ${HCM_APP_ID}
+name: home-state-stock
+---
+# Takes the state stock user from a cold start to the home screen: the
+# onboarding path (sign in, sync, Allow Permissions, first ADMIN_State option)
+# plus Submit. Every flow that works from the state stock user's home screen
+# starts here.
+- runFlow: ../sign-in/state-stock.yaml
+- runFlow:
+    file: ../dropdown/select-first-options.yaml
+    env:
+      FIELD: "ADMIN_State.*"
+      COUNT: "1"
+
+# Submit is the boundary screen's only action - greyed out until a boundary
+# is picked.
+- tapOn:
+    text: "Submit"
+    label: "Submit the boundary selection"
+
+# On 2026-10-15 Submit went straight to home with no further sync, showing a
+# "Background service started" banner on the way. If a later build syncs
+# here, this positive wait waits it out. "Stock Balance" heads the stock
+# roles' home screen and is there as soon as it paints.
+- extendedWaitUntil:
+    visible: "Stock Balance"
+    timeout: 300000
+    label: "Home screen loads after boundary selection"

@@ -1,0 +1,23 @@
+appId: ${HCM_APP_ID}
+name: recon-differing-count
+---
+# Test Case 2 (CASE "2": stock in hand - 1) or 3 (CASE "3": stock in hand as
+# read after Case 2, + 1). On the form; ends on it again, re-read. Case 2 is
+# BLOCKED, touching nothing, while stock in hand is 0.
+- runScript:
+    file: recon.js
+    env:
+      ACTION: prepare
+      CASE: ${CASE}
+    label: "Work out the count"
+- runFlow:
+    when:
+      true: ${output.rv.blocked}
+    commands:
+      - takeScreenshot: artifacts/recon-${output.rv.variant}-case${CASE}-blocked
+- runFlow:
+    when:
+      true: ${!output.rv.blocked}
+    file: differing-count-run.yaml
+    env:
+      CASE: ${CASE}

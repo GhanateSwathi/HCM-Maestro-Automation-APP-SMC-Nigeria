@@ -1,0 +1,78 @@
+appId: ${HCM_APP_ID}
+name: "Stock - health facility stock user views stock reports"
+tags:
+  - regression
+  - stock
+  - hf-stock
+  - mhbase
+---
+# Prompt 9 for the health facility (the specification's
+# health_facility/hf_view_reports.yaml): View Reports offers all four reports,
+# and each table holds what the facility did in the earlier prompts -
+#   Stock Received        HF_REPORT_RECEIVED           (Prompt 5)
+#   Stock Issued          HF_REPORT_ISSUED             (Prompt 6)
+#   Stock Returned        HF_REPORT_RETURNED           (Prompt 7)
+#   Stock Reconciliation  HF_REPORT_RECONCILIATION     (Prompt 8)
+# Needs HCM_HF_STOCK_USER_ID / HCM_HF_STOCK_PASSWORD (AU-HFS-001) and,
+# optionally, REPORT_FACILITY. Reads only; changes nothing.
+#
+# Every report runs; each finding (an empty table, an entry not found, an
+# untranslated header) is logged and the run fails at the end listing them.
+#
+# The reports are built from the records on the device. This flow starts by
+# wiping the app, so they show only what the downloads bring back - on
+# 2026-10-19, for the health facility, nothing: every table read "No
+# records found for the selected filters". Run it in the session that made
+# the transactions for the earlier prompts' entries to show.
+
+- runScript:
+    file: ../../subflows/stock/reports/reports.js
+    env:
+      ACTION: init
+      ROLE: "Health Facility User"
+      ACCOUNT: ${HCM_HF_STOCK_USER_ID}
+      FACILITY: ${REPORT_FACILITY}
+    label: "Read the View Reports test data"
+
+- runFlow: ../../subflows/home/hf-stock.yaml
+- runFlow: ../../subflows/stock/download-stock-data.yaml
+- runFlow: ../../subflows/stock/reports/open-view-reports.yaml
+
+# Test Cases 1-4.
+- runFlow:
+    file: ../../subflows/stock/reports/view-report.yaml
+    env:
+      REPORT: "Stock Received"
+      SOURCE: "Prompt 5"
+      EXPECTED: ${HF_REPORT_RECEIVED}
+- runFlow:
+    file: ../../subflows/stock/reports/view-report.yaml
+    env:
+      REPORT: "Stock Issued"
+      SOURCE: "Prompt 6"
+      EXPECTED: ${HF_REPORT_ISSUED}
+- runFlow:
+    file: ../../subflows/stock/reports/view-report.yaml
+    env:
+      REPORT: "Stock Returned"
+      SOURCE: "Prompt 7"
+      EXPECTED: ${HF_REPORT_RETURNED}
+- runFlow:
+    file: ../../subflows/stock/reports/view-report.yaml
+    env:
+      REPORT: "Stock Reconciliation"
+      SOURCE: "Prompt 8"
+      EXPECTED: ${HF_REPORT_RECONCILIATION}
+
+- runScript:
+    file: ../../subflows/stock/reports/reports.js
+    env:
+      ACTION: summary
+    label: "Log the View Reports report"
+- runFlow:
+    when:
+      true: ${output.reports.failure}
+    file: ../../subflows/fail.yaml
+    env:
+      MESSAGE: ${output.reports.failure}
+    label: "View Reports shows the expected data"

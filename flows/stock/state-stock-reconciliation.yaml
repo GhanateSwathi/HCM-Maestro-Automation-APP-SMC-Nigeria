@@ -1,0 +1,68 @@
+appId: ${HCM_APP_ID}
+name: "Stock - state stock user reconciles stock"
+tags:
+  - regression
+  - stock
+  - state-stock
+  - mhbase
+  - consumes-data
+---
+# Prompt 8 for the state user (the specification's
+# state_user/state_reconciliation.yaml) - the same cases as
+# hf-stock-reconciliation.yaml, signed in as the state stock user.
+#
+# Needs HCM_STATE_STOCK_USER_ID / HCM_STATE_STOCK_PASSWORD (AU-SAT-001),
+# PRODUCT_VARIANT_1 / _2, RECON_COMMENT and, optionally, RECON_FACILITY.
+# Every submission records a reconciliation - hence consumes-data.
+#
+# Stock in hand is the device's own figure: this flow starts by wiping the
+# app, and the state's stock (5 of each after Prompt 4) was moved in a
+# session wiped since, so it reads only what Download Stock Data brings back.
+# On 2026-10-19 that was the 490 dispatched to the health facility and none
+# of what the state received or returned: Stock in hand -490 for each
+# product, so both are BLOCKED ("Precondition not met: Stock in hand is
+# -490, expected at least 1.") and nothing is submitted. At 0, only Case 2
+# is BLOCKED. A meaningful state run needs the session that received the
+# stock - Prompts 2 to 4 and this one, without a wipe between.
+
+- runScript:
+    file: ../../subflows/stock/reconciliation/recon.js
+    env:
+      ACTION: init
+      ROLE: "State User"
+      ACCOUNT: ${HCM_STATE_STOCK_USER_ID}
+      COMMENT: ${RECON_COMMENT}
+      FACILITY: ${RECON_FACILITY}
+    label: "Read the reconciliation test data"
+- runFlow:
+    when:
+      true: ${output.recon.failure}
+    file: ../../subflows/fail.yaml
+    env:
+      MESSAGE: ${output.recon.failure}
+    label: "Reconciliation test data is set in .env"
+
+- runFlow: ../../subflows/home/state-stock.yaml
+- runFlow: ../../subflows/stock/download-stock-data.yaml
+
+- runFlow:
+    file: ../../subflows/stock/reconciliation/reconcile-variant.yaml
+    env:
+      VARIANT: ${PRODUCT_VARIANT_1}
+- runFlow:
+    file: ../../subflows/stock/reconciliation/reconcile-variant.yaml
+    env:
+      VARIANT: ${PRODUCT_VARIANT_2}
+
+- runScript:
+    file: ../../subflows/stock/reconciliation/recon.js
+    env:
+      ACTION: summary
+    label: "Log the reconciliation report"
+- runFlow:
+    when:
+      true: ${output.recon.failure}
+    file: ../../subflows/fail.yaml
+    env:
+      MESSAGE: ${output.recon.failure}
+    label: "Stock reconciliation behaves as specified"

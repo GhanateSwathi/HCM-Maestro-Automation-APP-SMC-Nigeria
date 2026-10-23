@@ -1,0 +1,27 @@
+appId: ${HCM_APP_ID}
+name: read-balances
+---
+# On the home screen: read both variants' Stock Balance lines ("200 SPAQ 1")
+# into output.variants.balanceBefore or balanceAfter, per PHASE.
+# Accepting a receipt adds its quantity to the product's balance - seen
+# 2026-10-15, SPAQ 1 100 -> 200 and SPAQ 2 0 -> 100.
+- copyTextFrom:
+    text: ${output.variants.balanceLines[0]}
+    label: "Read the first variant's stock balance"
+- runScript:
+    file: variants.js
+    env:
+      ACTION: balance
+      PHASE: ${PHASE}
+      INDEX: "0"
+    label: "Remember it"
+- copyTextFrom:
+    text: ${output.variants.balanceLines[1]}
+    label: "Read the second variant's stock balance"
+- runScript:
+    file: variants.js
+    env:
+      ACTION: balance
+      PHASE: ${PHASE}
+      INDEX: "1"
+    label: "Remember it"

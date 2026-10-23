@@ -1,0 +1,64 @@
+appId: ${HCM_APP_ID}
+name: verify-referral-list
+---
+# On the referral screen: each record made this run can be found by its
+# child name. Recorded per record; a submitted record not found is a
+# failure.
+#
+# Read off the app 2026-10-21: the screen lists nothing until something is
+# searched. Its field ("Enter the name of the referral") filters as you
+# type; each result is a card with the child's name, "Open" and "Date of
+# evaluation: <date>"; no result reads "Match Not Found". The typed name
+# also sits in the field, so a result is the name's second occurrence. The
+# cards show no sync status.
+#
+# The field is focused once, through its hint, and kept focused: tapping it
+# again later drops the cursor mid-text, and eraseText then leaves the tail
+# behind (a run searched "AutoChild_Sick_…3405" + "21123405"). With the
+# cursor left at the end, eraseText clears the whole previous name.
+- extendedWaitUntil:
+    visible: "Enter the name of the referral"
+    timeout: 10000
+    label: "The search field shows"
+- tapOn:
+    text: "Enter the name of the referral"
+    label: "Focus the search field"
+- evalScript: ${output.referral.i = 0}
+- repeat:
+    times: ${output.referral.records.length}
+    label: "Search each child"
+    commands:
+      - evalScript: ${output.referral.hit = false}
+      - eraseText
+      - inputText: ${output.referral.records[output.referral.i].name}
+      - extendedWaitUntil:
+          visible:
+            text: ${output.referral.records[output.referral.i].name}
+            index: 1
+          timeout: 10000
+          optional: true
+          label: "The child's card shows"
+      - runFlow:
+          when:
+            visible:
+              text: ${output.referral.records[output.referral.i].name}
+              index: 1
+          commands:
+            - evalScript: ${output.referral.hit = true}
+            - takeScreenshot: artifacts/referral-found-${output.referral.i}
+      - runScript:
+          file: referral.js
+          env:
+            ACTION: listed
+            INDEX: ${output.referral.i}
+            FOUND: ${output.referral.hit}
+      - evalScript: ${output.referral.i = output.referral.i + 1}
+- eraseText
+- runFlow:
+    when:
+      visible:
+        id: "android:id/input_method_nav_back"
+    commands:
+      - tapOn:
+          id: "android:id/input_method_nav_back"
+          label: "Close the keyboard"

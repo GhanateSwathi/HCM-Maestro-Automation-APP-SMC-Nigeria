@@ -1,0 +1,84 @@
+appId: ${HCM_APP_ID}
+name: fill-checklist
+---
+# The reason's checklist (the specification's checklist_<reason>.yaml, as
+# one subflow): answer every mandatory question - its label ends in " *" -
+# with its first option, or, for a text question, CHECKLIST_TEXT_ANSWER.
+# Each question and answer is recorded for the report.
+#
+# Read off the app 2026-10-21 (first options throughout):
+#   current / previous cycle  3 Yes/No questions
+#   Fever   tested for malaria? Yes -> result: Positive -> treated with anti
+#           malarial? / negative test received SPAQ? Yes -> "Add reason *"
+#   Sick    evaluated for the cause? Yes -> "Enter comments for diagnosis. *";
+#           treated? Yes -> "Name and dose of the drug *"; admitted? Yes
+# Answers reveal follow-up questions, so the questions are walked twice.
+# Re-ticking a radio leaves it ticked, and a text answer is erased and
+# retyped, so the second walk changes nothing already answered.
+#
+# A radio question's options sit under it, each radio a shade above its
+# label, so the nearest element below the question is its first radio. A
+# text question's nearest element is its field; tapping it raises the
+# keyboard, which is how the two are told apart.
+- repeat:
+    times: 2
+    label: "Walk the questions"
+    commands:
+      - evalScript: ${output.ref.k = 0}
+      - repeat:
+          times: 12
+          while:
+            visible:
+              text: "(?s).*\\*"
+              below: ${output.ref.title}
+              index: ${output.ref.k}
+          commands:
+            - copyTextFrom:
+                text: "(?s).*\\*"
+                below: ${output.ref.title}
+                index: ${output.ref.k}
+                label: "Read the question"
+            - runScript:
+                file: referral.js
+                env:
+                  ACTION: question
+            - tapOn:
+                below:
+                  text: "(?s).*\\*"
+                  below: ${output.ref.title}
+                  index: ${output.ref.k}
+                index: 0
+                label: "Its first option, or its text field"
+            - waitForAnimationToEnd:
+                timeout: 1500
+            - runFlow:
+                when:
+                  visible:
+                    id: "android:id/input_method_nav_back"
+                commands:
+                  - eraseText
+                  - inputText: ${output.referral.text}
+                  - tapOn:
+                      id: "android:id/input_method_nav_back"
+                      label: "Close the keyboard"
+                  - evalScript: ${output.ref.answers[output.ref.question] = output.referral.text + ' (typed)'}
+                  - evalScript: ${output.ref.typed = true}
+            - runFlow:
+                when:
+                  true: ${!output.ref.typed}
+                commands:
+                  - copyTextFrom:
+                      text: ".+"
+                      below:
+                        text: "(?s).*\\*"
+                        below: ${output.ref.title}
+                        index: ${output.ref.k}
+                      index: 0
+                      label: "Read the option ticked"
+                  - runScript:
+                      file: referral.js
+                      env:
+                        ACTION: answer
+                        TYPED: "false"
+            - evalScript: ${output.ref.typed = false, output.ref.k = output.ref.k + 1}
+- takeScreenshot: artifacts/referral-${output.ref.slug}-checklist

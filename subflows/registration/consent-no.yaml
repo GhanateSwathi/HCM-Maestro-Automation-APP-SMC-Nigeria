@@ -1,0 +1,141 @@
+appId: ${HCM_APP_ID}
+name: consent-no
+---
+# The specification's common/consent_no.yaml - on "Care giver's consent": No,
+# the reason field, the reason left empty (must be refused), CONSENT_REASON,
+# Submit. Ends on the "Ready to Submit?" popup.
+#
+# Read off the app as AU-CDD-001, 2026-10-22: No adds "Enter Reason *", a text
+# field. Submit with it empty stays put and shows "This field is required."
+# under it. With a reason, Submit raises "Ready to Submit?" ("Make sure you
+# review all the details before clicking on the submit button. Click on the
+# cancel button to go back to the previous page.") with Submit and Cancel -
+# spelled unlike the "Ready to submit ?" of a household with members.
+- extendedWaitUntil:
+    visible: "Care giver's consent"
+    timeout: 15000
+    label: "Care giver's consent opens"
+- assertVisible:
+    text: "Yes"
+    below: "Did the care giver allow.*"
+    label: "Yes is offered"
+- assertVisible:
+    text: "No"
+    below: "Yes"
+    label: "No is offered"
+# No's radio: left of "No" and below "Yes" - the radios are text-less and
+# report no state, so the reason field appearing is what shows No is chosen.
+- tapOn:
+    leftOf: "No"
+    below: "Yes"
+    label: "Consent - No"
+- extendedWaitUntil:
+    visible: "Enter Reason \\*"
+    timeout: 5000
+    optional: true
+    label: "The reason field appears"
+- runFlow:
+    when:
+      notVisible: "Enter Reason \\*"
+    commands:
+      - takeScreenshot: artifacts/registration-consent-no-no-reason-field
+      - runFlow:
+          file: ../fail.yaml
+          env:
+            MESSAGE: "Consent No did not show a reason field."
+          label: "Consent No shows a reason field"
+- runScript:
+    file: registration.js
+    env:
+      ACTION: step
+      STEP: "Consent No - reason field"
+      RESULT: PASSED
+      DETAIL: "No selected; Enter Reason * appears, a text field"
+
+# --- The reason is mandatory ----------------------------------------------------
+- tapOn:
+    text: "Submit"
+    below: "Care giver's consent"
+    label: "Submit with the reason empty"
+- extendedWaitUntil:
+    visible: "This field is required\\.|Ready to Submit\\?"
+    timeout: 10000
+    optional: true
+    label: "Submit is refused or accepted"
+- runFlow:
+    when:
+      visible: "Ready to Submit\\?"
+    commands:
+      - takeScreenshot: artifacts/registration-consent-no-empty-reason-accepted
+      - runScript:
+          file: registration.js
+          env:
+            ACTION: step
+            STEP: "Consent No - reason mandatory"
+            RESULT: DEVIATION
+            DETAIL: "Submit with the reason empty offered Ready to Submit?"
+      - tapOn:
+          text: "Cancel"
+          below: "Ready to Submit\\?"
+          label: "Cancel - nothing is submitted"
+      - extendedWaitUntil:
+          notVisible: "Ready to Submit\\?"
+          timeout: 10000
+          label: "The popup closes"
+- runFlow:
+    when:
+      visible: "This field is required\\."
+    commands:
+      - takeScreenshot: artifacts/registration-consent-no-reason-required
+      - runScript:
+          file: registration.js
+          env:
+            ACTION: step
+            STEP: "Consent No - reason mandatory"
+            RESULT: PASSED
+            DETAIL: "Submit with the reason empty is blocked - This field is required."
+
+# --- CONSENT_REASON -----------------------------------------------------------------
+- tapOn:
+    below: "Enter Reason \\*"
+    index: 0
+    label: "Focus the reason"
+- assertVisible:
+    focused: true
+    below: "Enter Reason \\*"
+    label: "The reason field has focus"
+- inputText: ${output.reg.reason}
+- tapOn:
+    id: "android:id/input_method_nav_back"
+    label: "Close the keyboard"
+- assertVisible:
+    text: ${output.reg.reasonSelector}
+    below: "Enter Reason \\*"
+    label: "The reason is typed"
+- takeScreenshot: artifacts/registration-consent-no
+- tapOn:
+    text: "Submit"
+    below: "Care giver's consent"
+    label: "Submit the consent"
+- extendedWaitUntil:
+    visible: "Ready to Submit\\?"
+    timeout: 10000
+    optional: true
+    label: "Ready to Submit? is shown"
+- runFlow:
+    when:
+      notVisible: "Ready to Submit\\?"
+    commands:
+      - takeScreenshot: artifacts/registration-consent-no-no-popup
+      - runFlow:
+          file: ../fail.yaml
+          env:
+            MESSAGE: "Submit with consent No and a reason did not show Ready to Submit?."
+          label: "Submit shows Ready to Submit?"
+- runScript:
+    file: registration.js
+    env:
+      ACTION: step
+      STEP: "Consent No - reason entered"
+      RESULT: PASSED
+      DETAIL: "${'reason ' + output.reg.reason + ' typed; Submit shows Ready to Submit?'}"

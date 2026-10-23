@@ -1,0 +1,77 @@
+appId: ${HCM_APP_ID}
+name: add-member
+---
+# Steps 7 and 13 - from Household Overview: Add Members -> Member Details for
+# WHO (child1 | child2; BOUNDS "true" tries the age bounds first) -> Save
+# Beneficiary -> "Ready to submit ?" -> Submit -> the success screen. Records
+# the member's Token ID in output.reg[WHO].id and ends on the success screen
+# ("View Household Details" / "Back To Search").
+#
+# Read off the app as AU-CDD-001, 2026-10-21: "Add Members" sits under the
+# last member's card. Saving a member asks "Ready to submit ?" (Submit /
+# Cancel); Submit ends on "Data recorded Successfully" / "The data has been
+# recorded successfully" / "Token ID: <id>" - the new member's beneficiary
+# ID, which its card on Household Overview shows.
+- scrollUntilVisible:
+    element: "Add Members"
+    direction: DOWN
+    timeout: 15000
+    label: "Find Add Members"
+- tapOn:
+    text: "Add Members"
+    label: "Add Members"
+- runFlow:
+    file: member-form.yaml
+    env:
+      WHO: ${WHO}
+      BOUNDS: ${BOUNDS}
+- extendedWaitUntil:
+    visible: "Ready to submit \\?"
+    timeout: 15000
+    optional: true
+    label: "Ready to submit"
+- runFlow:
+    when:
+      notVisible: "Ready to submit \\?"
+    commands:
+      - takeScreenshot: artifacts/registration-member-not-saved-${WHO}
+      - runFlow:
+          file: ../fail.yaml
+          env:
+            MESSAGE: "${'Save Beneficiary for ' + output.m.label + ' did not offer Ready to submit.'}"
+          label: "Saving the member asks Ready to submit"
+- takeScreenshot: artifacts/registration-ready-${WHO}
+- tapOn:
+    text: "Submit"
+    below: "Ready to submit \\?"
+    label: "Submit the household"
+- extendedWaitUntil:
+    visible: "Data recorded Successfully"
+    timeout: 30000
+    optional: true
+    label: "The household is recorded"
+- runFlow:
+    when:
+      notVisible: "Data recorded Successfully"
+    commands:
+      - takeScreenshot: artifacts/registration-not-recorded-${WHO}
+      - runFlow:
+          file: ../fail.yaml
+          env:
+            MESSAGE: "${'Submitting the household with ' + output.m.label + ' did not show Data recorded Successfully.'}"
+          label: "Data recorded Successfully"
+- copyTextFrom:
+    text: "Token ID: \\d+"
+    label: "Read the member's Token ID"
+- runScript:
+    file: registration.js
+    env:
+      ACTION: token
+- takeScreenshot: artifacts/registration-recorded-${WHO}
+- runScript:
+    file: registration.js
+    env:
+      ACTION: step
+      STEP: "${'Member saved - ' + output.m.label}"
+      RESULT: PASSED
+      DETAIL: "${output.m.first + ' ' + output.m.last + ', ' + output.m.age + ', ' + output.m.gender + '; Ready to submit -> Submit -> Data recorded Successfully, Token ID ' + output.m.id}"

@@ -1,0 +1,48 @@
+appId: ${HCM_APP_ID}
+name: redose-init
+---
+# Reads the dose-and-redose household's test data (Prompt 14, the REDOSE_*
+# keys - see .env.example) before anything touches the device, and fails at
+# once if any is missing or out of range. Generates the names:
+# AutoRedoseHead<stamp> (also the search text), AutoRedoseChild<n><stamp>.
+- runScript:
+    file: registration.js
+    env:
+      ACTION: init-redose
+      TEST_USER: ${TEST_USER}
+      VILLAGE: ${REGISTRATION_VILLAGE}
+      LATITUDE: ${TEST_LATITUDE}
+      LONGITUDE: ${TEST_LONGITUDE}
+      MEMBERS: ${REDOSE_HOUSEHOLD_MEMBERS}
+      HEAD_YEARS: ${REDOSE_HEAD_AGE_YEARS}
+      HEAD_MONTHS: ${REDOSE_HEAD_AGE_MONTHS}
+      HEAD_GENDER: ${REDOSE_HEAD_GENDER}
+      MOBILE: ${HEAD_MOBILE}
+      CHILD_1_MONTHS: ${REDOSE_CHILD_1_AGE_MONTHS}
+      CHILD_2_MONTHS: ${REDOSE_CHILD_2_AGE_MONTHS}
+      CHILD_3_MONTHS: ${REDOSE_CHILD_3_AGE_MONTHS}
+      CHILD_4_MONTHS: ${REDOSE_CHILD_4_AGE_MONTHS}
+      CHILD_5_MONTHS: ${REDOSE_CHILD_5_AGE_MONTHS}
+      CHILD_6_MONTHS: ${REDOSE_CHILD_6_AGE_MONTHS}
+      CHILD_GENDER: ${REDOSE_CHILD_GENDER}
+      REDOSE_REASON: ${REDOSE_REASON}
+      VARIANT_1: ${PRODUCT_VARIANT_1}
+      VARIANT_2: ${PRODUCT_VARIANT_2}
+    label: "Read the Prompt 14 test data"
+- runFlow:
+    when:
+      true: ${output.reg.failure}
+    file: ../fail.yaml
+    env:
+      MESSAGE: ${output.reg.failure}
+    label: "Prompt 14 test data is set in .env"
+# TEST_USER is reported as the account under test, so it must be the one
+# signing in. Only TEST_USER is named in the message.
+- evalScript: "${output.userCheck = (String(TEST_USER).trim().toLowerCase() == String(HCM_CDD_USER_ID).trim().toLowerCase()) ? '' : 'TEST_USER ' + TEST_USER + ' is not the CDD user .env signs in with (HCM_CDD_USER_ID).'}"
+- runFlow:
+    when:
+      true: ${output.userCheck}
+    file: ../fail.yaml
+    env:
+      MESSAGE: ${output.userCheck}
+    label: "TEST_USER is the account signing in"

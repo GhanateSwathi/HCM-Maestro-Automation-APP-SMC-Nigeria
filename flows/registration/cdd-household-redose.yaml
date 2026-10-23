@@ -1,0 +1,83 @@
+appId: ${HCM_APP_ID}
+name: "Registration - CDD household of 7, dose and redose for a SPAQ1 and a SPAQ2 child"
+tags:
+  - regression
+  - registration
+  - cdd
+  - mhbase
+  - consumes-data
+---
+# Prompt 14 (the specification's cdd/cdd_household_redose.yaml): the CDD
+# (AU-CDD-001) reads the stock balances, registers a household with consent
+# Yes and REDOSE_HOUSEHOLD_MEMBERS (7) members - the head and six children -
+# then gives child 1 (PRODUCT_VARIANT_1) and child 2 (PRODUCT_VARIANT_2) a
+# dose and a redose each (Test Cases 1 and 2): the product follows the age
+# band for both, each one lowers its own variant's balance by its quantity
+# and leaves the other alone, and no second redose is offered. Final
+# verification of every card, sync.
+#
+# Needs HCM_CDD_USER_ID / HCM_CDD_PASSWORD, TEST_USER (the same user), the
+# REDOSE_* keys, PRODUCT_VARIANT_1 / _2, and optionally REGISTRATION_VILLAGE,
+# TEST_LATITUDE / TEST_LONGITUDE, HEAD_MOBILE. Names are generated:
+# AutoRedoseHead<run time>, AutoRedoseChild<n><run time>. A fresh sign-in has
+# no beneficiary IDs, so they are downloaded first. The specification
+# assumes Prompt 11's stock; stock is device-local, so a fresh session must
+# hold at least 2 of each variant (a dose and a redose), else it is BLOCKED.
+# IRREVERSIBLE: a household of seven, two doses and two redoses - hence
+# consumes-data.
+#
+# Read off the app as AU-CDD-001, 2026-10-22.
+- runFlow: ../../subflows/registration/redose-init.yaml
+- runFlow: ../../subflows/home/cdd.yaml
+- runFlow:
+    file: ../../subflows/registration/cdd-balances.yaml
+    env:
+      PHASE: start
+- runScript:
+    file: ../../subflows/registration/registration.js
+    env:
+      ACTION: cover
+- runFlow:
+    when:
+      true: ${output.reg.stockFailure}
+    file: ../../subflows/fail.yaml
+    env:
+      MESSAGE: ${output.reg.stockFailure}
+    label: "The balances cover a dose and a redose of each"
+
+# --- Register the household: consent Yes, 7 members, the head, six children -----
+- runFlow: ../../subflows/registration/household-with-children.yaml
+
+# --- Test Case 1: child 1 (PRODUCT_VARIANT_1), dose then redose -------------------
+- runFlow:
+    file: ../../subflows/registration/dose-and-redose.yaml
+    env:
+      WHO: child1
+      TC: "1"
+# --- Test Case 2: child 2 (PRODUCT_VARIANT_2), dose then redose -------------------
+- runFlow: ../../subflows/registration/open-household.yaml
+- runFlow:
+    file: ../../subflows/registration/dose-and-redose.yaml
+    env:
+      WHO: child2
+      TC: "2"
+
+# --- Final verification, sync, report -------------------------------------------------
+- runFlow: ../../subflows/registration/open-household.yaml
+- runFlow: ../../subflows/registration/redose-final.yaml
+- runFlow:
+    file: ../../subflows/registration/sync-data.yaml
+    env:
+      STEP: "Sync Data"
+- runScript:
+    file: ../../subflows/registration/registration.js
+    env:
+      ACTION: redose-summary
+    label: "Log the execution report"
+- runFlow:
+    when:
+      true: ${output.reg.failure}
+    file: ../../subflows/fail.yaml
+    env:
+      MESSAGE: ${output.reg.failure}
+    label: "Both children dosed and redosed, stock right"

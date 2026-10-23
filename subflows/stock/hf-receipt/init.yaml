@@ -1,0 +1,25 @@
+appId: ${HCM_APP_ID}
+name: hf-receipt-init
+---
+# Reads the test data before anything touches the device, and fails at once
+# if any of it is missing: PRODUCT_VARIANT_1 / _2, EXPECTED_INITIAL_BALANCE,
+# DISPATCHED_QTY_SPAQ1 / _SPAQ2 (what Prompt 3 dispatched), and TEST_USER,
+# which must be the health facility stock user .env signs in with.
+- runFlow: ../accept-receipt/init-variants.yaml
+- runScript:
+    file: hf-receipt.js
+    env:
+      ACTION: init
+      TEST_USER: ${TEST_USER}
+      USER_ID: ${HCM_HF_STOCK_USER_ID}
+      EXPECTED_INITIAL: ${EXPECTED_INITIAL_BALANCE}
+      QTY_1: ${DISPATCHED_QTY_SPAQ1}
+      QTY_2: ${DISPATCHED_QTY_SPAQ2}
+    label: "Read the Prompt 5 test data"
+- runFlow:
+    when:
+      true: ${output.hf.failure}
+    file: ../../fail.yaml
+    env:
+      MESSAGE: ${output.hf.failure}
+    label: "Prompt 5 test data is set in .env"

@@ -1,0 +1,56 @@
+appId: ${HCM_APP_ID}
+name: case2a-cancel
+---
+# Cancel leaves the stock unaccepted - the state user's Case 2a, the health
+# facility user's Test Case 4. Expects the Accept Confirmation popup for
+# PRODUCT_VARIANT_1's transaction to be up. Runs before anything is
+# accepted, so the cancel path is proven before anything is consumed. Ends on
+# Incoming Transactions.
+- tapOn:
+    text: "Cancel"
+    label: "Cancel - tap Cancel"
+# Known to be on screen until Cancel, so this cannot pass vacuously.
+- extendedWaitUntil:
+    notVisible: "Accept Confirmation"
+    timeout: 10000
+    label: "Cancel - popup dismissed"
+- assertVisible:
+    text: "Stock Receipt Details"
+    index: 0
+    label: "Cancel - still on Stock Receipt Details"
+- assertVisible:
+    text: ${output.v.resource}
+    rightOf: "Resource"
+    above: "Material issue number"
+    label: "Cancel - still the same product"
+- assertVisible:
+    text: "Accept Stock"
+    label: "Cancel - Accept Stock still offered, so the stock was not accepted"
+- takeScreenshot: artifacts/stock-accept-cancelled
+
+# Neither variant accepted: back on the list, both still have every
+# transaction they had.
+- tapOn:
+    text: "Back"
+    label: "Cancel - back to Incoming Transactions"
+- extendedWaitUntil:
+    visible: "Incoming Transactions"
+    timeout: 15000
+    label: "Cancel - Incoming Transactions is back"
+- runFlow:
+    file: count-transactions.yaml
+    env:
+      INDEX: "0"
+- runFlow:
+    file: count-transactions.yaml
+    env:
+      INDEX: "1"
+- evalScript: "${output.variants.failure = (output.variants.counts[0] == output.variants.countsBefore[0] && output.variants.counts[1] == output.variants.countsBefore[1]) ? '' : output.variants.cases.cancel + ' - the incoming list changed after Cancel: ' + output.variants.names[0] + ' ' + output.variants.countsBefore[0] + ' -> ' + output.variants.counts[0] + ', ' + output.variants.names[1] + ' ' + output.variants.countsBefore[1] + ' -> ' + output.variants.counts[1] + '.'}"
+- runFlow:
+    when:
+      true: ${output.variants.failure}
+    file: ../../fail.yaml
+    env:
+      MESSAGE: ${output.variants.failure}
+    label: "Cancel - neither product variant accepted"
+- evalScript: ${console.log(output.variants.cases.cancel + ' PASSED - Cancel returned to Stock Receipt Details; stock not accepted. ' + output.variants.names.join(' and ') + ' transactions all still listed')}

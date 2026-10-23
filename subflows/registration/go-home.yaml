@@ -1,0 +1,25 @@
+appId: ${HCM_APP_ID}
+name: registration-go-home
+---
+# From any Registration & Delivery screen to home, through the side menu:
+# Back from the delivery and household screens walks through the form pages
+# filled earlier (as in Beneficiary Referral).
+- runFlow:
+    when:
+      visible:
+        id: "android:id/input_method_nav_back"
+    commands:
+      - tapOn:
+          id: "android:id/input_method_nav_back"
+          label: "Close the keyboard"
+- tapOn:
+    text: "Open navigation menu"
+    label: "Open the side menu"
+- tapOn:
+    text: "Home"
+    above: "Logout"
+    label: "Home"
+- extendedWaitUntil:
+    visible: "Registration & Delivery"
+    timeout: 15000
+    label: "Back on the home screen"

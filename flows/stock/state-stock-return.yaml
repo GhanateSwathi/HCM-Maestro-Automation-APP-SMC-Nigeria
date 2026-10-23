@@ -1,0 +1,53 @@
+appId: ${HCM_APP_ID}
+name: "Stock - state stock user returns stock to National"
+tags:
+  - regression
+  - stock
+  - state-stock
+  - mhbase
+  - consumes-data
+---
+# Prompt 4. Needs HCM_STATE_STOCK_USER_ID / HCM_STATE_STOCK_PASSWORD
+# (AU-SAT-001), PRODUCT_VARIANT_1 / _2 (SPAQ1, SPAQ2), RETURN_QUANTITY (5),
+# EXPECTED_START_BALANCE (10), EXPECTED_FINAL_BALANCE (5) and
+# RETURN_DESTINATION - the National warehouse as the app lists it,
+# Fac_f-2026-10-15-137945.
+#
+# Precondition: each product's balance is EXPECTED_START_BALANCE - the state
+# left by Prompt 3's Case 3. That balance lives on the device, and this flow
+# starts by wiping the app and signing in again, so on its own it finds the
+# balance a fresh install has (0 on 2026-10-19) and fails, before returning
+# anything, with "Precondition not met: SPAQ1 balance is 0, expected 10.
+# Run Prompt 3 first." For a real return, run it in the session that holds
+# the stock - see TEST-CASES RTN-01.
+#
+# Maestro stops at the first failure, so SPAQ2 is not tried after SPAQ1
+# fails. Once SPAQ1 is returned, a SPAQ2 failure reads
+# "Partial return: SPAQ1 returned (10 -> 5), SPAQ2 failed – <reason>".
+
+- runFlow: ../../subflows/home/state-stock.yaml
+- runFlow: ../../subflows/stock/download-stock-data.yaml
+
+# Test Case 1 and 2.
+- runFlow:
+    file: ../../subflows/stock/return/return-variant.yaml
+    env:
+      VARIANT: ${PRODUCT_VARIANT_1}
+      DESTINATION: ${RETURN_DESTINATION}
+      DESTINATION_KEY: "RETURN_DESTINATION"
+      ROLE: "State User"
+      PREREQUISITE: "Prompt 3"
+- runFlow:
+    file: ../../subflows/stock/return/return-variant.yaml
+    env:
+      VARIANT: ${PRODUCT_VARIANT_2}
+      DESTINATION: ${RETURN_DESTINATION}
+      DESTINATION_KEY: "RETURN_DESTINATION"
+      ROLE: "State User"
+      PREREQUISITE: "Prompt 3"
+
+# The second return must not have moved the first product's balance.
+- runFlow:
+    file: ../../subflows/stock/return/finish.yaml
+    env:
+      VARIANT: ${PRODUCT_VARIANT_1}

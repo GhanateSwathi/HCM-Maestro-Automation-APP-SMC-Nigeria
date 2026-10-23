@@ -1,0 +1,49 @@
+appId: ${HCM_APP_ID}
+name: create-referral
+---
+# The specification's common/create_referral.yaml: one referral for REASON,
+# from the referral screen back to it - Health Facility Details, Referral
+# Details (cycle, generated child name, age, gender, reason), the reason's
+# checklist, Submit, the success screen, Go Back. IRREVERSIBLE: creates a
+# referral record.
+#
+# A step that cannot be done fails this record only: it is recorded
+# (referral.js), the app is backed out to the referral screen, and the
+# caller goes on to the next reason.
+- runScript:
+    file: referral.js
+    env:
+      ACTION: begin
+      REASON: ${REASON}
+    label: "Start the referral"
+- runFlow:
+    when:
+      true: ${!output.ref.skip}
+    file: referral-facility.yaml
+- runFlow:
+    when:
+      true: ${!output.ref.skip}
+    file: referral-details.yaml
+- runFlow:
+    when:
+      true: ${!output.ref.skip}
+    file: referral-reason.yaml
+- runFlow:
+    when:
+      true: ${!output.ref.skip}
+    file: fill-checklist.yaml
+- runFlow:
+    when:
+      true: ${!output.ref.skip}
+    file: referral-submit.yaml
+- runFlow:
+    when:
+      true: ${output.ref.skip}
+    commands:
+      - takeScreenshot: artifacts/referral-${output.ref.slug}-failed
+      - runFlow: back-to-referrals.yaml
+- runScript:
+    file: referral.js
+    env:
+      ACTION: done
+    label: "Record the referral's result"

@@ -1,0 +1,72 @@
+appId: ${HCM_APP_ID}
+name: sync-referrals
+---
+# From the home screen: Sync Data until nothing is left to sync, and record
+# the result. Sync Data answers (2026-10-19/21) with a "Sync in progress"
+# banner, then "Data Synced Successfully" (Close), or straight away "No Data
+# available for sync" (Close) when the background service already sent it.
+# A "Data Unsynced" card on home ("There are N transactions yet to be
+# synced") is logged first - the pending records, if the service has not
+# sent them yet.
+- runFlow:
+    when:
+      visible: "There are .* yet to be synced"
+    commands:
+      - copyTextFrom:
+          text: "There are .* yet to be synced"
+          label: "Read the pending count"
+      - evalScript: "${console.log('Before sync - ' + maestro.copiedText)}"
+- takeScreenshot: artifacts/referral-before-sync
+- evalScript: ${output.referral.synced = ''}
+- repeat:
+    times: 4
+    while:
+      notVisible: "No Data available for sync"
+    label: "Sync until nothing is left"
+    commands:
+      - extendedWaitUntil:
+          notVisible: "Sync in progress"
+          timeout: 180000
+          optional: true
+          label: "Any sync running finishes"
+      - runFlow:
+          when:
+            visible: "Data Synced Successfully"
+          commands:
+            - evalScript: ${output.referral.synced = 'Data Synced Successfully'}
+            - takeScreenshot: artifacts/referral-synced
+            - tapOn: "Close"
+      - tapOn:
+          text: "Sync Data"
+          label: "Sync Data"
+      - extendedWaitUntil:
+          visible: "No Data available for sync|Sync in progress|Data Synced Successfully"
+          timeout: 60000
+          optional: true
+          label: "Sync Data answers"
+# The outcome is decided once, before Close takes the dialog away.
+- evalScript: ${output.referral.syncDone = false}
+- runFlow:
+    when:
+      visible: "No Data available for sync"
+    commands:
+      - evalScript: ${output.referral.syncDone = true}
+      - takeScreenshot: artifacts/referral-nothing-left
+      - runScript:
+          file: referral.js
+          env:
+            ACTION: sync
+            RESULT: ok
+            MESSAGE: "${(output.referral.synced ? output.referral.synced + ', then ' : '') + 'No Data available for sync'}"
+      - tapOn: "Close"
+- runFlow:
+    when:
+      true: ${!output.referral.syncDone}
+    commands:
+      - takeScreenshot: artifacts/referral-sync-failed
+      - runScript:
+          file: referral.js
+          env:
+            ACTION: sync
+            RESULT: failed
+            MESSAGE: "Sync Data did not reach No Data available for sync within the time allowed"

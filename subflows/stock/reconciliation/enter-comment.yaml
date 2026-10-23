@@ -1,0 +1,53 @@
+appId: ${HCM_APP_ID}
+name: recon-enter-comment
+---
+# On the reconciliation form with a count different from stock in hand:
+# type RECON_COMMENT into Comments and close the keyboard. Comments only
+# appears while the count differs (2026-10-19).
+- extendedWaitUntil:
+    visible: "Comments.*"
+    timeout: 5000
+    optional: true
+    label: "Comments is shown"
+- runFlow:
+    when:
+      notVisible: "Comments.*"
+    commands:
+      - takeScreenshot: artifacts/recon-no-comments-field
+      - runFlow:
+          file: ../../fail.yaml
+          env:
+            MESSAGE: "${output.rv.variant + ' - the Comments field did not appear for a count different from stock in hand.'}"
+          label: "Comments is shown"
+- scrollUntilVisible:
+    element:
+      text: "version \\d+"
+    direction: DOWN
+    timeout: 10000
+    label: "Scroll Comments into view"
+- tapOn:
+    below: "Comments.*"
+    above: "version \\d+"
+    label: "Focus Comments"
+# Once the keyboard is up, "version 2" is off screen; the label alone fences
+# the check.
+- assertVisible:
+    focused: true
+    below: "Comments.*"
+    label: "Comments has focus"
+- eraseText
+- inputText: ${output.recon.comment}
+- runFlow:
+    when:
+      visible:
+        id: "android:id/input_method_nav_back"
+    commands:
+      - tapOn:
+          id: "android:id/input_method_nav_back"
+          label: "Close the keyboard"
+      - waitForAnimationToEnd:
+          timeout: 2000
+- assertVisible:
+    text: ${output.recon.commentPattern}
+    below: "Comments.*"
+    label: "Comments shows RECON_COMMENT"

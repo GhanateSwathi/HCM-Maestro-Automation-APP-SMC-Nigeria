@@ -1,0 +1,93 @@
+appId: ${HCM_APP_ID}
+name: record-delivery
+---
+# On Delivery Details for member WHO: read the products offered and check the
+# age-product rule, read the quantity into output.m[QTY_FIELD] ("dose" when
+# not given; "redose" for a redose), Save Delivery, tick every delivery check,
+# Next, and "Delivery Successful". STEP names the report line. Shared by
+# deliver-dose.yaml and the redose (Prompt 14). See deliver-dose.yaml for the
+# screens.
+- runScript:
+    file: registration.js
+    env:
+      ACTION: member
+      WHO: ${WHO}
+- extendedWaitUntil:
+    visible: "Delivery Details"
+    timeout: 15000
+    label: "On Delivery Details"
+
+# --- The products offered ------------------------------------------------------
+- runFlow: read-products.yaml
+- takeScreenshot: artifacts/registration-delivery-${WHO}
+- runFlow:
+    when:
+      true: ${output.reg.productFailure}
+    file: ../fail.yaml
+    env:
+      MESSAGE: ${output.reg.productFailure}
+    label: "The age-product rule holds"
+- copyTextFrom:
+    text: "\\d+"
+    below: "Quantity Distributed"
+    above: "Add Items"
+    label: "Read the quantity distributed"
+- runScript:
+    file: registration.js
+    env:
+      ACTION: dose
+      FIELD: "${typeof QTY_FIELD !== 'undefined' ? QTY_FIELD : 'dose'}"
+
+# --- Record it -------------------------------------------------------------------
+- tapOn:
+    text: "Save Delivery"
+    label: "Save Delivery"
+- extendedWaitUntil:
+    visible: "Please check you have done the following"
+    timeout: 15000
+    label: "The delivery checks open"
+# Each box is a text-less element left of its label; the k-th box is the
+# k-th clickable below the title and left of the labels (the anchor resolves
+# to the first label).
+- evalScript: ${output.m.k = 0}
+- repeat:
+    times: 8
+    while:
+      visible:
+        text: "(?s).+\\s\\*"
+        below: "Please check you have done the following"
+        index: ${output.m.k}
+    commands:
+      - tapOn:
+          below: "Please check you have done the following"
+          leftOf: "(?s).+\\s\\*"
+          index: ${output.m.k}
+          label: "Tick the check"
+      - evalScript: ${output.m.k = output.m.k + 1}
+- takeScreenshot: artifacts/registration-delivery-checks-${WHO}
+- tapOn:
+    text: "Next"
+    label: "Next"
+- extendedWaitUntil:
+    visible: "Delivery Successful"
+    timeout: 30000
+    optional: true
+    label: "Delivery Successful"
+- runFlow:
+    when:
+      notVisible: "Delivery Successful"
+    commands:
+      - takeScreenshot: artifacts/registration-delivery-failed-${WHO}
+      - runFlow:
+          file: ../fail.yaml
+          env:
+            MESSAGE: "${STEP + ' - the dose was not recorded (no Delivery Successful).'}"
+          label: "The dose is recorded"
+- takeScreenshot: artifacts/registration-delivered-${WHO}
+- runScript:
+    file: registration.js
+    env:
+      ACTION: step
+      STEP: ${STEP}
+      RESULT: PASSED
+      DETAIL: "${output.m.label + ' (' + output.m.months + ' months): offered ' + output.m.products.join(', ') + ', ' + (typeof QTY_FIELD !== 'undefined' ? QTY_FIELD : 'dose') + ' ' + output.m[typeof QTY_FIELD !== 'undefined' ? QTY_FIELD : 'dose'] + ', ' + output.m.k + ' delivery checks ticked; Delivery Successful'}"
