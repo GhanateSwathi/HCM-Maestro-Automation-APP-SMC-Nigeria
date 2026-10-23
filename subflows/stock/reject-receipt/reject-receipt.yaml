@@ -1,0 +1,130 @@
+appId: ${HCM_APP_ID}
+name: reject-receipt
+---
+# Prompt 15 for one role - the specification's common/reject_stock.yaml.
+# Expects init.yaml to have run (test data, ROLE, PREREQUISITE) and the home
+# screen with the stock records downloaded. Test Cases 1-6 in order; any
+# hard failure stops the cases after it. Ends on home.
+# IRREVERSIBLE: rejects one incoming transaction per product variant, so every
+# run needs a fresh dispatch of each variant to this role.
+#
+# The order mirrors accepting (accept-receipt/): the Cancel path is proven on
+# PRODUCT_VARIANT_1's transaction before anything is rejected, then
+# PRODUCT_VARIANT_1 and _2 are rejected in turn. If Reject asks for no
+# confirmation, its first tap already rejects PRODUCT_VARIANT_1: Test Cases
+# 3 and 4 cannot run, and the run goes straight to checking that rejection.
+
+# --- Preconditions -----------------------------------------------------------
+- runFlow:
+    file: ../accept-receipt/read-balances.yaml
+    env:
+      PHASE: before
+- takeScreenshot: artifacts/stock-reject-balance-before
+- runFlow: ../open-incoming-transactions.yaml
+- runFlow:
+    when:
+      true: ${output.incoming == 'absent'}
+    commands:
+      - takeScreenshot: artifacts/stock-reject-blocked
+      - runFlow:
+          file: ../../fail.yaml
+          env:
+            MESSAGE: "${'BLOCKED - Test Cases 1 to 6: No incoming transactions for ' + output.rej.role + '; ' + output.rej.prerequisite + ' not received.'}"
+          label: "Precondition - incoming transactions are present"
+# At least one transaction for each variant, else BLOCKED - nothing rejected.
+# Counted over the whole list (count-all.yaml), not just the cards on screen.
+- runFlow: count-all.yaml
+- runScript:
+    file: ../accept-receipt/variants.js
+    env:
+      ACTION: precheck
+    label: "Check both variants are listed"
+- runFlow:
+    when:
+      true: ${output.variants.failure}
+    commands:
+      - takeScreenshot: artifacts/stock-reject-variants-missing
+      - runFlow:
+          file: ../../fail.yaml
+          env:
+            MESSAGE: ${output.variants.failure}
+          label: "Incoming transactions exist for both product variants"
+- evalScript: ${output.variants.countsBefore = output.variants.counts.slice()}
+- evalScript: ${output.rej.expectedCounts = output.variants.countsBefore.slice()}
+- takeScreenshot: artifacts/stock-reject-incoming
+
+# --- Test Case 1 - Stock Receipt Details offers Reject ------------------------------
+# open-transaction.yaml checks product, MRN, sender and quantity against the
+# card.
+- runFlow:
+    file: ../accept-receipt/open-transaction.yaml
+    env:
+      INDEX: "0"
+- extendedWaitUntil:
+    visible: "Accept Stock"
+    timeout: 15000
+    optional: true
+    label: "Test Case 1 - Accept Stock is offered"
+- runFlow:
+    when:
+      notVisible: "Accept Stock"
+    file: ../../fail.yaml
+    env:
+      MESSAGE: "${'Test Case 1 - Stock Receipt Details for ' + output.v.name + ' (' + output.txn.mrnLabel + ') offers no Accept Stock.'}"
+    label: "Test Case 1 - Accept Stock is offered"
+- runFlow:
+    when:
+      notVisible: "Reject"
+    file: ../../fail.yaml
+    env:
+      MESSAGE: "${'Test Case 1 - Stock Receipt Details for ' + output.v.name + ' (' + output.txn.mrnLabel + ') offers no Reject.'}"
+    label: "Test Case 1 - Reject is offered"
+- takeScreenshot: artifacts/stock-reject-details
+- evalScript: "${console.log('Test Case 1 PASSED - Stock Receipt Details for ' + output.v.name + ' (' + output.txn.mrnLabel + ', sender ' + output.txn.sender + ', quantity ' + output.variants.quantities[0] + ') offers Accept Stock and Reject')}"
+
+# --- Test Case 2 - Reject asks for confirmation ------------------------------------
+- runFlow: open-reject.yaml
+- runFlow:
+    when:
+      true: ${output.rej.open}
+    commands:
+      - evalScript: "${console.log('Test Case 2 PASSED - Reject on the ' + output.v.name + ' transaction (' + output.txn.mrnLabel + ') asks first: ' + output.rej.popupSummary)}"
+      # --- Test Case 3 - Cancel leaves the stock pending -------------------------
+      - runFlow: cancel-reject.yaml
+- runFlow:
+    when:
+      true: ${output.rej.pending}
+    commands:
+      - evalScript: ${output.rej.cancel = 'not run - Reject asked for no confirmation'}
+
+# --- Test Cases 4 and 5 - reject PRODUCT_VARIANT_1, then _2 (IRREVERSIBLE) ------------
+- runFlow:
+    file: reject-transaction.yaml
+    env:
+      INDEX: "0"
+      CHECK_EMPTY: "true"
+    label: "Step 1 - reject the first product variant"
+- runFlow:
+    file: reject-transaction.yaml
+    env:
+      INDEX: "1"
+      CHECK_EMPTY: "false"
+    label: "Step 2 - reject the second product variant"
+- evalScript: "${console.log('Test Case 5 PASSED - rejected ' + output.variants.rejected.join(' then ') + ' (' + output.rej.rejectedMrns.join(', ') + ')')}"
+
+# --- Test Case 6 - nothing was received --------------------------------------------
+- runFlow: final-check.yaml
+
+# --- Report; the soft checks fail the run here, all listed ------------------------
+- runScript:
+    file: reject.js
+    env:
+      ACTION: summary
+    label: "Log the execution report"
+- runFlow:
+    when:
+      true: ${output.rej.failure}
+    file: ../../fail.yaml
+    env:
+      MESSAGE: ${output.rej.failure}
+    label: "Stock rejection matches Prompt 15"

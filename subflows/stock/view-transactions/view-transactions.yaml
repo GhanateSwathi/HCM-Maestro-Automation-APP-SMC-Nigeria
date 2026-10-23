@@ -1,0 +1,102 @@
+appId: ${HCM_APP_ID}
+name: view-transactions
+---
+# Prompt 16 for one role - the specification's common/view_transactions.yaml.
+# Expects init.yaml to have run (test data, ROLE) and the home screen with
+# the stock records downloaded. Test Cases 1-6 in order; ends on home. Reads
+# only - nothing is submitted.
+#
+# The list shows the stock records on the device that the signed-in user
+# created (from the app's source), so after a fresh sign-in it holds what
+# Download Stock Data brought back: on 2026-10-23 the state user's two
+# dispatches to the health facility of 2026-10-19.
+
+# --- Test Case 1 - open View Transactions -------------------------------------------
+- runFlow: open-view-transactions.yaml
+
+# --- Test Case 2 - the list ----------------------------------------------------------
+- runFlow:
+    when:
+      notVisible: "MRN .*"
+    commands:
+      - setClipboard: "none"
+      - copyTextFrom:
+          text: "(?!Background service started$).+"
+          below: "View all stock transactions"
+          label: "Read the empty state"
+      - evalScript: ${output.vt.emptyText = maestro.copiedText}
+      - takeScreenshot: artifacts/view-txn-empty
+      - evalScript: "${console.log('Test Case 2 - no transactions listed for ' + output.vt.role + '; the screen shows: ' + output.vt.emptyText)}"
+- runFlow:
+    when:
+      visible: "MRN .*"
+    commands:
+      - runFlow: read-cards.yaml
+      - runFlow:
+          when:
+            true: ${output.vt.cards.length == 0}
+          commands:
+            - takeScreenshot: artifacts/view-txn-cards-unreadable
+            - runFlow:
+                file: ../../fail.yaml
+                env:
+                  MESSAGE: "${'Test Case 2 - View Transactions shows MRN tags for ' + output.vt.role + ', but no card with a product line could be read.'}"
+                label: "Test Case 2 - every card shows a product line"
+
+# --- Test Case 3 - the first card of each product variant's details -------------------
+- runFlow:
+    when:
+      true: ${output.vt.targets.length > 0}
+    commands:
+      - runFlow:
+          file: open-details.yaml
+          env:
+            INDEX: ${output.vt.targets[0]}
+- runFlow:
+    when:
+      true: ${output.vt.targets.length > 1}
+    commands:
+      - runFlow:
+          file: open-details.yaml
+          env:
+            INDEX: ${output.vt.targets[1]}
+
+# --- Test Case 4 - View QR --------------------------------------------------------------
+- runFlow: view-qr.yaml
+
+# --- Test Case 5 - the expected entries are listed --------------------------------------
+- runScript:
+    file: view-txn.js
+    env:
+      ACTION: expected
+    label: "Test Case 5 - look for the expected entries"
+
+# --- Test Case 6 - Back to Manage Stock -----------------------------------------------------
+- tapOn:
+    text: "Back"
+    below: "Open navigation menu"
+    label: "Test Case 6 - Back from View Transactions"
+- extendedWaitUntil:
+    visible: "Record Stock Receipt"
+    timeout: 15000
+    label: "Test Case 6 - Manage Stock is back"
+- assertVisible:
+    text: "Record Stock Issued"
+    label: "Test Case 6 - on Manage Stock"
+- evalScript: ${output.vt.back = 'Manage Stock'}
+- evalScript: ${console.log('Test Case 6 PASSED - Back from View Transactions returns to Manage Stock')}
+- runFlow: ../back-to-home.yaml
+
+# --- Report; missing expected entries fail the run here, all listed ------------------
+- runScript:
+    file: view-txn.js
+    env:
+      ACTION: summary
+    label: "Log the execution report"
+- runFlow:
+    when:
+      true: ${output.vt.failure}
+    file: ../../fail.yaml
+    env:
+      MESSAGE: ${output.vt.failure}
+    label: "The expected transactions are listed"

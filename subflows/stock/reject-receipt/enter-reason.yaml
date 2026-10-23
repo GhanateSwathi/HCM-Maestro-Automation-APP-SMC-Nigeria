@@ -1,0 +1,32 @@
+appId: ${HCM_APP_ID}
+name: reject-enter-reason
+---
+# With the reject popup up: type REJECT_REASON into its reason field
+# (output.rej.fieldPattern, read by open-reject.yaml) and close the keyboard.
+# The field sits between its label and the popup's buttons, which fences the
+# tap away from the keyboard's keys; focus is checked before typing so the
+# reason cannot land anywhere else.
+- tapOn:
+    below: ${output.rej.fieldPattern}
+    above: ${output.rej.confirmPattern}
+    label: "Focus the reason field"
+- assertVisible:
+    focused: true
+    below: ${output.rej.fieldPattern}
+    label: "The reason field has focus"
+- eraseText
+- inputText: ${output.rej.reason}
+- runFlow:
+    when:
+      visible:
+        id: "android:id/input_method_nav_back"
+    commands:
+      - tapOn:
+          id: "android:id/input_method_nav_back"
+          label: "Close the keyboard"
+      - waitForAnimationToEnd:
+          timeout: 2000
+- assertVisible:
+    text: ${output.rej.reasonPattern}
+    below: ${output.rej.fieldPattern}
+    label: "The reason field shows REJECT_REASON"

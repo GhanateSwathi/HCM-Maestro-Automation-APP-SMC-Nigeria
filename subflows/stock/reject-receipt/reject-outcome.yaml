@@ -1,0 +1,79 @@
+appId: ${HCM_APP_ID}
+name: reject-outcome
+---
+# Test Case 5's checks after Reject has acted on output.v's transaction
+# (output.rej.pending) and read-message.yaml has looked for the message: back
+# on Incoming Transactions, the transaction gone, the other variant untouched,
+# and a real MRN no longer listed. Ends on Incoming Transactions.
+#
+# Read off the app 2026-10-23 (state user, run 20261023-131008): Confirm
+# closed the popup and landed on Manage Stock, as Accept does. Home, the list
+# itself and a success screen are handled too: Back is pressed until one of
+# the three known screens shows, never on home (Back there leaves the app).
+
+# --- Back to Incoming Transactions -----------------------------------------------
+- extendedWaitUntil:
+    visible: "Record Stock Receipt|Incoming Transactions|Stock Balance"
+    timeout: 15000
+    optional: true
+    label: "The app moves on from the rejected transaction"
+- takeScreenshot: artifacts/stock-reject-${output.v.name}-after
+- repeat:
+    times: 3
+    while:
+      notVisible: "Record Stock Receipt|Incoming Transactions|Stock Balance"
+    label: "Back to a known screen"
+    commands:
+      - back
+      - waitForAnimationToEnd:
+          timeout: 2000
+- runFlow:
+    when:
+      visible: "Stock Balance"
+    file: ../open-incoming-transactions.yaml
+- runFlow:
+    when:
+      visible: "Record Stock Receipt"
+    commands:
+      - tapOn:
+          text: "Record Stock Receipt"
+          label: "Reopen Record Stock Receipt"
+- extendedWaitUntil:
+    visible: "Incoming Transactions"
+    timeout: 15000
+    label: "Incoming Transactions is back"
+- waitForAnimationToEnd:
+    timeout: 3000
+
+# --- Gone from the list, the other variant untouched ------------------------------
+- runFlow: count-all.yaml
+- runScript:
+    file: reject.js
+    env:
+      ACTION: rejected
+    label: "Record the rejected variant"
+- runFlow:
+    when:
+      true: ${output.rej.failure}
+    commands:
+      - takeScreenshot: artifacts/stock-reject-still-listed
+      - runFlow:
+          file: ../../fail.yaml
+          env:
+            MESSAGE: ${output.rej.failure}
+          label: "The transaction left the incoming list"
+# A real MRN names this transaction alone, so it must be gone.
+- runFlow:
+    when:
+      true: ${!output.txn.mrnMissing}
+    commands:
+      - runFlow:
+          when:
+            visible:
+              text: ${output.txn.labelPattern}
+          file: ../../fail.yaml
+          env:
+            MESSAGE: "${output.v.prefix + output.txn.mrnLabel + ' is still listed in Incoming Transactions after Reject.'}"
+          label: "The rejected MRN left the incoming list"
+- evalScript: ${output.rej.pending = false}
+- takeScreenshot: artifacts/stock-reject-${output.v.name}-list

@@ -1,0 +1,38 @@
+appId: ${HCM_APP_ID}
+name: "Stock - state stock user rejects an incoming stock receipt"
+tags:
+  - regression
+  - stock
+  - state-stock
+  - mhbase
+  - consumes-data
+---
+# Prompt 15 for the state user: the counterpart of Prompt 2 - Reject instead
+# of Accept Stock on Stock Receipt Details. Test Cases 1-6 in one session
+# (subflows/stock/reject-receipt/reject-receipt.yaml).
+#
+# Needs HCM_STATE_STOCK_USER_ID / HCM_STATE_STOCK_PASSWORD (AU-SAT-001 on the
+# mhbase tenant), PRODUCT_VARIANT_1 / _2 and REJECT_REASON, and an incoming
+# transaction for each variant - a fresh dispatch from National. Rejecting
+# consumes both; hence the consumes-data tag. A blocked run fails with a
+# reason starting "BLOCKED -" and never taps Reject.
+#
+# Run 2026-10-23 as AU-SAT-001 against National's two dispatches (SPAQ 1 900,
+# SPAQ 2 900): Test Cases 1-4 and SPAQ1's rejection in run 20261023-131008,
+# which then failed on an on-screen count (since replaced by count-all.yaml);
+# SPAQ2's rejection and Test Case 6 in the same session (20261023-132400),
+# passed. The fixed flow has not yet run end to end in one go.
+
+# Test data first, so a gap in .env fails before the device is touched.
+- runFlow:
+    file: ../../subflows/stock/reject-receipt/init.yaml
+    env:
+      ROLE: "State User"
+      PREREQUISITE: "the National dispatch"
+
+- runFlow: ../../subflows/home/state-stock.yaml
+
+# Fetch stock records - the incoming list stays empty without this.
+- runFlow: ../../subflows/stock/download-stock-data.yaml
+
+- runFlow: ../../subflows/stock/reject-receipt/reject-receipt.yaml

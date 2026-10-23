@@ -1,0 +1,31 @@
+appId: ${HCM_APP_ID}
+name: "Stock - health facility stock user views transactions"
+tags:
+  - regression
+  - stock
+  - hf-stock
+  - mhbase
+---
+# Prompt 16 for the health facility: Manage Stock -> View Transactions, Test
+# Cases 1-6 (subflows/stock/view-transactions/view-transactions.yaml). Reads
+# only.
+#
+# Needs HCM_HF_STOCK_USER_ID / HCM_HF_STOCK_PASSWORD (AU-HFS-001 on the
+# mhbase tenant) and PRODUCT_VARIANT_1 / _2; VIEW_TXN_EXPECTED_HF is
+# optional. The list shows the health facility's own records that Download
+# Stock Data brings to the device.
+
+# Test data first, so a gap in .env fails before the device is touched.
+- runFlow:
+    file: ../../subflows/stock/view-transactions/init.yaml
+    env:
+      ROLE: "Health Facility User"
+      EXPECTED: ${VIEW_TXN_EXPECTED_HF}
+
+# Sign in, choose the facility, home; the Manage Stock card is there.
+- runFlow: ../../subflows/home/hf-stock.yaml
+
+# The list is built from the records on the device.
+- runFlow: ../../subflows/stock/download-stock-data.yaml
+
+- runFlow: ../../subflows/stock/view-transactions/view-transactions.yaml

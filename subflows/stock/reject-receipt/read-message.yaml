@@ -1,0 +1,36 @@
+appId: ${HCM_APP_ID}
+name: reject-read-message
+---
+# Straight after Reject has acted on output.v's transaction (Confirm in the
+# popup, or a tap with no popup): look for a message about the rejection and
+# record it (reject.js ACTION=outcome; none is a DEVIATION).
+#
+# Read off the app 2026-10-23 (run 20261023-132400): a green "Stock rejected
+# successfully" banner at the foot of Manage Stock, gone after a few seconds.
+# So this runs at once, not after the popup has gone: in run 20261023-131008
+# the message was looked for 6 seconds after Confirm and missed. The
+# popup's own texts mention rejecting too - "Reject Confirmation", "Are you
+# sure you want to reject this stock?", "Reason for rejection *" (read
+# 2026-10-23) - so they are excluded while it closes, as is the bare
+# "Reject" button.
+- takeScreenshot: artifacts/stock-reject-${output.v.name}-confirmed
+- setClipboard: "none"
+- extendedWaitUntil:
+    visible: "(?!reject$)(?!reject confirmation$)(?!are you sure)(?!reason for rejection).*reject.*"
+    timeout: 8000
+    optional: true
+    label: "A message about the rejection"
+- runFlow:
+    when:
+      visible: "(?!reject$)(?!reject confirmation$)(?!are you sure)(?!reason for rejection).*reject.*"
+    commands:
+      - copyTextFrom:
+          text: "(?!reject$)(?!reject confirmation$)(?!are you sure)(?!reason for rejection).*reject.*"
+          label: "Read the message"
+      - takeScreenshot: artifacts/stock-rejected-${output.v.name}
+- runScript:
+    file: reject.js
+    env:
+      ACTION: outcome
+    label: "Record the message"
+- takeScreenshot: artifacts/stock-reject-${output.v.name}-after-message

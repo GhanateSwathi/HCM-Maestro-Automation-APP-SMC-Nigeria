@@ -1,0 +1,159 @@
+appId: ${HCM_APP_ID}
+name: reject-count-all
+---
+# On Incoming Transactions: count every card per product variant into
+# output.variants.counts, scrolling to the end of the list, then back to the
+# top so the first cards are on screen for open-transaction.yaml.
+#
+# Why not accept-receipt/count-transactions.yaml: it counts the cards on
+# screen, and three fit on the Pixel 9 Pro XL. On 2026-10-23 the state user's
+# list held four (run 20261023-131008); rejecting the first SPAQ1 card
+# brought the fourth - another SPAQ1 - into view, so the on-screen count
+# stayed 1 and a rejection that had worked read as "still listed". Here each
+# card is keyed by its MRN label - unique in the list at any one time,
+# placeholders ("MRN null_0") included - so a card seen at two scroll
+# positions counts once. A card counts for a variant when its product line
+# sits between its MRN label and the next card's.
+- scrollUntilVisible:
+    element:
+      text: "View and accept incoming stock transactions"
+    direction: UP
+    timeout: 10000
+    optional: true
+    label: "Count - top of the list"
+- runScript:
+    file: reject.js
+    env:
+      ACTION: countStart
+    label: "Count - start"
+- repeat:
+    times: 6
+    while:
+      true: ${!output.cnt.done}
+    label: "Count - each scroll position"
+    commands:
+      - evalScript: ${output.cnt.k = 0}
+      - repeat:
+          times: 8
+          while:
+            visible:
+              text: "MRN .*"
+              index: ${output.cnt.k}
+          label: "Count - each card on screen"
+          commands:
+            - copyTextFrom:
+                text: "MRN .*"
+                index: ${output.cnt.k}
+                label: "Count - this card's MRN label"
+            - runScript:
+                file: reject.js
+                env:
+                  ACTION: countHere
+            - runFlow:
+                when:
+                  visible:
+                    text: "MRN .*"
+                    index: ${output.cnt.k + 1}
+                commands:
+                  - copyTextFrom:
+                      text: "MRN .*"
+                      index: ${output.cnt.k + 1}
+                      label: "Count - the next card's MRN label"
+                  - runScript:
+                      file: reject.js
+                      env:
+                        ACTION: countNext
+            # Variant 1 in this card?
+            - runFlow:
+                when:
+                  true: ${output.cnt.next != ''}
+                commands:
+                  - runFlow:
+                      when:
+                        visible:
+                          text: ${output.variants.lines[0]}
+                          below:
+                            text: ${output.cnt.here}
+                          above:
+                            text: ${output.cnt.next}
+                      commands:
+                        - runScript:
+                            file: reject.js
+                            env:
+                              ACTION: countMark
+                              INDEX: "0"
+            - runFlow:
+                when:
+                  true: ${output.cnt.next == ''}
+                commands:
+                  - runFlow:
+                      when:
+                        visible:
+                          text: ${output.variants.lines[0]}
+                          below:
+                            text: ${output.cnt.here}
+                      commands:
+                        - runScript:
+                            file: reject.js
+                            env:
+                              ACTION: countMark
+                              INDEX: "0"
+            # Variant 2 in this card?
+            - runFlow:
+                when:
+                  true: ${output.cnt.next != ''}
+                commands:
+                  - runFlow:
+                      when:
+                        visible:
+                          text: ${output.variants.lines[1]}
+                          below:
+                            text: ${output.cnt.here}
+                          above:
+                            text: ${output.cnt.next}
+                      commands:
+                        - runScript:
+                            file: reject.js
+                            env:
+                              ACTION: countMark
+                              INDEX: "1"
+            - runFlow:
+                when:
+                  true: ${output.cnt.next == ''}
+                commands:
+                  - runFlow:
+                      when:
+                        visible:
+                          text: ${output.variants.lines[1]}
+                          below:
+                            text: ${output.cnt.here}
+                      commands:
+                        - runScript:
+                            file: reject.js
+                            env:
+                              ACTION: countMark
+                              INDEX: "1"
+            - evalScript: ${output.cnt.k = output.cnt.k + 1}
+      - runScript:
+          file: reject.js
+          env:
+            ACTION: countPage
+      - runFlow:
+          when:
+            true: ${!output.cnt.done}
+          commands:
+            - scroll
+            - waitForAnimationToEnd:
+                timeout: 2000
+- runScript:
+    file: reject.js
+    env:
+      ACTION: countEnd
+    label: "Count - the totals"
+- scrollUntilVisible:
+    element:
+      text: "View and accept incoming stock transactions"
+    direction: UP
+    timeout: 10000
+    optional: true
+    label: "Count - back to the top of the list"

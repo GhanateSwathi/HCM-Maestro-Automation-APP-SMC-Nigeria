@@ -1,0 +1,53 @@
+appId: ${HCM_APP_ID}
+name: reject-cancel
+---
+# Test Case 3 - Cancel leaves the stock pending. Expects the reject popup up
+# for PRODUCT_VARIANT_1's transaction (open-reject.yaml). Runs before anything
+# is rejected, so the cancel path is proven before anything is consumed. Ends
+# on Incoming Transactions with both variants' counts unchanged.
+- tapOn:
+    text: "Cancel"
+    label: "Test Case 3 - tap Cancel"
+# output.rej.closeCheck is on screen until Cancel, so this cannot pass early.
+- extendedWaitUntil:
+    notVisible: ${output.rej.closeCheck}
+    timeout: 10000
+    label: "Test Case 3 - popup dismissed"
+- evalScript: ${output.rej.open = false}
+- assertVisible:
+    text: "Stock Receipt Details"
+    index: 0
+    label: "Test Case 3 - still on Stock Receipt Details"
+- assertVisible:
+    text: ${output.v.resource}
+    rightOf: "Resource"
+    above: "Material issue number"
+    label: "Test Case 3 - still the same product"
+- assertVisible:
+    text: "Accept Stock"
+    label: "Test Case 3 - Accept Stock still offered"
+- assertVisible:
+    text: "Reject"
+    label: "Test Case 3 - Reject still offered, so the stock was not rejected"
+- takeScreenshot: artifacts/stock-reject-cancelled
+
+- tapOn:
+    text: "Back"
+    label: "Test Case 3 - back to Incoming Transactions"
+- extendedWaitUntil:
+    visible: "Incoming Transactions"
+    timeout: 15000
+    label: "Test Case 3 - Incoming Transactions is back"
+- waitForAnimationToEnd:
+    timeout: 3000
+- runFlow: count-all.yaml
+- evalScript: "${output.rej.failure = (output.variants.counts[0] == output.variants.countsBefore[0] && output.variants.counts[1] == output.variants.countsBefore[1]) ? '' : 'Test Case 3 - the incoming list changed after Cancel: ' + output.variants.names[0] + ' ' + output.variants.countsBefore[0] + ' -> ' + output.variants.counts[0] + ', ' + output.variants.names[1] + ' ' + output.variants.countsBefore[1] + ' -> ' + output.variants.counts[1] + '.'}"
+- runFlow:
+    when:
+      true: ${output.rej.failure}
+    file: ../../fail.yaml
+    env:
+      MESSAGE: ${output.rej.failure}
+    label: "Test Case 3 - neither product variant rejected"
+- evalScript: ${output.rej.cancel = 'popup closed, still on Stock Receipt Details, ' + output.variants.names.join(' and ') + ' all still listed'}
+- evalScript: ${console.log('Test Case 3 PASSED - Cancel returned to Stock Receipt Details; stock not rejected. ' + output.variants.names.join(' and ') + ' transactions all still listed')}

@@ -1,0 +1,30 @@
+appId: ${HCM_APP_ID}
+name: "Stock - state stock user views transactions"
+tags:
+  - regression
+  - stock
+  - state-stock
+  - mhbase
+---
+# Prompt 16 for the state user: Manage Stock -> View Transactions, Test Cases
+# 1-6 (subflows/stock/view-transactions/view-transactions.yaml). Reads only.
+#
+# Needs HCM_STATE_STOCK_USER_ID / HCM_STATE_STOCK_PASSWORD (AU-SAT-001 on the
+# mhbase tenant) and PRODUCT_VARIANT_1 / _2; VIEW_TXN_EXPECTED_STATE is
+# optional. The list shows the state user's own records that Download Stock
+# Data brings to the device - on 2026-10-23, the two dispatches to the health
+# facility of 2026-10-19 (SPAQ 1: 490, SPAQ 2: 490).
+
+# Test data first, so a gap in .env fails before the device is touched.
+- runFlow:
+    file: ../../subflows/stock/view-transactions/init.yaml
+    env:
+      ROLE: "State User"
+      EXPECTED: ${VIEW_TXN_EXPECTED_STATE}
+
+- runFlow: ../../subflows/home/state-stock.yaml
+
+# The list is built from the records on the device.
+- runFlow: ../../subflows/stock/download-stock-data.yaml
+
+- runFlow: ../../subflows/stock/view-transactions/view-transactions.yaml

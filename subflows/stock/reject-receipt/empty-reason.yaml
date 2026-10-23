@@ -1,0 +1,50 @@
+appId: ${HCM_APP_ID}
+name: reject-empty-reason
+---
+# Test Case 4 - with the reject popup up and its reason field marked
+# mandatory: Confirm with the field empty must be refused, the popup staying
+# up. Run only for a field marked mandatory (reject-transaction.yaml): with an
+# optional one this Confirm would reject the stock without a reason, so that
+# case is a DEVIATION logged by reject.js and never tried.
+#
+# From the app's source (2026-10-23): a mandatory field left empty shows
+# "<label> is required" under it and the popup stays. If the Confirm goes
+# through instead, the stock is rejected (IRREVERSIBLE); that is logged as a
+# DEVIATION and the run goes on to check the rejection.
+- tapOn:
+    text: ${output.rej.confirmPattern}
+    label: "Test Case 4 - Confirm with the reason empty (must be refused)"
+- setClipboard: "none"
+- extendedWaitUntil:
+    visible: ".*is required.*"
+    timeout: 5000
+    optional: true
+    label: "Test Case 4 - the empty reason is refused"
+- runFlow:
+    when:
+      visible: ".*is required.*"
+    commands:
+      - copyTextFrom:
+          text: ".*is required.*"
+          label: "Read the error"
+- takeScreenshot: artifacts/stock-reject-empty-reason
+- runFlow:
+    when:
+      visible: ${output.rej.closeCheck}
+    commands:
+      - runScript:
+          file: reject.js
+          env:
+            ACTION: empty
+            REFUSED: "yes"
+          label: "Test Case 4 - refused"
+- runFlow:
+    when:
+      notVisible: ${output.rej.closeCheck}
+    commands:
+      - runScript:
+          file: reject.js
+          env:
+            ACTION: empty
+            REFUSED: "no"
+          label: "Test Case 4 - went through"

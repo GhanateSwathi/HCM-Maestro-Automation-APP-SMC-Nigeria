@@ -1,0 +1,55 @@
+appId: ${HCM_APP_ID}
+name: view-txn-card-field
+---
+# Inside the card being read - from its MRN tag (output.vt.scan.here) down to
+# the next card's (output.vt.scan.next) - copy the element matching TEXT, if
+# there is one, and hand it to view-txn.js as ACTION (with INDEX). The last
+# card on screen has no next card, so it is fenced from above only; nothing
+# of a later card is on screen then.
+- setClipboard: "none"
+- runFlow:
+    when:
+      true: ${output.vt.scan.next != ''}
+    commands:
+      - runFlow:
+          when:
+            visible:
+              text: ${TEXT}
+              below:
+                text: ${output.vt.scan.here}
+              above:
+                text: ${output.vt.scan.next}
+          commands:
+            - copyTextFrom:
+                text: ${TEXT}
+                below:
+                  text: ${output.vt.scan.here}
+                above:
+                  text: ${output.vt.scan.next}
+                label: "Read this part of the card"
+            - runScript:
+                file: view-txn.js
+                env:
+                  ACTION: ${ACTION}
+                  INDEX: ${INDEX}
+- runFlow:
+    when:
+      true: ${output.vt.scan.next == ''}
+    commands:
+      - runFlow:
+          when:
+            visible:
+              text: ${TEXT}
+              below:
+                text: ${output.vt.scan.here}
+          commands:
+            - copyTextFrom:
+                text: ${TEXT}
+                below:
+                  text: ${output.vt.scan.here}
+                label: "Read this part of the card"
+            - runScript:
+                file: view-txn.js
+                env:
+                  ACTION: ${ACTION}
+                  INDEX: ${INDEX}

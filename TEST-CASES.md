@@ -15,20 +15,22 @@ were taken from.
 | --- | :-: | :-: | --- |
 | Login | 6 | 6 | National stock sign-in, wrong-credential rejection, password show/hide toggle |
 | Post-login onboarding | 4 | 4 | Choosing a configured facility, already-selected boundaries |
-| Stock — Manage Stock | 6 | 6 | Reject, View Transactions |
+| Stock — Manage Stock | 6 | 6 | (Reject and View Transactions: their own sections) |
 | Stock — Dispatch to a health facility | 4 | 4 | Transport Type, Scan Resource; receiving and dispatching in one session (see DSP-04) |
 | Stock — Return to National | 3 | 3 | Return validation (0, above balance); one-session receive → dispatch → return |
-| Stock — Health facility accepts the dispatch | 6 | 6 | Reject; choosing a named facility |
+| Stock — Health facility accepts the dispatch | 6 | 6 | Choosing a named facility (Reject: see Stock — Reject) |
 | Stock — Health facility dispatches to a CDD | 4 | 4 | Scanning from the gallery (the app has none); a wrong CDD's QR |
 | Stock — Health facility returns to the state | 3 | 3 | Return validation (0, above balance) |
 | Stock — Reconciliation (state user, health facility) | 4 | 4 | REC-03/04 fail by design against this build (see the section) |
 | Stock — View Reports (state user, health facility) | 5 | 5 | VR-02–05 fail against fresh sessions (reports are device-local); recipient columns not shown |
+| Stock — Reject a receipt (state user, health facility, CDD) | 6 | 6 | Passed for the state user 2026-10-23 (in two runs, one session); health facility and CDD not run - each needs a fresh dispatch of both variants. The sender's balance coming back; View Reports after a rejection |
+| Stock — View Transactions (state user, health facility, CDD) | 6 | 6 | Passed for the state user 2026-10-23 in session; the committed flows' end-to-end runs for all three roles were in progress at commit. What the QR encodes; transactions with more than one product |
 | Beneficiary Referral (health facility) | 7 | 7 | Scan Beneficiary; Referred by (CDD team code); opening a listed referral; mandatory-field validation; referral ID (the app shows none) |
 | Registration & Delivery (CDD) | 16 | 16 | The mobile-number bounds (never run - no test number); Unable To Deliver, Redose, Near by households, Search by ID, Mark Closed Household. REG-01, 02, 08, 09, 13 (and REG-07's save) were done in session by hand, not yet as written; the full flow has not run end to end (see the section) |
 | Registration — consent No (CDD) | 7 | 7 | Done in session by hand 2026-10-22; the flow has not run as written. Reasons other than free text; a refused household found other than by name |
 | Registration — Unable to Deliver (CDD) | 9 | 9 | Comment on Unable to Deliver (optional, left empty); a 20-member household fully registered; UTD-09's sync not run (expired sign-in) |
 | Registration — dose and redose (CDD) | 10 | 10 | Redose reason Others; a redose's time window; RDS-10's sync not run (expired sign-in) |
-| **Total** | **94** | **94** | |
+| **Total** | **106** | **106** | |
 
 Status key: **Automated** — a flow asserts it. **Partial** — the flow performs
 the step but asserts nothing about it. **Blocked** — a flow exists but cannot
@@ -354,8 +356,9 @@ issue number `--`.
   `FAC_F-2026-10-15-137945`; one SPAQ 2 transaction was left for later.
 
 ### Not yet covered
-- **Reject** on Stock Receipt Details, and the Waybill / Batch / Comment
-  fields — left empty when accepting.
+- **Reject** on Stock Receipt Details — now its own section,
+  [Stock — Reject a receipt](#stock--reject-a-receipt-state-user-health-facility-cdd).
+- The Waybill / Batch / Comment fields — left empty when accepting.
 - **Lists longer than a screen.** Only the cards on screen are read; three fit
   on the Pixel 9 Pro XL.
 
@@ -906,6 +909,243 @@ reports in the session that made the transactions.
 - **Notes:** The reconciliation table's columns have not been seen — it was
   empty every time — so an entry is looked for as its product and count
   anywhere in a row. Check the columns once it shows rows.
+
+---
+
+## Stock — Reject a receipt (state user, health facility, CDD)
+
+[Prompt 15](prompts/prompt-15-stock-reject.md): one shared subflow,
+[`reject-receipt.yaml`](subflows/stock/reject-receipt/reject-receipt.yaml),
+run per receiving role by
+[`flows/stock/state-stock-reject-receipt.yaml`](flows/stock/state-stock-reject-receipt.yaml),
+[`flows/stock/hf-stock-reject-receipt.yaml`](flows/stock/hf-stock-reject-receipt.yaml)
+and
+[`flows/stock/cdd-stock-reject-receipt.yaml`](flows/stock/cdd-stock-reject-receipt.yaml)
+· `regression`, `stock`, `state-stock` / `hf-stock` / `cdd`, `mhbase`,
+`consumes-data`. The counterpart of accepting (STK-04–06, HFR-03–05, REG-12):
+the same Incoming Transactions and Stock Receipt Details, but Reject. Test
+data from `.env`: `PRODUCT_VARIANT_1` / `_2`, `REJECT_REASON`.
+
+**How it was run.** On 2026-10-23 as the state user (AU-SAT-001), against
+National's two fresh dispatches of that morning — `SPAQ 1: 900` and
+`SPAQ 2: 900`, both from `FAC_F-2026-10-15-137945` with placeholder MRNs
+(`MRN null_0`, `MRN null_1`). The list also held the health facility's two
+returns of 2026-10-19 (`5318-E7D9-B9D7` SPAQ 2 5, `547C-3366-330E` SPAQ 1 5),
+which were left alone. Run `20261023-131008` (7 min 23 s with sign-in)
+passed Test Cases 1–4 and rejected SPAQ1, then failed on the flow's own
+count: it counted only the three cards on screen, and the rejection brought
+the fourth (another SPAQ1) into view. The count now walks the whole list
+([`count-all.yaml`](subflows/stock/reject-receipt/count-all.yaml)), and the
+message is looked for straight after Confirm (the first run looked 6 s late
+and missed the banner). In the same session, `20261023-132400` (4 min 38 s)
+rejected SPAQ2 and passed Test Case 6; Sync Data then reported
+`No Data available for sync`. The fixed flow has not yet run end to end in
+one go. **The health facility and the CDD have not been run:** each needs a
+fresh, unaccepted dispatch of both variants — from the state (as Prompt 3)
+and from the health facility (as Prompt 6). Every run rejects both.
+
+**What the app does** — read off the app as AU-SAT-001, 2026-10-23: Reject
+raises `Reject Confirmation` / `Are you sure you want to reject this stock?`
+with a text area `Reason for rejection *`, then `Confirm` and `Cancel`.
+Confirm lands on Manage Stock with a green `Stock rejected successfully`
+banner that lasts a few seconds; the transaction leaves Incoming
+Transactions, and the balance does not change. From the app's source
+(egovernments/health-campaign-field-worker-app, main, read 2026-10-23): the
+tenant's config decides whether Reject asks first, so the flow also handles
+a build without the popup; a rejected dispatch is marked `REJECTED`, and the
+sender's balance gets the quantity back when the sender next downloads stock
+— not checked here. **QA to confirm** the wording as intended.
+
+The popup, reason field and message are soft checks: each difference is
+logged as `DEVIATION - …` and the run fails at the end listing them
+(`Stock rejection for <role> differs from Prompt 15: …`). A transaction left
+listed, a list that changes after Cancel, or a balance that moves fails at
+once.
+
+### RJT-01 — Stock Receipt Details offers Reject (Test Case 1)
+- **Status:** Automated — the flows above. State user passed 2026-10-23
+  (`20261023-131008`): `SPAQ 1: 900`, `MRN null_0` (details `--`), sender
+  `FAC_F-2026-10-15-137945`, quantity 900. Health facility, CDD: not run.
+- **Preconditions:** Download Stock Data run; at least one incoming
+  transaction for each variant, else
+  `BLOCKED - Test Cases 1 to 6: No incoming transactions for <role>; <prerequisite> not received.`
+  or `BLOCKED - Test Cases 1 to 6: Expected product variants SPAQ1 and SPAQ2; found <…>.`
+  — nothing is rejected.
+- **Steps:** Home balances read; Record Stock Receipt; the first `SPAQ1`
+  transaction → `Select`.
+- **Expected:** Stock Receipt Details shows the card's product, MRN, sender
+  and quantity (as STK-04), and offers both `Accept Stock` and `Reject`.
+
+### RJT-02 — Reject asks for confirmation (Test Case 2)
+- **Status:** Automated. State user passed 2026-10-23 (`20261023-131008`,
+  and again for SPAQ2 in `-132400`). Health facility, CDD: not run.
+- **Steps:** Tap `Reject`.
+- **Expected:** `Reject Confirmation` / `Are you sure you want to reject this
+  stock?`, a `Reason for rejection *` text area, `Confirm` and `Cancel`; its
+  title, buttons and reason field are logged.
+- **Notes:** No popup within 10 s is a DEVIATION, and the tap has then
+  already rejected the `SPAQ1` transaction: RJT-03 and RJT-04 cannot run, and
+  the run goes straight to RJT-05's checks for it.
+
+### RJT-03 — Cancel leaves the stock pending (Test Case 3)
+- **Status:** Automated. State user passed 2026-10-23 (`20261023-131008`).
+  Health facility, CDD: not run.
+- **Steps:** In the popup, `Cancel`; then `Back`.
+- **Expected:** The popup closes; Stock Receipt Details is still up for the
+  same product with `Accept Stock` and `Reject` offered; back on the list,
+  both variants still have every transaction they had, else
+  `Test Case 3 - the incoming list changed after Cancel: …`.
+
+### RJT-04 — A reason is required (Test Case 4)
+- **Status:** Automated. State user passed 2026-10-23 (`20261023-131008`):
+  Confirm with the reason empty showed `Reason for Rejection is required` and
+  the popup stayed up. Health facility, CDD: not run.
+- **Expected (QA to confirm):** The popup's reason field is marked
+  mandatory, and Confirm with it empty is refused (`<label> is required`),
+  the popup staying up.
+- **Notes:** Soft check. No field, or one not marked mandatory, is a
+  DEVIATION, and Confirm with it empty is then never tried — it would reject
+  without a reason. A mandatory field whose empty Confirm goes through is a
+  DEVIATION, and that transaction is rejected without a reason.
+
+### RJT-05 — Reject SPAQ1, then SPAQ2 (Test Case 5)
+- **Status:** Automated. State user passed 2026-10-23: SPAQ1 `SPAQ 1: 900`
+  rejected in `20261023-131008` (gone from the list; the run's on-screen
+  count misread it, since fixed), SPAQ2 `SPAQ 2: 900` in `-132400` —
+  `Stock rejected successfully`, SPAQ2 2 → 1 listed, SPAQ1 untouched. Both
+  carried `Automation test - stock rejected`. Health facility, CDD: not run.
+- **Steps:** For each variant: its first transaction → `Reject` →
+  `REJECT_REASON` in the reason field → confirm.
+- **Expected:** A message about the rejection (none is a DEVIATION); back on
+  Incoming Transactions the transaction and a real MRN are gone and the other
+  variant is untouched until its turn, else
+  `the SPAQ1 transaction is still listed after Reject (…)`. A failure on the
+  second reads `Partial rejection: SPAQ1 rejected, SPAQ2 failed – <reason>`.
+- **Notes:** **Irreversible** — consumes one dispatch per variant. Confirm
+  lands on Manage Stock; the flow also handles the list, a success screen
+  and home. The incoming list is counted whole, scrolling to its end: the
+  accept flows count only the cards on screen (three fit).
+
+### RJT-06 — Nothing was received (Test Case 6)
+- **Status:** Automated. State user passed 2026-10-23 (`20261023-132400`):
+  `0 SPAQ 1` / `0 SPAQ 2` before and after; after Download Stock Data the
+  list held only the health facility's two returns. Both rejected
+  transactions had placeholder MRNs, so the "not listed again" check had no
+  MRN to look for. Health facility, CDD: not run.
+- **Steps:** Home; read both balances; Download Stock Data; Record Stock
+  Receipt.
+- **Expected:** Each Stock Balance unchanged, else
+  `Test Case 6 - stock was rejected, but the balance changed: …`; the
+  rejected MRNs not listed again. The flow ends by logging the execution
+  report.
+
+### Not yet covered
+- **The sender's balance coming back.** It happens on the sender's device
+  when the sender downloads stock, so it needs the sender's session; check it
+  by hand until a flow chains both roles.
+- **View Reports after a rejection.**
+
+---
+
+## Stock — View Transactions (state user, health facility, CDD)
+
+[Prompt 16](prompts/prompt-16-view-transactions.md): one shared subflow,
+[`view-transactions.yaml`](subflows/stock/view-transactions/view-transactions.yaml),
+run per role by
+[`flows/stock/state-stock-view-transactions.yaml`](flows/stock/state-stock-view-transactions.yaml),
+[`flows/stock/hf-stock-view-transactions.yaml`](flows/stock/hf-stock-view-transactions.yaml)
+and
+[`flows/stock/cdd-stock-view-transactions.yaml`](flows/stock/cdd-stock-view-transactions.yaml)
+· `regression`, `stock`, `state-stock` / `hf-stock` / `cdd`, `mhbase`.
+**Reads only.** Test data from `.env`: `PRODUCT_VARIANT_1` / `_2`, optional
+`VIEW_TXN_EXPECTED_STATE` / `_HF` / `_CDD`.
+
+**The screen** — read off the app as AU-SAT-001, 2026-10-23: Manage Stock's
+foot offers `View Transactions`, which opens `View Transactions` / `View all
+stock transactions`. One card per MRN: an `MRN <mrn>` tag and the date
+(`19 Oct 2026`), `Receiver` over the party's id, `View QR` (dispatches), the
+product line (`SPAQ 2: 490`) and `Select Transaction`. From the app's
+source, it lists the stock records **the signed-in user created** on the
+device, rejected ones left out — so after a fresh sign-in it holds what
+Download Stock Data brought back. Select Transaction opens `Stock Receipt
+Details`: Resource, Transaction Type, Transaction reason, Sender, MRN number,
+Waybill number, Batch number, Quantity received, Comment. View QR opens a
+`QR Code` popup with the QR image and a text-less close X.
+
+**How it was run.** The screens were read off the app as the state user on
+2026-10-23 (read only), then the shared subflow ran as written in that
+session (`20261023-135912`, 2 min 55 s): all six cases passed, with
+`VIEW_TXN_EXPECTED_STATE` = `SPAQ1 490,SPAQ2 490`. The committed flows —
+sign-in, Download Stock Data, the subflow — for all three roles were running
+when this was committed; their results follow.
+
+**Points for QA** (logged as `NOTE - …`; the flows pass on them):
+1. The details screen is titled `Stock Receipt Details` and labels the
+   quantity `Quantity received` for a dispatched transaction too, and shows
+   the Sender but no Receiver.
+2. Back from a transaction's details returns to Manage Stock, not to View
+   Transactions (as the app's source configures it).
+3. The state user's two dispatches of 2026-10-19 show as `MRN 8407-93EF-C911`
+   (SPAQ 1: 490) and `MRN A4ED-AAB3-1B81` (SPAQ 2: 490) — same date,
+   receiver and quantities as DSP-04's dispatches, which were recorded as
+   `67E0-282C-1890` and `9D99-BB3A-DAEC`. From the app's source, accepting
+   stock writes a new MRN, so the health facility's acceptance (HFR-05) may
+   have renumbered them. Hence `VIEW_TXN_EXPECTED_*` entries take an MRN
+   only optionally.
+
+### VTX-01 — Manage Stock offers View Transactions, and it opens (Test Case 1)
+- **Status:** Automated — the flows above. State user passed 2026-10-23
+  (`20261023-135912`, in session).
+- **Expected:** `View Transactions` on Manage Stock (with `Record Stock
+  Receipt`); it opens `View Transactions` / `View all stock transactions`;
+  the list or its empty state loads.
+
+### VTX-02 — The transaction list (Test Case 2)
+- **Status:** Automated. State user passed 2026-10-23: 2 cards —
+  `MRN A4ED-AAB3-1B81 | 19 Oct 2026 | Receiver FAC_F-2026-10-15-137947 | SPAQ 2: 490 | View QR`
+  and `MRN 8407-93EF-C911 | … | SPAQ 1: 490 | View QR`.
+- **Expected:** Every card read — MRN, date, Receiver or Sender with the id,
+  product lines, View QR — scrolling to the end of the list; each has an MRN
+  and a product line, else
+  `Test Case 2 - View Transactions shows MRN tags for <role>, but no card with a product line could be read.`
+  No cards: the empty state's text is logged. **QA to confirm** the
+  empty-state wording (not seen yet).
+
+### VTX-03 — Transaction details match the card (Test Case 3)
+- **Status:** Automated. State user passed 2026-10-23: both cards — MRN,
+  resource and quantity matched; Transaction Type `Dispatched`, Sender
+  `FAC_F-2026-10-15-137946`.
+- **Expected:** For the first card of each variant, its own `Select
+  Transaction` → details whose MRN number, Resource and quantity match the
+  card, else
+  `Test Case 3 - transaction details mismatch for <MRN>: <field> shows <value>, the card shows <value>.`
+  Back → Manage Stock → View Transactions reopened (Point for QA 2).
+- **Notes:** Each value is read right of its label and fenced between the
+  rows around it; the MRN below the Sender row, whose id wraps onto two
+  lines.
+
+### VTX-04 — View QR (Test Case 4)
+- **Status:** Automated. State user passed 2026-10-23: `QR Code` popup with
+  the QR image for `MRN A4ED-AAB3-1B81`, closed back to the list.
+- **Expected:** The first card offering `View QR` opens the `QR Code` popup
+  with a QR image; it closes and the list is still up. Not applicable when no
+  card offers View QR.
+- **Notes:** Closed with Back: the popup's X has no text and could only be
+  fenced against the status bar. What the QR encodes is not checked.
+
+### VTX-05 — Expected transactions are listed (Test Case 5)
+- **Status:** Automated. State user passed 2026-10-23: `SPAQ1 490`,
+  `SPAQ2 490` both found.
+- **Expected:** Each `VIEW_TXN_EXPECTED_<role>` entry matches a card by
+  product and quantity (and MRN, when given), else, at the end,
+  `Test Case 5 - View Transactions is missing <entries> for <role>.`
+  Blank: nothing expected.
+
+### VTX-06 — Back to Manage Stock (Test Case 6)
+- **Status:** Automated. State user passed 2026-10-23.
+- **Expected:** `Back` on View Transactions → Manage Stock (`Record Stock
+  Receipt`, `Record Stock Issued`). The flow ends on home with the execution
+  report.
 
 ---
 

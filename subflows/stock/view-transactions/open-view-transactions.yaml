@@ -1,0 +1,77 @@
+appId: ${HCM_APP_ID}
+name: view-txn-open
+---
+# Test Case 1 - from the home screen: the Manage Stock card (scrolled to if
+# needed) -> Manage Stock, whose foot offers View Transactions -> View
+# Transactions, and its list loaded. Ends on View Transactions.
+#
+# Read off the app as AU-SAT-001, 2026-10-23: Manage Stock lists Record
+# Stock Receipt and Record Stock Issued over a "View Transactions" button;
+# it opens "View Transactions" / "View all stock transactions". The title and
+# the button share their text, so the subtitle tells the screens apart.
+- runFlow:
+    when:
+      notVisible: "Manage Stock"
+    commands:
+      - scrollUntilVisible:
+          element: "Manage Stock"
+          direction: DOWN
+          timeout: 10000
+          optional: true
+          label: "Scroll down looking for the Manage Stock card"
+- runFlow:
+    when:
+      notVisible: "Manage Stock"
+    commands:
+      - takeScreenshot: artifacts/view-txn-manage-stock-missing
+      - runFlow:
+          file: ../../fail.yaml
+          env:
+            MESSAGE: "${'Test Case 1 - Manage Stock card not displayed on home screen for ' + output.vt.role + '.'}"
+          label: "Manage Stock card is displayed"
+- tapOn:
+    text: "Manage Stock"
+    label: "Open Manage Stock"
+- extendedWaitUntil:
+    visible: "View Transactions"
+    timeout: 30000
+    optional: true
+    label: "Test Case 1 - Manage Stock offers View Transactions"
+- runFlow:
+    when:
+      notVisible: "View Transactions"
+    commands:
+      - takeScreenshot: artifacts/view-txn-button-missing
+      - runFlow:
+          file: ../../fail.yaml
+          env:
+            MESSAGE: "${'Test Case 1 - Manage Stock offers no View Transactions for ' + output.vt.role + '.'}"
+          label: "Manage Stock offers View Transactions"
+- assertVisible:
+    text: "Record Stock Receipt"
+    label: "Test Case 1 - on Manage Stock"
+- tapOn:
+    text: "View Transactions"
+    label: "Open View Transactions"
+- extendedWaitUntil:
+    visible: "View all stock transactions"
+    timeout: 30000
+    label: "Test Case 1 - View Transactions opens"
+- assertVisible:
+    text: "View Transactions"
+    above: "View all stock transactions"
+    label: "Test Case 1 - titled View Transactions"
+# The list is built from records already on the device, so it paints with
+# the screen; the wait covers a slower device. A "Background service
+# started" banner can still be up and is left out.
+- extendedWaitUntil:
+    visible:
+      text: "(?!Background service started$).+"
+      below: "View all stock transactions"
+    timeout: 30000
+    optional: true
+    label: "The list, or its empty state, is shown"
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: artifacts/view-txn-list
+- evalScript: ${console.log('Test Case 1 PASSED - Manage Stock offers View Transactions; it opens View Transactions / View all stock transactions')}

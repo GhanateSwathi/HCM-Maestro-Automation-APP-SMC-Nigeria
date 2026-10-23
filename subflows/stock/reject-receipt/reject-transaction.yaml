@@ -1,0 +1,62 @@
+appId: ${HCM_APP_ID}
+name: reject-transaction
+---
+# Test Case 5 for product variant INDEX (0 or 1) - and Test Case 4 when
+# CHECK_EMPTY is "true": reject the variant's first incoming transaction.
+# Starts and ends on Incoming Transactions. IRREVERSIBLE: the transaction is
+# rejected.
+#
+# Normally opens the transaction and taps Reject here. When the caller's own
+# Reject tap raised no popup (output.rej.pending), that tap has already acted,
+# so this goes straight to checking the outcome.
+- runFlow:
+    when:
+      true: ${!output.rej.pending}
+    commands:
+      - runFlow:
+          file: ../accept-receipt/open-transaction.yaml
+          env:
+            INDEX: ${INDEX}
+      - runFlow: open-reject.yaml
+
+# Test Case 4 - only once, and only for a field marked mandatory.
+- runFlow:
+    when:
+      true: ${output.rej.open && CHECK_EMPTY == 'true' && output.rej.field == 'mandatory'}
+    file: empty-reason.yaml
+
+# The reason, then Confirm.
+- runFlow:
+    when:
+      true: ${output.rej.open}
+    commands:
+      - runFlow:
+          when:
+            true: ${output.rej.field != 'none'}
+          file: enter-reason.yaml
+      - takeScreenshot: artifacts/stock-reject-${output.v.name}-ready
+      - tapOn:
+          text: ${output.rej.confirmPattern}
+          label: "Confirm the rejection (rejects this transaction's stock)"
+      # At once - a banner may last only a few seconds.
+      - runFlow: read-message.yaml
+      # Known to be on screen until Confirm, so this cannot pass early.
+      - extendedWaitUntil:
+          notVisible: ${output.rej.closeCheck}
+          timeout: 15000
+          optional: true
+          label: "The reject popup closes"
+      - runFlow:
+          when:
+            visible: ${output.rej.closeCheck}
+          commands:
+            - takeScreenshot: artifacts/stock-reject-popup-stayed
+            - runFlow:
+                file: ../../fail.yaml
+                env:
+                  MESSAGE: "${output.v.prefix + 'the reject popup stayed up after ' + output.rej.confirmLabel + ' for ' + output.v.name + ' (' + output.txn.mrnLabel + ').'}"
+                label: "The reject popup closes after Confirm"
+      - evalScript: ${output.rej.open = false}
+      - evalScript: ${output.rej.pending = true}
+
+- runFlow: reject-outcome.yaml

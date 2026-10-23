@@ -1,0 +1,86 @@
+appId: ${HCM_APP_ID}
+name: view-txn-view-qr
+---
+# Test Case 4 - on View Transactions: the first card offering View QR (a
+# dispatch) opens a "QR Code" popup with the QR image, which then closes.
+# Not applicable when no card offers it. Starts and ends on View Transactions.
+#
+# Read off the app as AU-SAT-001, 2026-10-23: the popup reads "QR Code" with
+# the image (content description "qr code") and a close X at its top right.
+# The X has no text and sits where only the status bar would fence it, so the
+# popup is closed with Back, as Android closes any dialog; the list must then
+# still be up. What the QR encodes is not checked.
+- runFlow:
+    when:
+      true: ${output.vt.qrTarget < 0}
+    commands:
+      - evalScript: ${output.vt.qr = 'not applicable - no card offers View QR'}
+- runFlow:
+    when:
+      true: ${output.vt.qrTarget >= 0}
+    commands:
+      - runScript:
+          file: view-txn.js
+          env:
+            ACTION: target
+            INDEX: ${output.vt.qrTarget}
+      - scrollUntilVisible:
+          element:
+            text: "View all stock transactions"
+          direction: UP
+          timeout: 10000
+          optional: true
+          label: "Top of the list"
+      - scrollUntilVisible:
+          element:
+            text: "View QR"
+            below:
+              text: ${output.vt.target.labelPattern}
+          direction: DOWN
+          timeout: 30000
+          label: "Scroll to the card's View QR"
+      - evalScript: ${output.vt.tapped = false}
+      - runFlow:
+          when:
+            true: ${output.vt.target.nextPattern != ''}
+          commands:
+            - runFlow:
+                when:
+                  visible:
+                    text: ${output.vt.target.nextPattern}
+                commands:
+                  - tapOn:
+                      text: "View QR"
+                      below:
+                        text: ${output.vt.target.labelPattern}
+                      above:
+                        text: ${output.vt.target.nextPattern}
+                      label: "Test Case 4 - View QR"
+                  - evalScript: ${output.vt.tapped = true}
+      - runFlow:
+          when:
+            true: ${!output.vt.tapped}
+          commands:
+            - tapOn:
+                text: "View QR"
+                below:
+                  text: ${output.vt.target.labelPattern}
+                label: "Test Case 4 - View QR"
+      - extendedWaitUntil:
+          visible: "QR Code"
+          timeout: 15000
+          label: "Test Case 4 - the QR Code popup opens"
+      - assertVisible:
+          text: "qr code"
+          label: "Test Case 4 - the popup shows a QR image"
+      - takeScreenshot: artifacts/view-txn-qr
+      - back
+      - extendedWaitUntil:
+          notVisible: "QR Code"
+          timeout: 10000
+          label: "Test Case 4 - the popup closes"
+      - assertVisible:
+          text: "View all stock transactions"
+          label: "Test Case 4 - still on View Transactions"
+      - evalScript: ${output.vt.qr = 'QR Code popup with a QR image for ' + output.vt.target.card.label + ', closed'}
+      - evalScript: ${console.log('Test Case 4 PASSED - View QR on ' + output.vt.target.card.label + ' shows the QR Code popup, which closes back to the list')}

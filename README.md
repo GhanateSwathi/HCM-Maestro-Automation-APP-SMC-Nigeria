@@ -21,6 +21,30 @@ Coverage starts from a single smoke flow and grows from here.
 not, and which flow runs each case, grouped by screen. Update it in the same
 change that adds or removes a flow.
 
+[`prompts/`](prompts/) holds the specification prompts the flows are built
+from, one file per prompt. Prompts 1–14 were given in conversation and are
+kept there word for word; where a flow differs from its prompt, TEST-CASES
+says why.
+
+| Prompt | Specification | Flows |
+| --- | --- | --- |
+| [1](prompts/prompt-01-login-and-onboarding.md) | Login and initial configuration, all three roles | `flows/login/sign-in-*`, `flows/onboarding/` |
+| [2](prompts/prompt-02-state-stock-receipt.md) | State user: Record Stock Receipt, accept | `state-stock-incoming-receipts`, `state-stock-accept-receipt` |
+| [3](prompts/prompt-03-state-dispatch-to-hf.md) | State user: dispatch to a health facility | `state-stock-dispatch` |
+| [4](prompts/prompt-04-state-return-to-national.md) | State user: return to National | `state-stock-return` |
+| [5](prompts/prompt-05-hf-accept-stock.md) | Health facility: accept incoming stock | `hf-stock-accept-receipt` |
+| [6](prompts/prompt-06-hf-dispatch-to-cdd-qr.md) | Health facility: dispatch to a CDD by QR code | `hf-stock-dispatch-cdd` |
+| [7](prompts/prompt-07-hf-return-to-state.md) | Health facility: return to the state | `hf-stock-return-state` |
+| [8](prompts/prompt-08-stock-reconciliation.md) | Stock reconciliation, state user and health facility | `*-stock-reconciliation` |
+| [9](prompts/prompt-09-view-reports.md) | View Reports, state user and health facility | `*-stock-view-reports` |
+| [10](prompts/prompt-10-hf-beneficiary-referral.md) | Health facility: beneficiary referral | `hf-beneficiary-referral` |
+| [11](prompts/prompt-11-cdd-registration-and-delivery.md) | CDD: registration, stock receipt, dose delivery | `cdd-registration-full`, `cdd-low-beneficiary-id` |
+| [12](prompts/prompt-12-cdd-consent-no.md) | CDD: caregiver consent No | `cdd-consent-no` |
+| [13](prompts/prompt-13-cdd-unable-to-deliver.md) | CDD: household of 20, Unable to Deliver | `cdd-household-utd` |
+| [14](prompts/prompt-14-cdd-dose-and-redose.md) | CDD: household of 7, dose and redose | `cdd-household-redose` |
+| [15](prompts/prompt-15-stock-reject.md) | Reject incoming stock, all three receiving roles | `*-stock-reject-receipt` |
+| [16](prompts/prompt-16-view-transactions.md) | View Transactions, state user, health facility and CDD | `*-stock-view-transactions` |
+
 ## Prerequisites
 
 - **Maestro CLI** — installed at `~/.maestro/bin/`. See the
@@ -96,6 +120,8 @@ template is tracked.
 | `REDOSE_CHILD_1_AGE_MONTHS` … `_6_` / `REDOSE_CHILD_GENDER` | Its six children's ages in months - `6`, `24` (dosed and redosed: `PRODUCT_VARIANT_1`, `_2`), then `4`, `10`, `15`, `50` (registered only) - and their gender (blank: first offered) |
 | `REDOSE_REASON` | Optional. The redose's Reason, as the app lists it (`Vomitting`, `Others` on 2026-10-22); blank takes the first |
 | `CONSENT_REASON` | The reason typed when the caregiver refuses consent (`test`; ASCII only). The consent-No flow sets the consent itself - there is no `CONSENT` key, which would reach every flow |
+| `REJECT_REASON` | The reason typed into the reject popup's reason field, when it has one, by the three reject flows (`Automation test - stock rejected`; ASCII only) |
+| `VIEW_TXN_EXPECTED_STATE` / `_HF` / `_CDD` | Optional. Transactions the role's View Transactions list must hold, comma-separated, each `<variant> <quantity>` or `<variant> <MRN> <quantity>` (e.g. `SPAQ1 490,SPAQ2 490`). Blank: the list is logged and nothing is expected. A receiver's acceptance can change the MRN the sender sees, so give an MRN only when it is known to be stable |
 
 Leave a role's pair blank if you are not testing that role. See
 [Roles](#roles) for how a flow signs in as one.
@@ -285,6 +311,8 @@ at sign-in, and without them Incoming Transactions is empty.
 | [`hf-stock-return-state.yaml`](flows/stock/hf-stock-return-state.yaml) | `regression`, `stock`, `hf-stock`, `mhbase`, `consumes-data` | Prompt 7 (the specification's `hf_return_state.yaml`): the return flow's subflow run for the health facility — `RETURN_QUANTITY` of `PRODUCT_VARIANT_1`, then `_2`, back to the state (`HF_RETURN_DESTINATION`), each from `EXPECTED_START_BALANCE` to `EXPECTED_FINAL_BALANCE`, the first re-checked after the second, MRNs logged. No QR scan: the Return form offers the state warehouse only. Needs the session holding the stock. See TEST-CASES HRT-01–03. |
 | [`state-stock-reconciliation.yaml`](flows/stock/state-stock-reconciliation.yaml) / [`hf-stock-reconciliation.yaml`](flows/stock/hf-stock-reconciliation.yaml) | `regression`, `stock`, `state-stock` or `hf-stock`, `mhbase`, `consumes-data` | Prompt 8, one flow per role (the specification's `state_reconciliation.yaml` / `hf_reconciliation.yaml`) over one shared subflow: Stock Reconciliation for `PRODUCT_VARIANT_1` and `_2` — Case 1 count = stock in hand with no comment, Case 2 one less and Case 3 one more, each first without a comment (must be refused) then with `RECON_COMMENT`; stock in hand re-read after each. **Every submission records a reconciliation.** The specification's rules are checked softly: each difference is logged as `DEVIATION - …` and the run fails at the end listing them all. Stock in hand below 0 BLOCKs the variant, submitting nothing; at 0 only Case 2 is BLOCKED. Needs the session that holds the stock, like the return flows. See TEST-CASES REC-01–04. |
 | [`state-stock-view-reports.yaml`](flows/stock/state-stock-view-reports.yaml) / [`hf-stock-view-reports.yaml`](flows/stock/hf-stock-view-reports.yaml) | `regression`, `stock`, `state-stock` or `hf-stock`, `mhbase` | Prompt 9, one flow per role (the specification's `state_view_reports.yaml` / `hf_view_reports.yaml`) over one shared subflow: View Reports offers Stock Received, Issued, Returned and Reconciliation; each table is opened for the user's warehouse, its headers and rows read, and each `*_REPORT_*` entry looked for by product, MRN and quantity. Reads only. Findings — empty tables, missing entries, the untranslated quantity header — are logged and the run fails at the end listing them. **The reports show only the records on the device**, so after a wipe they miss the earlier prompts' transactions; see TEST-CASES VR-01–05. |
+| [`state-stock-reject-receipt.yaml`](flows/stock/state-stock-reject-receipt.yaml) / [`hf-stock-reject-receipt.yaml`](flows/stock/hf-stock-reject-receipt.yaml) / [`cdd-stock-reject-receipt.yaml`](flows/stock/cdd-stock-reject-receipt.yaml) | `regression`, `stock`, `state-stock` / `hf-stock` / `cdd`, `mhbase`, `consumes-data` | [Prompt 15](prompts/prompt-15-stock-reject.md), one flow per receiving role over one shared subflow - the counterpart of accepting: needs an incoming transaction for each of `PRODUCT_VARIANT_1` and `_2` (else `BLOCKED - …`, nothing rejected); the first `_1` transaction's Stock Receipt Details offer Reject (Test Case 1); Reject asks for confirmation (2); Cancel leaves both variants pending (3); an empty reason is refused when the field is mandatory (4); then `_1` and `_2` are rejected in turn with `REJECT_REASON` (**rejects the stock**), each leaving the incoming list (5); the balances stay unchanged and the rejected MRNs stay out of the list after Download Stock Data (6). The popup, reason field and message are soft checks (`DEVIATION - …`, the run fails at the end listing them); if Reject asks for no confirmation, its first tap rejects and Test Cases 3-4 cannot run. The incoming list is counted whole, scrolling to its end. Passed for the state user on 2026-10-23; the health facility and CDD flows have not run yet. See TEST-CASES RJT-01–06. |
+| [`state-stock-view-transactions.yaml`](flows/stock/state-stock-view-transactions.yaml) / [`hf-stock-view-transactions.yaml`](flows/stock/hf-stock-view-transactions.yaml) / [`cdd-stock-view-transactions.yaml`](flows/stock/cdd-stock-view-transactions.yaml) | `regression`, `stock`, `state-stock` / `hf-stock` / `cdd`, `mhbase` | [Prompt 16](prompts/prompt-16-view-transactions.md), one flow per role over one shared subflow. Reads only. Manage Stock offers View Transactions and it opens (Test Case 1); every card is read - MRN, date, Receiver or Sender, product lines, View QR - scrolling the whole list, or the empty state logged (2); the first card of each variant's Select Transaction opens details whose MRN, resource and quantity match the card (3); View QR opens the QR Code popup, which closes (4); `VIEW_TXN_EXPECTED_<role>` entries are listed, when set (5); Back returns to Manage Stock (6). The list holds the user's own records on the device, so it runs after Download Stock Data. Points for QA (titles, labels, where Back leads) are logged as `NOTE - …`. See TEST-CASES VTX-01–06. |
 
 ### `flows/referral/`
 
@@ -570,6 +598,12 @@ flows/                      runnable tests, grouped by feature area
     hf-stock-reconciliation.yaml        stock reconciliation as the health facility, Cases 1-3
     state-stock-view-reports.yaml       View Reports as the state user, four reports
     hf-stock-view-reports.yaml          View Reports as the health facility, four reports
+    state-stock-reject-receipt.yaml     state user rejects an incoming receipt, Test Cases 1-6
+    hf-stock-reject-receipt.yaml        health facility rejects the state's dispatch, Test Cases 1-6
+    cdd-stock-reject-receipt.yaml       CDD rejects the health facility's dispatch, Test Cases 1-6
+    state-stock-view-transactions.yaml  View Transactions as the state user, Test Cases 1-6
+    hf-stock-view-transactions.yaml     View Transactions as the health facility, Test Cases 1-6
+    cdd-stock-view-transactions.yaml    View Transactions as the CDD, Test Cases 1-6
   referral/
     hf-beneficiary-referral.yaml        four referrals, one per reason, then sync
   registration/
@@ -603,6 +637,8 @@ subflows/                   reusable building blocks, pulled in via runFlow
     enter-quantity.yaml              type the quantity, focus checked
     back-to-home.yaml                Back until home
     accept-receipt/         accepting incoming stock - shared by both receivers
+    reject-receipt/         rejecting incoming stock - shared by all three receivers
+    view-transactions/      Manage Stock > View Transactions - shared by all three roles
     dispatch/               dispatch (Issue) building blocks
     return/                 return building blocks - state to National, HF to state
     hf-receipt/             the health facility's Test Cases 1-6
@@ -613,6 +649,10 @@ subflows/                   reusable building blocks, pulled in via runFlow
   dropdown/
     select-first-options.yaml  pick the first N options of a boundary dropdown
     dropdown.js                its book-keeping
+prompts/                    the specification prompts, one file each
+  prompt-01-…-14-….md       Prompts 1-14, word for word as given
+  prompt-15-stock-reject.md rejecting incoming stock, all three receiving roles
+  prompt-16-view-transactions.md  View Transactions, all three roles
 scripts/                    run.ps1 (Windows) and run.sh (bash) - same behaviour
                             prepare-qr-camera.ps1 / .sh - flash the QR to the emulator camera
 assets/qr/cdd_qr.png        the CDD's QR code (QR_CODE_PATH; gitignored, like .env)
@@ -649,6 +689,8 @@ Two rules keep this working, and both are easy to break:
 | [`stock/read-first-transaction.yaml`](subflows/stock/read-first-transaction.yaml) | Log the first incoming transaction's MRN, product, date, sender and status. |
 | [`stock/incoming-receipts.js`](subflows/stock/incoming-receipts.js) | Log whether incoming transactions were found and enforce `HCM_STATE_STOCK_INCOMING_RECEIPTS` when it is set. |
 | [`stock/accept-receipt/`](subflows/stock/accept-receipt/) | Accepting incoming stock, shared by the state user (Cases 2, 2a, 2b) and the health facility user (Test Cases 3–5): `init-variants.yaml`, `read-balances.yaml` (home Stock Balance), `count-transactions.yaml` / `check-variants.yaml` (a transaction for each variant), `open-transaction.yaml` (a variant's first transaction → its own Select → Stock Receipt Details, product / MRN / sender / quantity checked), `open-accept-confirmation.yaml`, `case2-popup.yaml` / `case2a-cancel.yaml` (the popup, then Cancel), `accept-transaction.yaml` (… → Confirm → banner, list, count, MRN gone), `accept-both.yaml` (variant 1, then 2), `case2b-confirm.yaml` (the state user's: both, then balances), and `variants.js` / `transaction.js` for the book-keeping. A flow renames the cases in its messages through `output.variants.cases`. |
+| [`stock/reject-receipt/`](subflows/stock/reject-receipt/) | Rejecting incoming stock (Prompt 15) for the state user, the health facility and the CDD, over `accept-receipt/`'s transaction reading: `init.yaml` (test data first; the flow passes `ROLE` and `PREREQUISITE`), `reject-receipt.yaml` (the specification's `common/reject_stock.yaml` - Test Cases 1-6, home to home), `open-reject.yaml` (tap Reject; a popup or not, and the popup's title, confirming button and reason field), `cancel-reject.yaml` (Test Case 3), `empty-reason.yaml` (Test Case 4, only for a field marked mandatory), `enter-reason.yaml`, `reject-transaction.yaml` (one variant: reason, Confirm), `read-message.yaml` (the `Stock rejected successfully` banner, looked for straight after Confirm), `reject-outcome.yaml` (back to the list, transaction gone, other variant untouched), `count-all.yaml` (every card per variant, scrolling the whole list - the accept flows count only the cards on screen), `final-check.yaml` (Test Case 6), and `reject.js` for the book-keeping, counting, deviations and report. |
+| [`stock/view-transactions/`](subflows/stock/view-transactions/) | View Transactions (Prompt 16) for the state user, the health facility and the CDD: `init.yaml` (test data first; the flow passes `ROLE` and `EXPECTED`), `view-transactions.yaml` (the specification's `common/view_transactions.yaml` - Test Cases 1-6, home to home), `open-view-transactions.yaml` (Test Case 1), `read-cards.yaml` (Test Case 2 - every card, keyed by MRN, scrolling the whole list) over `card-field.yaml` (one part of one card, fenced between its MRN tag and the next card's), `open-details.yaml` (Test Case 3 - one card's Select Transaction, the details compared, Back), `view-qr.yaml` (Test Case 4 - closed with Back: the popup's X has no text), and `view-txn.js` for the book-keeping, expected entries, notes and report. |
 | [`stock/reports/`](subflows/stock/reports/) | View Reports for either role: `open-view-reports.yaml` (the card, all four reports offered — `report-offered.yaml` each), `view-report.yaml` (the specification's `common/view_report.yaml` — one report: facility, table state, back), `report-table.yaml` (headers, rows logged, each expected entry looked for) and `reports.js` (patterns, findings, the report). |
 | [`stock/reconciliation/`](subflows/stock/reconciliation/) | Stock Reconciliation for either role: `reconcile-variant.yaml` (the specification's `common/stock_reconciliation.yaml` — one variant, Cases 1–3, home to home), `open-variant.yaml` (home → warehouse → variant → Stock in hand), `enter-count.yaml`, `enter-comment.yaml`, `submit.yaml`, `case1-equal.yaml`, `differing-count.yaml` (Cases 2 and 3; Case 2 BLOCKED at stock in hand 0), and `recon.js` — the book-keeping, deviations and report. |
 | [`stock/hf-receipt/`](subflows/stock/hf-receipt/) | The health facility flow's own steps: `init.yaml` (test data, before the device is touched), one subflow per test case (`tc1-initial-balance`, `tc2-incoming`, `tc3-details` / `tc3-variant`, `tc4-cancel`, `tc6-final-balance`), and `hf-receipt.js` for the balances, messages and the closing report. |

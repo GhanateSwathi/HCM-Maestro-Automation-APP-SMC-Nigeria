@@ -1,0 +1,22 @@
+appId: ${HCM_APP_ID}
+name: view-txn-init
+---
+# Prompt 16's test data, read before anything touches the device:
+# PRODUCT_VARIANT_1 / _2 and the role's optional expected entries (EXPECTED,
+# the flow's VIEW_TXN_EXPECTED_<role>). ROLE comes from the calling flow and
+# only words the messages.
+- runFlow: ../accept-receipt/init-variants.yaml
+- runScript:
+    file: view-txn.js
+    env:
+      ACTION: init
+      ROLE: ${ROLE}
+      EXPECTED: ${EXPECTED}
+    label: "Read the Prompt 16 test data"
+- runFlow:
+    when:
+      true: ${output.vt.failure}
+    file: ../../fail.yaml
+    env:
+      MESSAGE: ${output.vt.failure}
+    label: "Prompt 16 test data is valid"

@@ -1,0 +1,39 @@
+appId: ${HCM_APP_ID}
+name: "Stock - CDD rejects the health facility's dispatch"
+tags:
+  - regression
+  - stock
+  - cdd
+  - mhbase
+  - consumes-data
+---
+# Prompt 15 for the CDD: the counterpart of Prompt 11 Step 11 - Reject
+# instead of Accept Stock on the health facility's dispatch. Test Cases 1-6
+# in one session (subflows/stock/reject-receipt/reject-receipt.yaml).
+#
+# Needs HCM_CDD_USER_ID / HCM_CDD_PASSWORD (AU-CDD-001 on the mhbase tenant),
+# PRODUCT_VARIANT_1 / _2 and REJECT_REASON, and an incoming transaction for
+# each variant - a fresh dispatch from the health facility to this CDD's team
+# code (Prompt 6). Rejecting consumes both; hence the consumes-data tag. A
+# blocked run fails with a reason starting "BLOCKED -" and never taps Reject.
+#
+# The CDD's home lists Manage Stock and Download Stock Data like the stock
+# roles' (read 2026-10-21), and its incoming list held Prompt 6's dispatch
+# straight after sign-in. Not run yet; the steps are the state user's, which
+# passed on 2026-10-23 (state-stock-reject-receipt.yaml), and the CDD's popup
+# has not been seen.
+
+# Test data first, so a gap in .env fails before the device is touched.
+- runFlow:
+    file: ../../subflows/stock/reject-receipt/init.yaml
+    env:
+      ROLE: "CDD"
+      PREREQUISITE: "the health facility's dispatch (Prompt 6)"
+
+# Sign in, the facility and three communities, home.
+- runFlow: ../../subflows/home/cdd.yaml
+
+# Fetch stock records, for a device that has not fetched them.
+- runFlow: ../../subflows/stock/download-stock-data.yaml
+
+- runFlow: ../../subflows/stock/reject-receipt/reject-receipt.yaml

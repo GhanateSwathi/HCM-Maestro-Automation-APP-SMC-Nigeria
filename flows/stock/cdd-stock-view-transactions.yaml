@@ -1,0 +1,30 @@
+appId: ${HCM_APP_ID}
+name: "Stock - CDD views transactions"
+tags:
+  - regression
+  - stock
+  - cdd
+  - mhbase
+---
+# Prompt 16 for the CDD: Manage Stock -> View Transactions, Test Cases 1-6
+# (subflows/stock/view-transactions/view-transactions.yaml). Reads only.
+#
+# Needs HCM_CDD_USER_ID / HCM_CDD_PASSWORD (AU-CDD-001 on the mhbase tenant)
+# and PRODUCT_VARIANT_1 / _2; VIEW_TXN_EXPECTED_CDD is optional. The CDD's
+# home lists Manage Stock and Download Stock Data like the stock roles'
+# (read 2026-10-21).
+
+# Test data first, so a gap in .env fails before the device is touched.
+- runFlow:
+    file: ../../subflows/stock/view-transactions/init.yaml
+    env:
+      ROLE: "CDD"
+      EXPECTED: ${VIEW_TXN_EXPECTED_CDD}
+
+# Sign in, the facility and three communities, home.
+- runFlow: ../../subflows/home/cdd.yaml
+
+# The list is built from the records on the device.
+- runFlow: ../../subflows/stock/download-stock-data.yaml
+
+- runFlow: ../../subflows/stock/view-transactions/view-transactions.yaml

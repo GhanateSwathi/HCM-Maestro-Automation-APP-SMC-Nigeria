@@ -1,0 +1,59 @@
+appId: ${HCM_APP_ID}
+name: reject-final-check
+---
+# Test Case 6 - nothing was received. From Incoming Transactions after both
+# rejections: home, each Stock Balance unchanged from before; then Download
+# Stock Data again and the rejected MRNs are not listed again. Ends on home.
+#
+# The balance is the device's own figure (read-stock-balance.yaml), so it is
+# read straight away. A placeholder MRN ("MRN null_0") cannot be looked for -
+# it renumbers - so only real MRNs are checked after the download.
+- runFlow: ../back-to-home.yaml
+- runFlow:
+    file: ../accept-receipt/read-balances.yaml
+    env:
+      PHASE: after
+- takeScreenshot: artifacts/stock-reject-balance-after
+- runScript:
+    file: reject.js
+    env:
+      ACTION: final
+    label: "Test Case 6 - compare the balances"
+- runFlow:
+    when:
+      true: ${output.rej.failure}
+    file: ../../fail.yaml
+    env:
+      MESSAGE: ${output.rej.failure}
+    label: "Test Case 6 - Stock Balance unchanged"
+
+# Downloading copies records to the device and changes nothing on the server.
+- runFlow: ../download-stock-data.yaml
+- runFlow: ../open-incoming-transactions.yaml
+- takeScreenshot: artifacts/stock-reject-list-after-download
+- runFlow:
+    when:
+      true: ${output.rej.rejectedLabels[0] != ''}
+    commands:
+      - runFlow:
+          when:
+            visible:
+              text: ${output.rej.rejectedLabels[0]}
+          file: ../../fail.yaml
+          env:
+            MESSAGE: "${'Test Case 6 - ' + output.rej.rejectedMrns[0] + ' is listed in Incoming Transactions again after Download Stock Data.'}"
+          label: "Test Case 6 - the first rejected MRN stays gone"
+- runFlow:
+    when:
+      true: ${output.rej.rejectedLabels[1] != ''}
+    commands:
+      - runFlow:
+          when:
+            visible:
+              text: ${output.rej.rejectedLabels[1]}
+          file: ../../fail.yaml
+          env:
+            MESSAGE: "${'Test Case 6 - ' + output.rej.rejectedMrns[1] + ' is listed in Incoming Transactions again after Download Stock Data.'}"
+          label: "Test Case 6 - the second rejected MRN stays gone"
+- runFlow: ../back-to-home.yaml
+- evalScript: "${console.log('Test Case 6 PASSED - Stock Balance unchanged; the rejected MRNs (' + output.rej.rejectedMrns.join(', ') + ') stay out of Incoming Transactions after Download Stock Data')}"

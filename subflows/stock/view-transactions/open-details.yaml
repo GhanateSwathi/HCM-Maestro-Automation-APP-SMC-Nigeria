@@ -1,0 +1,192 @@
+appId: ${HCM_APP_ID}
+name: view-txn-open-details
+---
+# Test Case 3 for card INDEX of output.vt.cards: its own Select Transaction ->
+# the details screen, whose MRN, resource and quantity must match the card;
+# Transaction Type and Sender are logged. Then Back, and View Transactions
+# reopened if Back left it. Starts and ends on View Transactions.
+#
+# Read off the app as AU-SAT-001, 2026-10-23, for a dispatch: "Stock Receipt
+# Details" lists, label left and value right, Resource (SPAQ 2), Transaction
+# Type (Dispatched), Transaction reason (--), Sender (the user's own
+# warehouse), MRN number, Waybill number (--), Batch number (--), Quantity
+# received (490) and Comment (--). No Receiver row. Back (top left) returns to
+# Manage Stock, not to View Transactions - as the app's source configures it.
+- runScript:
+    file: view-txn.js
+    env:
+      ACTION: target
+      INDEX: ${INDEX}
+- scrollUntilVisible:
+    element:
+      text: "View all stock transactions"
+    direction: UP
+    timeout: 10000
+    optional: true
+    label: "Top of the list"
+# Until the card's own Select Transaction is on screen, not only its MRN tag.
+- scrollUntilVisible:
+    element:
+      text: "Select Transaction"
+      below:
+        text: ${output.vt.target.labelPattern}
+    direction: DOWN
+    timeout: 30000
+    label: "Scroll to the card's Select Transaction"
+# Fenced above the next card's MRN tag when that is on screen; otherwise the
+# next card is not on screen at all and only this card's button is below.
+- evalScript: ${output.vt.tapped = false}
+- runFlow:
+    when:
+      true: ${output.vt.target.nextPattern != ''}
+    commands:
+      - runFlow:
+          when:
+            visible:
+              text: ${output.vt.target.nextPattern}
+          commands:
+            - tapOn:
+                text: "Select Transaction"
+                below:
+                  text: ${output.vt.target.labelPattern}
+                above:
+                  text: ${output.vt.target.nextPattern}
+                label: "Select this transaction"
+            - evalScript: ${output.vt.tapped = true}
+- runFlow:
+    when:
+      true: ${!output.vt.tapped}
+    commands:
+      - tapOn:
+          text: "Select Transaction"
+          below:
+            text: ${output.vt.target.labelPattern}
+          label: "Select this transaction"
+- extendedWaitUntil:
+    visible: "Stock Receipt Details|Transaction details|Stock Details"
+    timeout: 15000
+    label: "Test Case 3 - the details screen opens"
+- extendedWaitUntil:
+    visible: "MRN number"
+    timeout: 15000
+    label: "Test Case 3 - the details are shown"
+
+# Each value sits right of its label, fenced between the rows above and below
+# it - "right of" alone reaches the status bar.
+- setClipboard: "none"
+- copyTextFrom:
+    text: ".+"
+    rightOf: "Resource"
+    below: "Back"
+    above: "Transaction Type"
+    label: "Read Resource"
+- runScript:
+    file: view-txn.js
+    env:
+      ACTION: detail
+      WHAT: resource
+- setClipboard: "none"
+- copyTextFrom:
+    text: ".+"
+    rightOf: "Transaction Type"
+    below: "Resource"
+    above: "Transaction reason"
+    label: "Read Transaction Type"
+- runScript:
+    file: view-txn.js
+    env:
+      ACTION: detail
+      WHAT: type
+- setClipboard: "none"
+- runFlow:
+    when:
+      visible: "Sender"
+    commands:
+      - copyTextFrom:
+          text: ".+"
+          rightOf: "Sender"
+          below: "Transaction reason"
+          above: "MRN number"
+          label: "Read Sender"
+- runScript:
+    file: view-txn.js
+    env:
+      ACTION: detail
+      WHAT: sender
+# Fenced below the Sender row: the sender's id wraps onto two lines
+# (FAC_F-2026-10-15-137946, 2026-10-23), so "below Transaction reason" would
+# take it in too.
+- setClipboard: "none"
+- runFlow:
+    when:
+      visible: "Sender"
+    commands:
+      - copyTextFrom:
+          text: ".+"
+          rightOf: "MRN number"
+          below: "Sender"
+          above: "Waybill number"
+          label: "Read MRN number"
+- runFlow:
+    when:
+      notVisible: "Sender"
+    commands:
+      - copyTextFrom:
+          text: ".+"
+          rightOf: "MRN number"
+          below: "Transaction reason"
+          above: "Waybill number"
+          label: "Read MRN number"
+- runScript:
+    file: view-txn.js
+    env:
+      ACTION: detail
+      WHAT: mrn
+- setClipboard: "none"
+- copyTextFrom:
+    text: ".+"
+    rightOf: "Quantity.*"
+    below: "Batch number"
+    above: "Comment"
+    label: "Read the quantity"
+- runScript:
+    file: view-txn.js
+    env:
+      ACTION: detail
+      WHAT: quantity
+- takeScreenshot: artifacts/view-txn-details-${INDEX}
+- runFlow:
+    when:
+      true: ${output.vt.failure}
+    file: ../../fail.yaml
+    env:
+      MESSAGE: ${output.vt.failure}
+    label: "Test Case 3 - the details match the card"
+
+# --- Back -------------------------------------------------------------------------
+- tapOn:
+    text: "Back"
+    below: "Open navigation menu"
+    label: "Back from the details"
+- extendedWaitUntil:
+    visible: "Record Stock Receipt|View all stock transactions"
+    timeout: 15000
+    label: "Back leaves the details"
+- evalScript: ${output.vt.backTo = 'view transactions'}
+- runFlow:
+    when:
+      visible: "Record Stock Receipt"
+    commands:
+      - evalScript: ${output.vt.backTo = 'manage stock'}
+      - tapOn:
+          text: "View Transactions"
+          label: "Reopen View Transactions"
+      - extendedWaitUntil:
+          visible: "View all stock transactions"
+          timeout: 15000
+          label: "View Transactions is back"
+- runScript:
+    file: view-txn.js
+    env:
+      ACTION: detailDone
+      BACK_TO: ${output.vt.backTo}

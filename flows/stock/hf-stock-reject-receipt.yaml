@@ -1,0 +1,37 @@
+appId: ${HCM_APP_ID}
+name: "Stock - health facility stock user rejects the state's dispatch"
+tags:
+  - regression
+  - stock
+  - hf-stock
+  - mhbase
+  - consumes-data
+---
+# Prompt 15 for the health facility: the counterpart of Prompt 5 - Reject
+# instead of Accept Stock on the state's dispatch. Test Cases 1-6 in one
+# session (subflows/stock/reject-receipt/reject-receipt.yaml).
+#
+# Needs HCM_HF_STOCK_USER_ID / HCM_HF_STOCK_PASSWORD (AU-HFS-001 on the
+# mhbase tenant), PRODUCT_VARIANT_1 / _2 and REJECT_REASON, and an incoming
+# transaction for each variant - a fresh dispatch from the state (Prompt 3).
+# Rejecting consumes both; hence the consumes-data tag. A blocked run fails
+# with a reason starting "BLOCKED -" and never taps Reject.
+#
+# Not run yet. The steps are the state user's, which passed on 2026-10-23
+# (state-stock-reject-receipt.yaml); the health facility's popup has not
+# been seen.
+
+# Test data first, so a gap in .env fails before the device is touched.
+- runFlow:
+    file: ../../subflows/stock/reject-receipt/init.yaml
+    env:
+      ROLE: "Health Facility User"
+      PREREQUISITE: "the state's dispatch (Prompt 3)"
+
+# Sign in, choose the facility, home; the Manage Stock card is there.
+- runFlow: ../../subflows/home/hf-stock.yaml
+
+# Fetch stock records - the incoming list stays empty without this.
+- runFlow: ../../subflows/stock/download-stock-data.yaml
+
+- runFlow: ../../subflows/stock/reject-receipt/reject-receipt.yaml

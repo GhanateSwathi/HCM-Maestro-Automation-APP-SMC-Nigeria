@@ -73,6 +73,8 @@ if (ACTION === 'init') {
         // passes to the next transaction, so its absence proves nothing.
         acceptedMrns: [],
         acceptedLabels: [],
+        // Variants rejected so far (reject-receipt/, Prompt 15).
+        rejected: [],
         cases: {
             blocked: 'BLOCKED - Case 2, 2a and 2b',
             popup: 'Case 2',
@@ -108,10 +110,13 @@ if (ACTION === 'init') {
         name: bv.names[i],
         line: bv.lines[i],
         resource: bv.resources[i],
-        // Once a variant has been accepted, any failure is a partial acceptance.
+        // Once a variant has been accepted (or rejected), any failure is a
+        // partial acceptance (or rejection).
         prefix: bv.accepted.length
             ? 'Partial acceptance: ' + bv.accepted.join(', ') + ' accepted, ' + bv.names[i] + ' failed – '
-            : ''
+            : bv.rejected.length
+                ? 'Partial rejection: ' + bv.rejected.join(', ') + ' rejected, ' + bv.names[i] + ' failed – '
+                : ''
     };
 } else if (ACTION === 'quantity') {
     output.variants.quantities[output.v.index] = trailingNumber(maestro.copiedText);

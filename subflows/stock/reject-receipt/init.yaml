@@ -1,0 +1,23 @@
+appId: ${HCM_APP_ID}
+name: reject-init
+---
+# Prompt 15's test data, read before anything touches the device:
+# PRODUCT_VARIANT_1 / _2 and REJECT_REASON. ROLE and PREREQUISITE come from
+# the calling flow and only word the messages ("BLOCKED - ...: No incoming
+# transactions for <ROLE>; <PREREQUISITE> not received.").
+- runFlow: ../accept-receipt/init-variants.yaml
+- runScript:
+    file: reject.js
+    env:
+      ACTION: init
+      ROLE: ${ROLE}
+      PREREQUISITE: ${PREREQUISITE}
+      REASON: ${REJECT_REASON}
+    label: "Read the Prompt 15 test data"
+- runFlow:
+    when:
+      true: ${output.rej.failure}
+    file: ../../fail.yaml
+    env:
+      MESSAGE: ${output.rej.failure}
+    label: "Prompt 15 test data is set in .env"

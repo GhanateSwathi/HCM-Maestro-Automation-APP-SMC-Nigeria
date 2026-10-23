@@ -1,0 +1,148 @@
+appId: ${HCM_APP_ID}
+name: view-txn-read-cards
+---
+# Test Case 2 - on View Transactions: read every card into output.vt.cards,
+# scrolling to the end of the list, then back to the top. Each card is keyed
+# by its MRN label, so a card seen at two scroll positions is read once; a
+# card whose product line is still below the screen is read at the next
+# position.
+#
+# Read off the app as AU-SAT-001, 2026-10-23: each card shows, top to bottom,
+# "MRN <mrn>" with the date to its right ("19 Oct 2026"), "Receiver" over the
+# party's id with "View QR" to their right, the product line ("SPAQ 2: 490")
+# and "Select Transaction". Three cards fit on the Pixel 9 Pro XL.
+- scrollUntilVisible:
+    element:
+      text: "View all stock transactions"
+    direction: UP
+    timeout: 10000
+    optional: true
+    label: "Top of the list"
+- runScript:
+    file: view-txn.js
+    env:
+      ACTION: scanStart
+- repeat:
+    times: 8
+    while:
+      true: ${!output.vt.scan.done}
+    label: "Each scroll position"
+    commands:
+      - evalScript: ${output.vt.scan.k = 0}
+      - repeat:
+          times: 8
+          while:
+            visible:
+              text: "MRN .*"
+              index: ${output.vt.scan.k}
+          label: "Each card on screen"
+          commands:
+            - copyTextFrom:
+                text: "MRN .*"
+                index: ${output.vt.scan.k}
+                label: "This card's MRN tag"
+            - runScript:
+                file: view-txn.js
+                env:
+                  ACTION: here
+            - runFlow:
+                when:
+                  visible:
+                    text: "MRN .*"
+                    index: ${output.vt.scan.k + 1}
+                commands:
+                  - copyTextFrom:
+                      text: "MRN .*"
+                      index: ${output.vt.scan.k + 1}
+                      label: "The next card's MRN tag"
+                  - runScript:
+                      file: view-txn.js
+                      env:
+                        ACTION: next
+            - runFlow:
+                when:
+                  true: ${!output.vt.cur.skip}
+                commands:
+                  - runFlow:
+                      file: card-field.yaml
+                      env:
+                        TEXT: "\\d{1,2} [A-Za-z]{3} \\d{4}"
+                        ACTION: date
+                        INDEX: "0"
+                  - runFlow:
+                      file: card-field.yaml
+                      env:
+                        TEXT: "Receiver|Sender"
+                        ACTION: party
+                        INDEX: "0"
+                  - runFlow:
+                      file: card-field.yaml
+                      env:
+                        TEXT: ${output.variants.lines[0]}
+                        ACTION: line
+                        INDEX: "0"
+                  - runFlow:
+                      file: card-field.yaml
+                      env:
+                        TEXT: ${output.variants.lines[1]}
+                        ACTION: line
+                        INDEX: "1"
+                  - runFlow:
+                      file: card-field.yaml
+                      env:
+                        TEXT: "View QR"
+                        ACTION: qr
+                        INDEX: "0"
+                  # The party's id: under its label, above the product line,
+                  # both inside this card. "View QR" sits beside it and is
+                  # left out.
+                  - runFlow:
+                      when:
+                        true: ${output.vt.cur.partyPattern != '' && output.vt.cur.linePattern != ''}
+                      commands:
+                        - setClipboard: "none"
+                        - copyTextFrom:
+                            text: "(?!View QR$).+"
+                            below:
+                              text: ${output.vt.cur.partyPattern}
+                              below:
+                                text: ${output.vt.scan.here}
+                              above:
+                                text: ${output.vt.cur.linePattern}
+                            above:
+                              text: ${output.vt.cur.linePattern}
+                              below:
+                                text: ${output.vt.scan.here}
+                            label: "The card's party id"
+                        - runScript:
+                            file: view-txn.js
+                            env:
+                              ACTION: partyId
+            - runScript:
+                file: view-txn.js
+                env:
+                  ACTION: cardDone
+            - evalScript: ${output.vt.scan.k = output.vt.scan.k + 1}
+      - runScript:
+          file: view-txn.js
+          env:
+            ACTION: page
+      - runFlow:
+          when:
+            true: ${!output.vt.scan.done}
+          commands:
+            - scroll
+            - waitForAnimationToEnd:
+                timeout: 2000
+- runScript:
+    file: view-txn.js
+    env:
+      ACTION: scanEnd
+    label: "Test Case 2 - log the list"
+- scrollUntilVisible:
+    element:
+      text: "View all stock transactions"
+    direction: UP
+    timeout: 10000
+    optional: true
+    label: "Back to the top of the list"

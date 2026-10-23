@@ -1,0 +1,128 @@
+appId: ${HCM_APP_ID}
+name: reject-open
+---
+# On Stock Receipt Details (accept-receipt/open-transaction.yaml): tap Reject
+# and find out whether the app asks first. Leaves output.rej.open (a popup is
+# up) or output.rej.pending (no popup: the tap acted, its outcome is next).
+# With a popup, reads its title, confirming button and reason field into
+# output.rej.
+#
+# Read off the app as AU-SAT-001, 2026-10-23 (runs 20261023-131008 and
+# -132400): Reject raises "Reject Confirmation" / "Are you sure you want to
+# reject this stock?" with a text area "Reason for rejection *", then Confirm
+# and Cancel. Confirm with the reason empty keeps the popup up and shows
+# "Reason for Rejection is required". The patterns below match that, and stay
+# loose on purpose: from the app's source the tenant's config decides whether
+# Reject asks first at all, so a build without the popup is handled too (a
+# DEVIATION; the tap has then already rejected the stock).
+#   popup        it offers Cancel; while it is up the screen behind it is not
+#                in the hierarchy
+#   title        anything mentioning "reject" other than the bare word
+#   confirming   Confirm (Reject, Yes, Submit, Proceed or OK also accepted)
+#   reason       a label starting "Reason" or "Comment"; a trailing "*" marks
+#                it mandatory
+# A popup offering none of those buttons is cancelled and the run fails, so a
+# changed wording never rejects anything.
+- extendedWaitUntil:
+    visible: "Reject"
+    timeout: 15000
+    optional: true
+    label: "Stock Receipt Details offers Reject"
+- runFlow:
+    when:
+      notVisible: "Reject"
+    file: ../../fail.yaml
+    env:
+      MESSAGE: "${output.v.prefix + 'the ' + output.v.name + ' transaction offers no Reject, so nothing was tapped.'}"
+    label: "Reject is offered"
+- tapOn:
+    text: "Reject"
+    label: "Tap Reject (rejects at once if the app does not ask first)"
+# Either a popup, or - without one - a message about the rejection. Waiting
+# for both keeps a short-lived banner from passing unseen.
+- extendedWaitUntil:
+    visible: "Cancel|(?!reject$).*reject.*"
+    timeout: 10000
+    optional: true
+    label: "A confirmation popup, or a message about the rejection"
+- waitForAnimationToEnd:
+    timeout: 2000
+
+# --- Popup -----------------------------------------------------------------------
+- runFlow:
+    when:
+      visible: "Cancel"
+    commands:
+      - runScript:
+          file: reject.js
+          env:
+            ACTION: popup
+            POPUP: "yes"
+          label: "Reject asked first"
+      - takeScreenshot: artifacts/stock-reject-popup-${output.v.name}
+      - setClipboard: "none"
+      - runFlow:
+          when:
+            visible: "(?!reject$).*reject.*"
+          commands:
+            - copyTextFrom:
+                text: "(?!reject$).*reject.*"
+                label: "Read the popup's title"
+      - runScript:
+          file: reject.js
+          env:
+            ACTION: title
+          label: "Remember the title"
+      - setClipboard: "none"
+      - runFlow:
+          when:
+            visible: "Confirm|Reject|Yes|Submit|Proceed|OK"
+          commands:
+            - copyTextFrom:
+                text: "Confirm|Reject|Yes|Submit|Proceed|OK"
+                label: "Read the popup's confirming button"
+      - runScript:
+          file: reject.js
+          env:
+            ACTION: confirm
+          label: "Remember the confirming button"
+      - runFlow:
+          when:
+            true: ${output.rej.failure}
+          commands:
+            - takeScreenshot: artifacts/stock-reject-popup-unrecognised
+            - tapOn:
+                text: "Cancel"
+                label: "Cancel the unrecognised popup - nothing is rejected"
+            - runFlow:
+                file: ../../fail.yaml
+                env:
+                  MESSAGE: ${output.rej.failure}
+                label: "The reject popup offers a confirming button"
+      - setClipboard: "none"
+      - runFlow:
+          when:
+            visible: "(reason|comment).*"
+          commands:
+            - copyTextFrom:
+                text: "(reason|comment).*"
+                label: "Read the popup's reason field label"
+      - runScript:
+          file: reject.js
+          env:
+            ACTION: field
+          label: "Remember the reason field"
+
+# --- No popup: the tap acted ---------------------------------------------------
+- runFlow:
+    when:
+      notVisible: "Cancel"
+    commands:
+      - takeScreenshot: artifacts/stock-reject-no-popup-${output.v.name}
+      - runScript:
+          file: reject.js
+          env:
+            ACTION: popup
+            POPUP: "no"
+          label: "Reject did not ask first"
+      - runFlow: read-message.yaml
