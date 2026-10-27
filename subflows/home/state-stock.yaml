@@ -5,18 +5,34 @@ name: home-state-stock
 # onboarding path (sign in, sync, Allow Permissions, first ADMIN_State option)
 # plus Submit. Every flow that works from the state stock user's home screen
 # starts here.
-- runFlow: ../sign-in/state-stock.yaml
+#
+# In a chained run (KEEP_SESSION=true, scripts/run-chain.ps1) the previous
+# flow's session is reused when the app is already signed in: keep-session.yaml
+# decides, and sign-in (which clears the app) and the boundary are skipped as
+# far as they are not needed.
 - runFlow:
-    file: ../dropdown/select-first-options.yaml
+    file: keep-session.yaml
     env:
-      FIELD: "ADMIN_State.*"
-      COUNT: "1"
-
-# Submit is the boundary screen's only action - greyed out until a boundary
-# is picked.
-- tapOn:
-    text: "Submit"
-    label: "Submit the boundary selection"
+      HOME_SCREEN: "Stock Balance"
+      BOUNDARY_SCREEN: "ADMIN_State.*|Community.*"
+- runFlow:
+    when:
+      true: ${output.session == 'fresh'}
+    file: ../sign-in/state-stock.yaml
+- runFlow:
+    when:
+      true: ${output.session != 'home'}
+    commands:
+      - runFlow:
+          file: ../dropdown/select-first-options.yaml
+          env:
+            FIELD: "ADMIN_State.*"
+            COUNT: "1"
+      # Submit is the boundary screen's only action - greyed out until a
+      # boundary is picked.
+      - tapOn:
+          text: "Submit"
+          label: "Submit the boundary selection"
 
 # On 2026-10-15 Submit went straight to home with no further sync, showing a
 # "Background service started" banner on the way. If a later build syncs

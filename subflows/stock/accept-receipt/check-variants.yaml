@@ -10,14 +10,7 @@ name: check-variants
 #
 # The app gives each transaction one product (2026-10-15), so the two
 # variants come from two transactions, not two records of one.
-- runFlow:
-    file: count-transactions.yaml
-    env:
-      INDEX: "0"
-- runFlow:
-    file: count-transactions.yaml
-    env:
-      INDEX: "1"
+- runFlow: ../reject-receipt/count-all.yaml
 - runScript:
     file: variants.js
     env:

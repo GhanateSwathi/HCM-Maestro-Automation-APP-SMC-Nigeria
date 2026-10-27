@@ -1,0 +1,66 @@
+appId: ${HCM_APP_ID}
+name: home-keep-session
+---
+# For chained runs (scripts/run-chain.ps1 passes KEEP_SESSION=true): reuse the
+# session the previous flow of the same role left, instead of wiping the app.
+# Stock, balances and downloaded records live on the device, so flows that
+# build on each other (accept -> reject -> dispatch -> return) only work in
+# one session; every flow's sign-in clears the app (launch-app.yaml), which is
+# right for a flow run on its own and wrong in the middle of a chain.
+#
+# Sets output.session for the calling home subflow:
+#   home      signed in and on HOME_SCREEN - skip sign-in and boundary
+#   boundary  signed in, but the app restarted onto boundary selection
+#             (BOUNDARY_SCREEN; seen 2026-10-23) - select and submit again
+#   fresh     anything else: KEEP_SESSION unset, the Login screen, an unknown
+#             screen - sign in as usual, which clears the app
+# A chain logs out between roles (flows/login/logout.yaml), so the session
+# found here is always the role about to run.
+- evalScript: ${output.session = 'fresh'}
+- runFlow:
+    when:
+      true: ${typeof KEEP_SESSION !== 'undefined' && String(KEEP_SESSION) == 'true'}
+    commands:
+      - launchApp:
+          clearState: false
+          stopApp: false
+      - extendedWaitUntil:
+          visible: "${HOME_SCREEN}|${BOUNDARY_SCREEN}|User ID.*|Open navigation menu"
+          timeout: 60000
+          optional: true
+          label: "The app shows where it is"
+      # Inside the app but not on home (the previous flow ended elsewhere):
+      # Home from the side menu.
+      - runFlow:
+          when:
+            notVisible: ${HOME_SCREEN}
+          commands:
+            - runFlow:
+                when:
+                  visible: "Open navigation menu"
+                commands:
+                  - runFlow: ../open-side-menu.yaml
+                  - tapOn:
+                      text: "Home"
+                      above: "Logout"
+                      label: "Home"
+                  - extendedWaitUntil:
+                      visible: ${HOME_SCREEN}
+                      timeout: 15000
+                      optional: true
+                      label: "The home screen"
+      - runFlow:
+          when:
+            visible: ${HOME_SCREEN}
+          commands:
+            - evalScript: ${output.session = 'home'}
+      - runFlow:
+          when:
+            true: ${output.session == 'fresh'}
+          commands:
+            - runFlow:
+                when:
+                  visible: ${BOUNDARY_SCREEN}
+                commands:
+                  - evalScript: ${output.session = 'boundary'}
+- evalScript: "${console.log('Session - ' + (output.session == 'home' ? 'kept, already on the home screen' : (output.session == 'boundary' ? 'kept, boundary selection asked again' : 'fresh sign-in')))}"

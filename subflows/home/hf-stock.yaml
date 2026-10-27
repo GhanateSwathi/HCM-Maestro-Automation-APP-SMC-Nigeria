@@ -6,30 +6,50 @@ name: home-hf-stock
 # ADMIN_Health Facility option) plus Submit. Every flow that works from that
 # user's home screen starts here. Leaves the facility chosen in
 # output.dropdown.options[0] (also logged by the dropdown).
-- runFlow: ../sign-in/hf-stock.yaml
+#
+# In a chained run (KEEP_SESSION=true, scripts/run-chain.ps1) the previous
+# flow's session is reused when the app is already signed in: keep-session.yaml
+# decides, and sign-in (which clears the app), the facility and the data
+# check are skipped as far as they are not needed.
 - runFlow:
-    file: ../dropdown/select-first-options.yaml
-    env:
-      FIELD: "ADMIN_Health Facility.*"
-      COUNT: "1"
-- evalScript: ${console.log('Health Facility selected - ' + output.dropdown.options[0])}
-
-- tapOn:
-    text: "Submit"
-    label: "Submit the boundary selection"
-
-# Unlike the state user's, this Submit looks for records under the chosen
-# boundary first: "No data found!" (Go Back), "Data found!" (Download, or
-# Proceed Without Downloading per BOUNDARY_DATA_CHOICE), or "Failed to check
-# data in server" (Retry, then Proceed Without Downloading) - all handled by
-# boundary-data.yaml (Prompt 17), shared with the CDD. AU-HFS-001 got "No
-# data found!" on 2026-10-19 and, once the facility had its own activity,
-# "Data found!". Stock is fetched later, by Download Stock Data.
-- runFlow:
-    file: boundary-data.yaml
+    file: keep-session.yaml
     env:
       HOME_SCREEN: "Stock Balance"
-      ROLE: "Health Facility User"
+      BOUNDARY_SCREEN: "ADMIN_Health Facility.*"
+- runFlow:
+    when:
+      true: ${output.session == 'fresh'}
+    file: ../sign-in/hf-stock.yaml
+- runFlow:
+    when:
+      true: ${output.session != 'home'}
+    commands:
+      - runFlow:
+          file: ../dropdown/select-first-options.yaml
+          env:
+            FIELD: "ADMIN_Health Facility.*"
+            COUNT: "1"
+      - evalScript: ${console.log('Health Facility selected - ' + output.dropdown.options[0])}
+      - tapOn:
+          text: "Submit"
+          label: "Submit the boundary selection"
+      # Unlike the state user's, this Submit looks for records under the
+      # chosen boundary first: "No data found!" (Go Back), "Data found!"
+      # (Download, or Proceed Without Downloading per BOUNDARY_DATA_CHOICE),
+      # or "Failed to check data in server" (Retry, then Proceed Without
+      # Downloading) - all handled by boundary-data.yaml (Prompt 17), shared
+      # with the CDD. AU-HFS-001 got "No data found!" on 2026-10-19 and, once
+      # the facility had its own activity, "Data found!". Stock is fetched
+      # later, by Download Stock Data.
+      - runFlow:
+          file: boundary-data.yaml
+          env:
+            HOME_SCREEN: "Stock Balance"
+            ROLE: "Health Facility User"
+- extendedWaitUntil:
+    visible: "Stock Balance"
+    timeout: 60000
+    label: "On the home screen"
 
 - runFlow:
     when:

@@ -6,37 +6,58 @@ name: home-cdd
 # ADMIN_Health Facility, the first three ADMIN_Community) plus Submit. Every
 # flow that works from the CDD's home screen starts here. Leaves the
 # communities chosen in output.dropdown.options (also logged).
-- runFlow: ../sign-in/cdd.yaml
+#
+# In a chained run (KEEP_SESSION=true, scripts/run-chain.ps1) the previous
+# flow's session is reused when the app is already signed in: keep-session.yaml
+# decides, and sign-in (which clears the app), the boundaries and the data
+# check are skipped as far as they are not needed.
+- evalScript: ${output.cddBoundaryData = 'session kept - no boundary check'}
 - runFlow:
-    file: ../dropdown/select-first-options.yaml
-    env:
-      FIELD: "ADMIN_Health Facility.*"
-      COUNT: "1"
-- evalScript: ${output.cddFacility = output.dropdown.options[0]}
-- runFlow:
-    file: ../dropdown/select-first-options.yaml
-    env:
-      FIELD: "ADMIN_Community.*"
-      COUNT: "3"
-- evalScript: "${console.log('CDD boundaries - ' + output.cddFacility + '; communities ' + output.dropdown.options.join(', '))}"
-
-- tapOn:
-    text: "Submit"
-    label: "Submit the boundary selection"
-
-# As for the health facility user, Submit may first report the boundary's
-# records: "No data found!" (Go Back), "Data found!" (Download, or Proceed
-# Without Downloading per BOUNDARY_DATA_CHOICE), or - as for AU-CDD-001 on
-# 2026-10-21 and 23, three times in a row - "Failed to check data in server"
-# (Retry, then Proceed Without Downloading). A field user then proceeds
-# without the boundary's existing records; registering a new household does
-# not need them, and stock comes down separately (Download Stock Data). All
-# handled by boundary-data.yaml (Prompt 17), which logs the outcome.
-- runFlow:
-    file: boundary-data.yaml
+    file: keep-session.yaml
     env:
       HOME_SCREEN: "Registration & Delivery|Stock Balance"
-      ROLE: "CDD"
-- evalScript: ${output.cddBoundaryData = output.bd.detail}
+      BOUNDARY_SCREEN: "ADMIN_Health Facility.*"
+- runFlow:
+    when:
+      true: ${output.session == 'fresh'}
+    file: ../sign-in/cdd.yaml
+- runFlow:
+    when:
+      true: ${output.session != 'home'}
+    commands:
+      - runFlow:
+          file: ../dropdown/select-first-options.yaml
+          env:
+            FIELD: "ADMIN_Health Facility.*"
+            COUNT: "1"
+      - evalScript: ${output.cddFacility = output.dropdown.options[0]}
+      - runFlow:
+          file: ../dropdown/select-first-options.yaml
+          env:
+            FIELD: "ADMIN_Community.*"
+            COUNT: "3"
+      - evalScript: "${console.log('CDD boundaries - ' + output.cddFacility + '; communities ' + output.dropdown.options.join(', '))}"
+      - tapOn:
+          text: "Submit"
+          label: "Submit the boundary selection"
+      # As for the health facility user, Submit may first report the
+      # boundary's records: "No data found!" (Go Back), "Data found!"
+      # (Download, or Proceed Without Downloading per BOUNDARY_DATA_CHOICE),
+      # or - as for AU-CDD-001 on 2026-10-21 and 23, three times in a row -
+      # "Failed to check data in server" (Retry, then Proceed Without
+      # Downloading). A field user then proceeds without the boundary's
+      # existing records; registering a new household does not need them,
+      # and stock comes down separately (Download Stock Data). All handled by
+      # boundary-data.yaml (Prompt 17), which logs the outcome.
+      - runFlow:
+          file: boundary-data.yaml
+          env:
+            HOME_SCREEN: "Registration & Delivery|Stock Balance"
+            ROLE: "CDD"
+      - evalScript: ${output.cddBoundaryData = output.bd.detail}
+- extendedWaitUntil:
+    visible: "Registration & Delivery|Stock Balance"
+    timeout: 60000
+    label: "On the home screen"
 - evalScript: "${console.log('CDD boundary records - ' + output.cddBoundaryData)}"
 - takeScreenshot: artifacts/cdd-home

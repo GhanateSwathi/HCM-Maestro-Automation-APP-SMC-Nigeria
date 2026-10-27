@@ -14,7 +14,13 @@ param(
     [string[]] $Flow,
     [string]   $Tags,
     [string]   $ExcludeTags,
-    [string]   $Device
+    [string]   $Device,
+    # Reuse the signed-in session instead of wiping the app at sign-in
+    # (KEEP_SESSION=true; subflows/home/keep-session.yaml). For chained runs
+    # - see run-chain.ps1.
+    [switch]   $KeepSession,
+    # KEY=VALUE pairs that replace .env's for this run only (e.g. TEST_USER).
+    [string[]] $Set
 )
 
 $ErrorActionPreference = 'Stop'
@@ -45,9 +51,19 @@ if (-not (Test-Path $envFile)) {
 
 $cliArgs = @('test')
 
+# -Set and -KeepSession replace any .env entry with the same key.
+$overrides = @()
+if ($Set)         { $overrides += $Set }
+if ($KeepSession) { $overrides += 'KEEP_SESSION=true' }
+$overrideKeys = @($overrides | ForEach-Object { ($_ -split '=', 2)[0].Trim() })
 foreach ($line in Get-Content $envFile) {
     $entry = $line.Trim()
     if ($entry -eq '' -or $entry.StartsWith('#')) { continue }
+    if ($overrideKeys -contains ($entry -split '=', 2)[0].Trim()) { continue }
+    $cliArgs += '-e'
+    $cliArgs += $entry
+}
+foreach ($entry in $overrides) {
     $cliArgs += '-e'
     $cliArgs += $entry
 }

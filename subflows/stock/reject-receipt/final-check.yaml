@@ -31,6 +31,21 @@ name: reject-final-check
 - runFlow: ../download-stock-data.yaml
 - runFlow: ../open-incoming-transactions.yaml
 - takeScreenshot: artifacts/stock-reject-list-after-download
+# The one whole-list count after the rejections: each variant is its count
+# before less what was rejected of it (reject.js listCheck).
+- runFlow: count-all.yaml
+- runScript:
+    file: reject.js
+    env:
+      ACTION: listCheck
+    label: "Test Case 6 - the incoming list matches the rejections"
+- runFlow:
+    when:
+      true: ${output.rej.failure}
+    file: ../../fail.yaml
+    env:
+      MESSAGE: ${output.rej.failure}
+    label: "Test Case 6 - the rejected transactions are gone"
 - runFlow:
     when:
       true: ${output.rej.rejectedLabels[0] != ''}

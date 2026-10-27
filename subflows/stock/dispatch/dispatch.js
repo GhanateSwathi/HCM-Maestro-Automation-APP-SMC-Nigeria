@@ -36,14 +36,23 @@ if (ACTION === 'plan') {
         output.plan.failure = 'PRODUCT_VARIANT must be set in .env (e.g. SPAQ1, or SPAQ1,SPAQ2).';
     }
 } else if (ACTION === 'init') {
+    // PARTS (optional, from the caller): Case 3 dispatches the stock above
+    // the remaining balance in this many equal dispatches - the suite's 2, so
+    // the receiver has one to accept and one to reject. Unset: 1.
+    var parts = parseInt(String(typeof PARTS === 'undefined' ? '' : PARTS).trim(), 10);
     output.dispatch = {
         variant: String(VARIANT).trim(),
         remaining: parseInt(String(REMAINING).trim(), 10),
+        parts: isNaN(parts) || parts < 1 ? 1 : parts,
         balance: NaN,
         over: NaN,
         quantity: NaN,
+        expectedFinal: NaN,
         finalBalance: NaN,
+        partQuantities: [],
+        partDone: 0,
         mrn: '',
+        mrns: [],
         errors: {},
         failure: ''
     };
@@ -69,9 +78,10 @@ if (ACTION === 'plan') {
     } else if (PHASE === 'final') {
         d.finalBalance = value;
         console.log('Final balance for ' + d.variant + ': ' + value);
-        if (value !== d.remaining) {
-            d.failure = 'Balance mismatch: expected ' + d.remaining + ', found ' + value +
-                ' after dispatching ' + d.quantity + ' from ' + d.balance + '.';
+        if (value !== d.expectedFinal) {
+            d.failure = 'Balance mismatch: expected ' + d.expectedFinal + ', found ' + value +
+                ' after dispatching ' + d.quantity + (d.parts > 1 ? ' (' + d.partQuantities.join(' + ') + ')' : '') +
+                ' from ' + d.balance + '.';
         }
     }
 } else if (ACTION === 'error') {
@@ -83,9 +93,22 @@ if (ACTION === 'plan') {
     if (!(c.balance > c.remaining)) {
         c.failure = 'BLOCKED - Case 3: Insufficient stock: balance ' + c.balance +
             '; cannot dispatch while leaving ' + c.remaining + '.';
+    } else if (c.parts > 1 && Math.floor((c.balance - c.remaining) / c.parts) < 1) {
+        c.failure = 'BLOCKED - Case 3: Insufficient stock: balance ' + c.balance + ' cannot be dispatched in ' +
+            c.parts + ' parts while leaving ' + c.remaining + '.';
     } else {
+        // The total leaves exactly REMAINING_BALANCE. In parts, each is the
+        // same and the last takes what is left over (435 -> 217 + 218), so the
+        // final balance is REMAINING_BALANCE whatever the split.
         c.quantity = c.balance - c.remaining;
-        console.log('Case 3 - DISPATCH_QUANTITY = ' + c.balance + ' - ' + c.remaining + ' = ' + c.quantity);
+        var each = Math.floor(c.quantity / c.parts);
+        c.partQuantities = [];
+        for (var pi = 0; pi < c.parts; pi++) {
+            c.partQuantities.push(pi === c.parts - 1 ? c.quantity - each * (c.parts - 1) : each);
+        }
+        c.expectedFinal = c.remaining;
+        console.log('Case 3 - DISPATCH_QUANTITY = ' + c.balance + ' - ' + c.remaining + ' = ' + c.quantity +
+            (c.parts > 1 ? ', in ' + c.parts + ' parts: ' + c.partQuantities.join(' + ') : ''));
     }
 } else if (ACTION === 'done') {
     var r = output.dispatch;
@@ -95,8 +118,10 @@ if (ACTION === 'plan') {
         : '';
     output.plan.results.push(r.variant + ': to ' + output.form.facility + scan + ', balance ' + r.balance +
         ', Case 1 blocked ("' + r.errors['1'] + '"), Case 2 blocked at ' + r.over + ' ("' + r.errors['2'] +
-        '"), Case 3 dispatched ' + r.quantity + ', final balance ' + r.finalBalance + ' (expected ' +
-        r.remaining + ')' + (r.mrn ? ', MRN ' + r.mrn : ''));
+        '"), Case 3 dispatched ' + r.quantity + (r.parts > 1 ? ' (' + r.partQuantities.join(' + ') + ')' : '') +
+        ', final balance ' +
+        r.finalBalance + ' (expected ' + r.expectedFinal + ')' +
+        (r.mrns.length ? ', MRN ' + r.mrns.join(', ') : (r.mrn ? ', MRN ' + r.mrn : '')));
     output.plan.next = output.plan.next + 1;
 } else if (ACTION === 'summary') {
     console.log('Dispatch summary - ' + output.plan.results.join(' | '));

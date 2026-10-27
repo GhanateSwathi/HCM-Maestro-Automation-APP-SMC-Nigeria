@@ -13,7 +13,7 @@ tags:
 # state user's screen: one boundary dropdown, no facility picker. The ADMIN_
 # forms are the mhbase tenant's raw boundary codes.
 - assertNotVisible:
-    text: "(ADMIN_)?Health Facility.*"
+    text: "(ADMIN_)?Health Facility.*" 
     label: "No facility picker for the state role"
 - assertVisible:
     text: "Submit"

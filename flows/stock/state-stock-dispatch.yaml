@@ -52,6 +52,8 @@ tags:
             TEAM_CODE: ""
             MISSING: "Facility To does not offer the health facility to dispatch to (TARGET_HEALTH_FACILITY, or any)."
             ROLE: "State User"
+            # Blank: one dispatch. 2 in a chained run: one part to accept, one to reject.
+            PARTS: ${DISPATCH_PARTS}
 
 - runScript:
     file: ../../subflows/stock/dispatch/dispatch.js

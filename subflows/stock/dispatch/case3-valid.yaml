@@ -6,6 +6,12 @@ name: case3-valid
 # leaves for the chosen recipient (a health facility, or a CDD's delivery
 # team).
 #
+# With PARTS (output.dispatch.parts; DISPATCH_PARTS in .env) above 1, that
+# stock goes out in as many dispatches, one form each, so the receiver gets
+# one transaction per part - one to accept and one to reject in a chained run
+# (scripts/run-chain.ps1). The parts are equal but for the last, which takes
+# what is left over (435 -> 217 + 218), so REMAINING_BALANCE is still left.
+#
 # BLOCKED, touching nothing, unless CURRENT_BALANCE > REMAINING_BALANCE:
 #   BLOCKED - Case 3: Insufficient stock: balance 0; cannot dispatch while leaving 10.
 #
@@ -34,54 +40,61 @@ name: case3-valid
             MESSAGE: ${output.dispatch.failure}
           label: "Case 3 - enough stock to dispatch"
 
-- runFlow:
-    file: ../open-stock-form.yaml
-    env:
-      TRANSACTION_TYPE: "Issue"
-- runFlow:
-    file: ../enter-quantity.yaml
-    env:
-      QUANTITY: ${output.dispatch.quantity}
-- assertNotVisible:
-    text: "(?!\\d+$).+"
-    below: "Quantity sent.*"
-    above: "Submit"
-    label: "Case 3 - the quantity raises no validation message"
-- tapOn:
-    text: "Submit"
-    label: "Case 3 - Submit the dispatch (irreversible)"
-- waitForAnimationToEnd:
-    timeout: 3000
-- runFlow:
-    when:
-      visible: "Confirm"
+- evalScript: ${output.dispatch.partDone = 0}
+- repeat:
+    times: ${output.dispatch.parts}
+    label: "Case 3 - each dispatch"
     commands:
-      - takeScreenshot: artifacts/dispatch-case3-popup
+      - runFlow:
+          file: ../open-stock-form.yaml
+          env:
+            TRANSACTION_TYPE: "Issue"
+      - runFlow:
+          file: ../enter-quantity.yaml
+          env:
+            QUANTITY: ${output.dispatch.partQuantities[output.dispatch.partDone]}
+      - assertNotVisible:
+          text: "(?!\\d+$).+"
+          below: "Quantity sent.*"
+          above: "Submit"
+          label: "Case 3 - the quantity raises no validation message"
       - tapOn:
-          text: "Confirm"
-          label: "Case 3 - Confirm the dispatch"
-# Known to be on screen at Submit, so this cannot pass vacuously.
-- extendedWaitUntil:
-    notVisible: "Quantity sent.*"
-    timeout: 30000
-    label: "Case 3 - the dispatch went through (the form closed)"
-- takeScreenshot: artifacts/dispatch-case3-${output.dispatch.variant}-result
-# The success screen names the dispatch's MRN - log it for the report.
-- setClipboard: "none"
-- runFlow:
-    when:
-      visible: ".*MRN: .*"
-    commands:
-      - copyTextFrom:
-          text: ".*MRN: .*"
-          label: "Case 3 - read the dispatch's MRN"
-      - evalScript: ${output.dispatch.mrn = String(maestro.copiedText).replace(/^.*MRN:\s*/, '').trim()}
-- evalScript: "${console.log('Case 3 - ' + output.dispatch.variant + ' dispatch confirmation: ' + maestro.copiedText)}"
+          text: "Submit"
+          label: "Case 3 - Submit the dispatch (irreversible)"
+      - waitForAnimationToEnd:
+          timeout: 3000
+      - runFlow:
+          when:
+            visible: "Confirm"
+          commands:
+            - takeScreenshot: artifacts/dispatch-case3-popup
+            - tapOn:
+                text: "Confirm"
+                label: "Case 3 - Confirm the dispatch"
+      # Known to be on screen at Submit, so this cannot pass vacuously.
+      - extendedWaitUntil:
+          notVisible: "Quantity sent.*"
+          timeout: 30000
+          label: "Case 3 - the dispatch went through (the form closed)"
+      - takeScreenshot: artifacts/dispatch-case3-${output.dispatch.variant}-result
+      # The success screen names the dispatch's MRN - log it for the report.
+      - setClipboard: "none"
+      - runFlow:
+          when:
+            visible: ".*MRN: .*"
+          commands:
+            - copyTextFrom:
+                text: ".*MRN: .*"
+                label: "Case 3 - read the dispatch's MRN"
+            - evalScript: ${output.dispatch.mrn = String(maestro.copiedText).replace(/^.*MRN:\s*/, '').trim()}
+            - evalScript: ${output.dispatch.mrns.push(output.dispatch.mrn)}
+      - evalScript: "${console.log('Case 3 - ' + output.dispatch.variant + ' dispatch of ' + output.dispatch.partQuantities[output.dispatch.partDone] + ' - confirmation: ' + maestro.copiedText)}"
+      - evalScript: ${output.dispatch.partDone = output.dispatch.partDone + 1}
+      - runFlow: ../back-to-home.yaml
 
-- runFlow: ../back-to-home.yaml
 - runFlow:
     file: dispatch-balance.yaml
     env:
       PHASE: final
 - takeScreenshot: artifacts/dispatch-case3-${output.dispatch.variant}-final-balance
-- evalScript: ${console.log('Case 3 PASSED - dispatched ' + output.dispatch.quantity + ' ' + output.dispatch.variant + ' to ' + output.form.facility + '; balance ' + output.dispatch.balance + ' -> ' + output.dispatch.finalBalance)}
+- evalScript: "${console.log('Case 3 PASSED - dispatched ' + output.dispatch.quantity + (output.dispatch.parts > 1 ? ' (' + output.dispatch.partQuantities.join(' + ') + ')' : '') + ' ' + output.dispatch.variant + ' to ' + output.form.facility + '; balance ' + output.dispatch.balance + ' -> ' + output.dispatch.finalBalance)}"

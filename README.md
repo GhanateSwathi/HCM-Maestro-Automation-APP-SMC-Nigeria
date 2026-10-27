@@ -90,15 +90,15 @@ template is tracked.
 | `RETURN_QUANTITY` / `EXPECTED_START_BALANCE` / `EXPECTED_FINAL_BALANCE` | The return flow's quantity (`5`) and the balance before (`10`) and after (`5`) for each of `PRODUCT_VARIANT_1` and `_2` |
 | `RETURN_DESTINATION` | The National warehouse as Facility To lists it on the Return form — the app shows codes, not "National": `Fac_f-2026-10-15-137945` |
 | `TEST_USER` | The account under test, for a flow's report. Must be the user the flow signs in with, or the flow fails before touching the device: `HCM_HF_STOCK_USER_ID` for the health facility accept and referral flows, `HCM_CDD_USER_ID` (`AU-CDD-001`) for the registration flows - so set it for the flow you run |
-| `EXPECTED_INITIAL_BALANCE` | The health facility's balance of each variant before it accepts anything (`0`) |
-| `DISPATCHED_QTY_SPAQ1` / `DISPATCHED_QTY_SPAQ2` | What the state dispatched, from the dispatch flow's report (`490` each on 2026-10-19). Checked against `PRODUCT_VARIANT_1`'s and `_2`'s Stock Receipt Details |
+| `EXPECTED_INITIAL_BALANCE` | Optional, best blank. The health facility's balance of each variant before it accepts anything. Blank: the opening balance is logged and the final check is relative (balance = opening + received) |
+| `DISPATCHED_QTY_SPAQ1` / `DISPATCHED_QTY_SPAQ2` | Optional, best blank - they change with every dispatch. Set: what the state dispatched, checked against `PRODUCT_VARIANT_1`'s and `_2`'s Stock Receipt Details. Blank: each card is checked against Stock Receipt Details as read during the run |
 | `TARGET_CDD` | The CDD the health facility dispatches to, as their QR code names them (`AU-CDD-001`). The scanned code must match it |
 | `QR_CODE_PATH` | That CDD's QR code as an image, relative to the project root (`assets/qr/cdd_qr.png`). [`prepare-qr-camera`](#qr-codes-on-the-emulator) shows it to the emulator camera |
 | `HF_RETURN_DESTINATION` | The state warehouse the health facility returns to, as its Return form lists it: `Fac_f-2026-10-15-137946`. The return quantities and balances are the shared `RETURN_QUANTITY` / `EXPECTED_START_BALANCE` / `EXPECTED_FINAL_BALANCE` |
 | `RECON_COMMENT` | The comment the reconciliation flows enter for a count different from stock in hand. ASCII only — Maestro's `inputText` on Android types nothing else — so `Automation test - reconciliation discrepancy` with a plain hyphen |
 | `RECON_FACILITY` | Optional. The Stock Reconciliation warehouse, as the app lists it; blank takes the first offered |
 | `REPORT_FACILITY` | Optional. The View Reports facility filter option; blank takes the first offered |
-| `STATE_REPORT_RECEIVED` / `_ISSUED` / `_RETURNED` / `_RECONCILIATION` | The entries the state user's reports should hold, from the earlier prompts' execution reports. Transaction reports: `<variant> <MRN> <quantity>`, comma-separated (e.g. `SPAQ1 C552-4450-5C9A 500,SPAQ2 B46C-1695-D327 500`); reconciliation: `<variant> <manual count>`. Blank: none expected |
+| `STATE_REPORT_RECEIVED` / `_ISSUED` / `_RETURNED` / `_RECONCILIATION` | Optional, best blank: MRNs are made by the app at each dispatch, so stored ones go stale with every run. Set: the entries the state user's reports should hold - transaction reports `<variant> <MRN> <quantity>`, comma-separated; reconciliation `<variant> <manual count>`. Blank: each report's rows are read and logged |
 | `HF_REPORT_RECEIVED` / `_ISSUED` / `_RETURNED` / `_RECONCILIATION` | The same for the health facility |
 | `REASON_1` … `REASON_4` | The four referral reasons, worded as the app lists them: `Fever`, `Sick`, `Drug side effect from the current cycle`, `Drug side effect from the previous cycle` |
 | `CHILD_AGE_MONTHS` | The referred child's age in months, 3 to 59 (`24`) |
@@ -111,8 +111,8 @@ template is tracked.
 | `HEAD_MOBILE` | Optional. An 11-digit **test** number - never a real person's. Blank leaves the field empty (it is optional in the app) and skips the 10- and 12-digit checks, which are derived from this number |
 | `CHILD_1_AGE_MONTHS` / `CHILD_2_AGE_MONTHS` | The two children's ages in months: child 1 3 to 11 (expects `PRODUCT_VARIANT_1`), child 2 12 to 59 (expects `PRODUCT_VARIANT_2`) - `6` and `36`. The form takes years and months; the flow splits them |
 | `HEAD_GENDER` / `CHILD_1_GENDER` / `CHILD_2_GENDER` | Optional; blank takes the first offered (`Female`) |
-| `EXPECTED_CDD_RECEIVED_SPAQ1` / `_SPAQ2` | What the health facility dispatched to the CDD - Prompt 6's report (`480` each) |
-| `CDD_INCOMING_MRNS` | Optional. That dispatch's MRNs, comma-separated (`0572-01DA-C66C,CDC9-2D30-F38E`); the transaction about to be accepted must be one of them. Blank accepts the first per variant |
+| `EXPECTED_CDD_RECEIVED_SPAQ1` / `_SPAQ2` | Optional, best blank. Set: what the health facility dispatched to the CDD. Blank: Step 11 checks the balance rose by the quantity Stock Receipt Details shows |
+| `CDD_INCOMING_MRNS` | Optional, best blank. That dispatch's MRNs, comma-separated; the transaction about to be accepted must be one of them. Blank accepts the first per variant |
 | `UTD_HOUSEHOLD_MEMBERS` / `UTD_HEAD_AGE_YEARS` / `UTD_HEAD_AGE_MONTHS` | The Unable to Deliver household's own values - `20`, `35`, `0` - kept apart from Prompt 11's `HOUSEHOLD_MEMBERS` / `HEAD_AGE_*` |
 | `UTD_CHILD_1_AGE_MONTHS` … `_4_` | Its four children's ages in months, 3 to 59: `6`, `9` (`PRODUCT_VARIANT_1`), `24`, `48` (`PRODUCT_VARIANT_2`) |
 | `UTD_HEAD_GENDER` / `UTD_CHILD_GENDER` | Optional; blank takes the first offered (`Female`) |
@@ -124,6 +124,8 @@ template is tracked.
 | `REJECT_REASON` | The reason typed into the reject popup's reason field, when it has one, by the three reject flows (`Automation test - stock rejected`; ASCII only) |
 | `BOUNDARY_DATA_CHOICE` | What the health facility and CDD do when the boundary data check after Submit answers `Data found!`: `Download` (default; copies the boundary's records to the device, changes nothing on the server) or `Proceed` (Proceed Without Downloading). Used by every flow that signs in as either role |
 | `BOUNDARY_DATA_RETRIES` | How many times to Retry `Failed to check data in server` before Proceed Without Downloading (default `2`) |
+| `DISPATCH_PARTS` | How many dispatches Case 3 of the dispatch flows makes (`state-stock-dispatch.yaml`, `hf-stock-dispatch-cdd.yaml`): blank, one. `run-chain.ps1` passes `2`, so the next role has one transaction to accept and one to reject; the parts are equal but for the last, which takes what is left over, so `REMAINING_BALANCE` is still left |
+| `KEEP_SESSION` | **Not set in `.env`.** `run-chain.ps1` (or `run.ps1 -KeepSession`) passes `true` per run: the sign-in reuses the session the app already holds instead of wiping it - see [Chained runs](#chained-runs). Set in `.env`, every flow would do so |
 | `VIEW_TXN_EXPECTED_STATE` / `_HF` / `_CDD` | Optional. Transactions the role's View Transactions list must hold, comma-separated, each `<variant> <quantity>` or `<variant> <MRN> <quantity>` (e.g. `SPAQ1 490,SPAQ2 490`). Blank: the list is logged and nothing is expected. A receiver's acceptance can change the MRN the sender sees, so give an MRN only when it is known to be stable |
 
 Leave a role's pair blank if you are not testing that role. See
@@ -187,6 +189,47 @@ To use a different report format with `run.sh`, pass your own `--format`
 > `~/.maestro/tests/`). Share `report.html` and the screenshots, never the
 > whole folder. That is also why the default report is `HTML` and not
 > `HTML-DETAILED`, which lists each executed step, password included.
+
+### Chained runs
+
+Every flow signs in at the start, and signing in clears the app. Stock,
+balances and downloaded records live on the device, so flows that build on
+each other - accept, then reject, dispatch, return - cannot pass as separate
+runs: the dispatch flow's sign-in would erase the stock the accept flow just
+received. `run-chain.ps1` runs the existing flows of each role back to back in
+one app session instead, then syncs and logs out:
+
+```powershell
+.\scripts\run-chain.ps1                                   # state user, health facility, CDD
+.\scripts\run-chain.ps1 -Role State                       # one role
+.\scripts\run-chain.ps1 -Role HealthFacility,Cdd -Device emulator-5554
+```
+
+| Role | Flows, in order |
+| --- | --- |
+| `State` | `state-stock-accept-receipt`, `state-stock-reject-receipt`, `state-stock-dispatch` (in 2 parts), `state-stock-return`, `login/logout` |
+| `HealthFacility` | `hf-stock-accept-receipt`, `hf-stock-reject-receipt`, `hf-stock-dispatch-cdd` (in 2 parts; the QR camera is prepared and stopped by the script), `hf-stock-return-state`, `login/logout` |
+| `Cdd` | `cdd-stock-reject-receipt` (first, while the balance is 0), `cdd-registration-full` (accepts the other part), `cdd-consent-no`, `cdd-household-utd`, `cdd-household-redose`, `cdd-stock-view-transactions`, `login/logout` |
+
+- The flows are the prompts' own, unchanged. A role's first flow signs in
+  fresh; the rest run with `-KeepSession`, and
+  [`keep-session.yaml`](subflows/home/keep-session.yaml) then skips the sign-in
+  when the app is already on that role's home screen.
+- Per run the script sets `TEST_USER` to the role's user ID (read from
+  `.env`, never printed) and `DISPATCH_PARTS=2`, so each dispatch reaches the
+  next role as two transactions - one to accept, one to reject.
+- Expected MRNs and quantities are not taken from `.env`: they change with
+  every dispatch. Each flow checks what it reads on the screen - a card
+  against its Stock Receipt Details, a balance against the quantity received.
+- A failing flow stops the chain there, without logging out. Each flow writes
+  its own run folder.
+- Irreversible: a full chain accepts, rejects, dispatches and returns stock,
+  registers households and records doses on UAT. Before it, National must
+  have dispatched at least two transactions of each product variant to the
+  state, not yet downloaded or accepted.
+
+`run.ps1` takes the same switches for a single flow: `-KeepSession`, and
+`-Set KEY=VALUE,...` to replace `.env` values for that run.
 
 ### QR codes on the emulator
 
@@ -279,6 +322,7 @@ so the two cannot drift apart.
 | [`sign-in-cdd.yaml`](flows/login/sign-in-cdd.yaml) | `regression`, `login`, `cdd` | The CDD user signs in, the post-login sync completes, and facility selection opens. Needs the CDD credentials and a reachable environment; takes about 3 minutes. |
 | [`sign-in-state-stock.yaml`](flows/login/sign-in-state-stock.yaml) | `regression`, `login`, `state-stock` | The state stock user signs in and lands on boundary selection with no facility picker. Needs the state stock credentials. |
 | [`sign-in-hf-stock.yaml`](flows/login/sign-in-hf-stock.yaml) | `regression`, `login`, `hf-stock` | The health facility stock user signs in and lands on the same boundary selection. Needs the health facility stock credentials. |
+| [`logout.yaml`](flows/login/logout.yaml) | `chain`, `login` | Ends the session the app holds: home, Sync Data until `No Data available for sync` (`Sync Up Failed` fails it - those records would not reach the server), then the side menu's Logout, `Are you sure you want to end the session?`, Ok, the Login screen. Signs nothing in, so on its own it needs an app already signed in; `run-chain.ps1` runs it after each role. Already on the Login screen, it does nothing. |
 
 ### `flows/onboarding/`
 
@@ -434,7 +478,7 @@ maestro test flows --include-tags smoke --exclude-tags flaky
 
 | Axis | Purpose | Used here |
 | --- | --- | --- |
-| Test level | How deep and how slow the test is | `smoke`, `regression` |
+| Test level | How deep and how slow the test is | `smoke`, `regression`; `chain` for `flows/login/logout.yaml`, which only makes sense inside a chained run |
 | Feature area | Which part of the app it covers | `login`, `onboarding`, `stock`, `referral`, `registration` |
 | Role | Which user the flow signs in as — see [Roles](#roles) | `cdd`, `state-stock`, `hf-stock`; `nat-stock` reserved |
 | Platform | Android vs iOS flows | No — Android only |
@@ -586,6 +630,7 @@ flows/                      runnable tests, grouped by feature area
     sign-in-cdd.yaml        CDD sign-in through to facility selection
     sign-in-state-stock.yaml  state stock sign-in through to boundary selection
     sign-in-hf-stock.yaml   health facility stock sign-in, same landing
+    logout.yaml             sync, then log out of the session the app holds (chained runs)
   onboarding/
     state-stock-selects-state.yaml              first ADMIN_State option
     hf-stock-selects-facility.yaml              first ADMIN_Health Facility option
@@ -622,6 +667,8 @@ subflows/                   reusable building blocks, pulled in via runFlow
   launch-app.yaml
   accept-system-dialogs.yaml  answers Android's permission and system prompts
   login.yaml                the one login, for every role
+  sync-and-logout.yaml      Sync Data until nothing is left, then Logout
+  open-side-menu.yaml       opens the side menu, retrying past the Auto Sync notification
   allow-permissions.yaml    the app's post-sync Allow Permissions screen
   fail.yaml                 fail with a readable message
   sign-in/                  one "sign in as <role>" per role
@@ -634,6 +681,7 @@ subflows/                   reusable building blocks, pulled in via runFlow
     cdd.yaml
     boundary-data.yaml      the data check after Submit (health facility, CDD) - Prompt 17
     boundary-data.js        its book-keeping
+    keep-session.yaml       chained runs: reuse the signed-in session instead of signing in again
   stock/
     download-stock-data.yaml         fetch stock records (home > home)
     open-incoming-transactions.yaml  home > Manage Stock > Record Stock Receipt
@@ -663,6 +711,7 @@ prompts/                    the specification prompts, one file each
   prompt-16-view-transactions.md  View Transactions, all three roles
   prompt-17-boundary-data-download.md  the data check after login, health facility and CDD
 scripts/                    run.ps1 (Windows) and run.sh (bash) - same behaviour
+                            run-chain.ps1 - each role's flows back to back in one session, then logout
                             prepare-qr-camera.ps1 / .sh - flash the QR to the emulator camera
 assets/qr/cdd_qr.png        the CDD's QR code (QR_CODE_PATH; gitignored, like .env)
 artifacts/                  run reports and screenshots (gitignored)
@@ -693,12 +742,15 @@ Two rules keep this working, and both are easy to break:
 | [`home/hf-stock.yaml`](subflows/home/hf-stock.yaml) | The same for the health facility stock user: the first `ADMIN_Health Facility` option (logged), Submit, the boundary data check (`boundary-data.yaml`), home, and the Manage Stock card (else `Manage Stock card not displayed on home screen for Health Facility User.`). |
 | [`home/cdd.yaml`](subflows/home/cdd.yaml) | The same for the CDD user: the first `ADMIN_Health Facility` and the first three `ADMIN_Community` options (logged), Submit, the boundary data check (`boundary-data.yaml`; it failed three times on 2026-10-21 and 23 - registering a new household does not need the boundary's existing records), and home. Logs which answer it was. |
 | [`home/boundary-data.yaml`](subflows/home/boundary-data.yaml) | Prompt 17 - the check the health facility's and the CDD's Submit runs: `Data found!` (both choices offered; Download → `Go To Home Screen`, or Proceed Without Downloading, per `BOUNDARY_DATA_CHOICE`), `No data found!` (Go Back), `Failed to check data in server` (Retry up to `BOUNDARY_DATA_RETRIES`, then Proceed Without Downloading), or straight home; ends on the caller's `HOME_SCREEN`. [`boundary-data.js`](subflows/home/boundary-data.js) records the first answer, the retries, the outcome and the test cases covered. |
+| [`home/keep-session.yaml`](subflows/home/keep-session.yaml) | Chained runs (`KEEP_SESSION=true`): brings the app to the front without clearing it and sets `output.session` - `home` (signed in, on the caller's `HOME_SCREEN`: sign-in and boundary skipped), `boundary` (signed in, but the restarted app asks for the boundary again: no sign-in), or `fresh` (anything else, or `KEEP_SESSION` unset: the usual sign-in, which clears the app). Used at the start of `home/state-stock.yaml`, `home/hf-stock.yaml` and `home/cdd.yaml`. |
+| [`sync-and-logout.yaml`](subflows/sync-and-logout.yaml) | Home (side menu), Sync Data until `No Data available for sync` - `Sync Up Failed` fails - then Logout, Ok, the Login screen. Read off the app 2026-10-23. Used by `flows/login/logout.yaml`. |
+| [`open-side-menu.yaml`](subflows/open-side-menu.yaml) | Tap `Open navigation menu` until the menu's `Logout` shows (up to 4 taps): the background Auto Sync's heads-up notification can cover the button for a few seconds and take the tap (CDD, 2026-10-26). Used by `home/keep-session.yaml`, both `go-home.yaml`s and `sync-and-logout.yaml`. |
 | [`fail.yaml`](subflows/fail.yaml) | Fail the flow with a plain-English `MESSAGE` that reaches the run summary and `report.html` — for checks whose failure should read as a sentence (`BLOCKED - …`, `MRN mismatch: …`). Run it inside a `runFlow: when:` that detects the failure. |
 | [`stock/download-stock-data.yaml`](subflows/stock/download-stock-data.yaml) | From home: Download Stock Data → Download (when `Data Found`) → Go To Home Screen. Copies records to the device; changes nothing on the server. |
 | [`stock/open-incoming-transactions.yaml`](subflows/stock/open-incoming-transactions.yaml) | From home: Manage Stock card (scrolled to if needed) → Record Stock Receipt → wait for the list. Sets `output.incoming` to `present` or `absent`. |
 | [`stock/read-first-transaction.yaml`](subflows/stock/read-first-transaction.yaml) | Log the first incoming transaction's MRN, product, date, sender and status. |
 | [`stock/incoming-receipts.js`](subflows/stock/incoming-receipts.js) | Log whether incoming transactions were found and enforce `HCM_STATE_STOCK_INCOMING_RECEIPTS` when it is set. |
-| [`stock/accept-receipt/`](subflows/stock/accept-receipt/) | Accepting incoming stock, shared by the state user (Cases 2, 2a, 2b) and the health facility user (Test Cases 3–5): `init-variants.yaml`, `read-balances.yaml` (home Stock Balance), `count-transactions.yaml` / `check-variants.yaml` (a transaction for each variant), `open-transaction.yaml` (a variant's first transaction → its own Select → Stock Receipt Details, product / MRN / sender / quantity checked), `open-accept-confirmation.yaml`, `case2-popup.yaml` / `case2a-cancel.yaml` (the popup, then Cancel), `accept-transaction.yaml` (… → Confirm → banner, list, count, MRN gone), `accept-both.yaml` (variant 1, then 2), `case2b-confirm.yaml` (the state user's: both, then balances), and `variants.js` / `transaction.js` for the book-keeping. A flow renames the cases in its messages through `output.variants.cases`. |
+| [`stock/accept-receipt/`](subflows/stock/accept-receipt/) | Accepting incoming stock, shared by the state user (Cases 2, 2a, 2b) and the health facility user (Test Cases 3–5): `init-variants.yaml`, `read-balances.yaml` (home Stock Balance), `check-variants.yaml` (a transaction for each variant - every count here is over the whole list, by `../reject-receipt/count-all.yaml`, since 2026-10-23; `count-transactions.yaml`, which saw only the cards on screen, is kept but unused), `open-transaction.yaml` (a variant's first transaction → its own Select → Stock Receipt Details, product / MRN / sender / quantity checked), `open-accept-confirmation.yaml`, `case2-popup.yaml` / `case2a-cancel.yaml` (the popup, then Cancel), `accept-transaction.yaml` (… → Confirm → banner, list, count, MRN gone), `accept-both.yaml` (variant 1, then 2), `case2b-confirm.yaml` (the state user's: both, then balances), and `variants.js` / `transaction.js` for the book-keeping. A flow renames the cases in its messages through `output.variants.cases`. |
 | [`stock/reject-receipt/`](subflows/stock/reject-receipt/) | Rejecting incoming stock (Prompt 15) for the state user, the health facility and the CDD, over `accept-receipt/`'s transaction reading: `init.yaml` (test data first; the flow passes `ROLE` and `PREREQUISITE`), `reject-receipt.yaml` (the specification's `common/reject_stock.yaml` - Test Cases 1-6, home to home), `open-reject.yaml` (tap Reject; a popup or not, and the popup's title, confirming button and reason field), `cancel-reject.yaml` (Test Case 3), `empty-reason.yaml` (Test Case 4, only for a field marked mandatory), `enter-reason.yaml`, `reject-transaction.yaml` (one variant: reason, Confirm), `read-message.yaml` (the `Stock rejected successfully` banner, looked for straight after Confirm), `reject-outcome.yaml` (back to the list, transaction gone, other variant untouched), `count-all.yaml` (every card per variant, scrolling the whole list - the accept flows count only the cards on screen), `final-check.yaml` (Test Case 6), and `reject.js` for the book-keeping, counting, deviations and report. |
 | [`stock/view-transactions/`](subflows/stock/view-transactions/) | View Transactions (Prompt 16) for the state user, the health facility and the CDD: `init.yaml` (test data first; the flow passes `ROLE` and `EXPECTED`), `view-transactions.yaml` (the specification's `common/view_transactions.yaml` - Test Cases 1-6, home to home), `open-view-transactions.yaml` (Test Case 1), `read-cards.yaml` (Test Case 2 - every card, keyed by MRN, scrolling the whole list) over `card-field.yaml` (one part of one card, fenced between its MRN tag and the next card's), `open-details.yaml` (Test Case 3 - one card's Select Transaction, the details compared, Back), `view-qr.yaml` (Test Case 4 - closed with Back: the popup's X has no text), `tap-back.yaml` (the app's Back link, tapped again when an Android notification covered it), and `view-txn.js` for the book-keeping, expected entries, notes and report. |
 | [`stock/reports/`](subflows/stock/reports/) | View Reports for either role: `open-view-reports.yaml` (the card, all four reports offered — `report-offered.yaml` each), `view-report.yaml` (the specification's `common/view_report.yaml` — one report: facility, table state, back), `report-table.yaml` (headers, rows logged, each expected entry looked for) and `reports.js` (patterns, findings, the report). |
@@ -709,7 +761,7 @@ Two rules keep this working, and both are easy to break:
 | [`stock/scan-team-code.yaml`](subflows/stock/scan-team-code.yaml) | The specification's `scan_qr.yaml`. With Facility To `Delivery team`: Team Code → camera permission if asked → wait for a code → it must name `TARGET_CDD` → Submit (retried past the `Code already scanned` banner) → Team Code shows the CDD. Fails as `QR code scan failed: <reason>.` |
 | [`stock/enter-quantity.yaml`](subflows/stock/enter-quantity.yaml) | Fenced focus + focus check + type `QUANTITY` into "Quantity sent" or "Quantity returned". |
 | [`stock/back-to-home.yaml`](subflows/stock/back-to-home.yaml) | Android Back until the home screen, stopping there. |
-| [`stock/dispatch/`](subflows/stock/dispatch/) | Both dispatch flows — the state to a health facility, the health facility to a CDD; the caller names the recipient (`TARGET`, `TEAM_CODE`, `MISSING`, `ROLE`): `dispatch-variant.yaml` (Cases 1–3 for one product, home to home), `init-dispatch.yaml`, `dispatch-balance.yaml` (the shared balance read, checked per phase), `expect-blocked.yaml` (shared by Case 1 and 2 — never confirms), one subflow per case, and `dispatch.js` for the book-keeping. |
+| [`stock/dispatch/`](subflows/stock/dispatch/) | Both dispatch flows — the state to a health facility, the health facility to a CDD; the caller names the recipient (`TARGET`, `TEAM_CODE`, `MISSING`, `ROLE`), and may split Case 3 into `PARTS` equal dispatches (the suite's 2; unset, 1): `dispatch-variant.yaml` (Cases 1–3 for one product, home to home), `init-dispatch.yaml`, `dispatch-balance.yaml` (the shared balance read, checked per phase), `expect-blocked.yaml` (shared by Case 1 and 2 — never confirms), one subflow per case, and `dispatch.js` for the book-keeping. |
 | [`stock/return/`](subflows/stock/return/) | Both return flows — the state to National, the health facility to the state: `return-variant.yaml` (start balance must be `EXPECTED_START_BALANCE` → Return form to `DESTINATION` → `RETURN_QUANTITY` → Submit → MRN → final balance must be `EXPECTED_FINAL_BALANCE`; the caller passes `DESTINATION`, `DESTINATION_KEY`, `ROLE`, `PREREQUISITE`), `finish.yaml` (the first product re-checked, summary) and `return.js` for the book-keeping and messages. |
 | [`referral/`](subflows/referral/) | Beneficiary Referral: `open-referral.yaml` (card → village), `create-referral.yaml` (the specification's `common/create_referral.yaml` — one referral, in stages `referral-facility`, `referral-details` with `pick-option` / `enter-field`, `referral-reason`, `fill-checklist`, `referral-submit`; a failed stage fails that record only and `back-to-referrals.yaml` backs out), `fill-checklist.yaml` (every mandatory question: first option, or `CHECKLIST_TEXT_ANSWER` for a text question; walked twice for follow-ups), `verify-list.yaml` (searches each child's name), `go-home.yaml` (side menu → Home; Android Back would walk into the old form pages), `sync-referrals.yaml`, and `referral.js` for names, checklist titles, answers and the report. |
 | [`registration/`](subflows/registration/) | Registration & Delivery as the CDD (Prompt 11), over `registration.js` (test data, generated names, steps, boundary rows, deviations, the report): `init.yaml` / `consent-init.yaml` / `utd-init.yaml` / `redose-init.yaml` (test data first - Prompts 11 / 12 / 13 / 14); `household-with-children.yaml` (consent Yes, the head, every child, each submitted - Prompts 13 and 14); `start-registration.yaml` (search, the Low Beneficiary IDs fallback, location - every new registration); `open-registration.yaml` (card → village → search screen), `search-and-register.yaml` (Register Beneficiary empty / 2 characters / the search text), `low-id-popup.yaml` (Test Case 1), `download-ids.yaml` (Step 1); `register-household.yaml` (the specification's `common/register_household.yaml`: search and location, then `CONSENT` `Yes` - Steps 2-8 - or `No` - `consent-no.yaml`, ending on `Ready to Submit?`; a Low Beneficiary IDs popup at the start leads to the download first; `CHECK_SHORT` for the 2-character check) over `beneficiary-location.yaml`, `consent.yaml`, `consent-no.yaml` (No, reason field, reason mandatory, `CONSENT_REASON`), `consent-no-submit.yaml` (Prompt 12 Test Cases 1-3), `household-details.yaml` (`BOUNDS` runs `household-bounds.yaml`) / `household-count.yaml`, `member-form.yaml` (head or child: names, `age-entry.yaml` for each age and its bounds, gender, `mobile-number.yaml`), `add-member.yaml` (the specification's `common/add_member.yaml`) and `household-check.yaml`; `start-dose.yaml`, `eligibility-checklist.yaml` (every question `ANSWER`, follow-ups included), `first-dose.yaml` + `insufficient-stock.yaml` (Steps 9-10); `cdd-accept-stock.yaml` / `cdd-check-transaction.yaml` (Step 11, over `stock/accept-receipt/`); `open-household.yaml`, `deliver-dose.yaml` (the specification's `common/deliver_dose.yaml` - Dose, checklist, Record Cycle Dose, then `record-delivery.yaml`: `read-products.yaml` for the products offered and the age-product rule, quantity, Save Delivery, the delivery checks); `redose.yaml` (the specification's `common/redose.yaml` - the card's Redose, product, quantity, Reason, Submit, Redose Completed, no second redose), `dose-and-redose.yaml` (one Prompt 14 test case, with the balance checks) and `redose-final.yaml` (every card's status); `unable-to-deliver.yaml` (the specification's `common/unable_to_deliver.yaml` - the card's Unable To Deliver: reason, Proceed, Submit, status), `utd-final.yaml` (every child's status, balances unchanged) and `cdd-balances.yaml` (both balances into a phase); `balance-after-doses.yaml` (Step 15); `sync-data.yaml` (home, Sync Data until `No Data available for sync`; `Sync Up Failed` - e.g. `Session Expired` - recorded as a failure), the last step of both full flows; `go-home.yaml` (side menu → Home). |

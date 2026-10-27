@@ -29,8 +29,9 @@
 //   ACTION=empty     REFUSED=yes|no: Confirm with the reason empty;
 //                    maestro.copiedText the error shown, or "none"
 //   ACTION=outcome   maestro.copiedText: the message after rejecting, or "none"
-//   ACTION=rejected  after count-transactions.yaml for both variants: record
-//                    output.v as rejected, or the reason in output.rej.failure
+//   ACTION=rejected  record output.v as rejected
+//   ACTION=listCheck after count-all.yaml in Test Case 6: each variant's count
+//                    less what was rejected, or the reason in output.rej.failure
 //   ACTION=final     after read-balances.yaml PHASE=after: the balances check
 //   ACTION=summary   log the execution report; the deviations, if any, in
 //                    output.rej.failure
@@ -171,31 +172,37 @@ if (ACTION === 'init') {
             ' (' + output.txn.mrnLabel + ').');
     }
 } else if (ACTION === 'rejected') {
+    // Recorded on the message and, for a real MRN, the MRN gone from the list
+    // (reject-outcome.yaml). No whole-list count per rejection - 4-5 minutes
+    // each on 17 cards (2026-10-26); Test Case 6 counts once, after Download
+    // Stock Data (ACTION=listCheck).
     var rv = output.variants;
     var i = output.v.index;
-    var o = 1 - i;
     r.expectedCounts[i] = r.expectedCounts[i] - 1;
-    var problems = [];
-    if (rv.counts[i] !== r.expectedCounts[i]) {
-        problems.push('the ' + rv.names[i] + ' transaction is still listed after Reject (' +
-            (r.expectedCounts[i] + 1) + ' before, ' + rv.counts[i] + ' after).');
+    r.failure = '';
+    rv.rejected.push(rv.names[i]);
+    r.rejectedMrns.push(output.txn.mrnLabel);
+    // '' for a placeholder MRN ("MRN null_0"): it passes to the next
+    // transaction as the list renumbers, so its absence proves nothing.
+    r.rejectedLabels.push(output.txn.mrnMissing ? '' : output.txn.labelPattern);
+    r.rejectedQuantities.push(rv.quantities[i]);
+    console.log('Test Case 5 - ' + rv.names[i] + ' rejected (' + output.txn.mrnLabel + ', quantity ' +
+        rv.quantities[i] + ')' + (output.txn.mrnMissing ? '' : '; the MRN left Incoming Transactions'));
+} else if (ACTION === 'listCheck') {
+    // Test Case 6, after Download Stock Data: each variant's incoming count
+    // is its count before less what was rejected of it. More means a
+    // rejection did not take; fewer means another transaction went too.
+    var lv = output.variants;
+    var off = [];
+    for (var li = 0; li < 2; li++) {
+        if (lv.counts[li] !== r.expectedCounts[li]) {
+            off.push(lv.names[li] + ' ' + lv.counts[li] + ' listed, expected ' + r.expectedCounts[li] +
+                ' (' + lv.countsBefore[li] + ' before, less what was rejected)');
+        }
     }
-    if (rv.counts[o] !== r.expectedCounts[o]) {
-        problems.push(rv.names[o] + ' incoming transactions changed while ' + rv.names[i] + ' was rejected: ' +
-            r.expectedCounts[o] + ' expected, ' + rv.counts[o] + ' listed.');
-    }
-    r.failure = problems.length ? output.v.prefix + problems.join(' ') : '';
-    if (!problems.length) {
-        rv.rejected.push(rv.names[i]);
-        r.rejectedMrns.push(output.txn.mrnLabel);
-        // '' for a placeholder MRN ("MRN null_0"): it passes to the next
-        // transaction as the list renumbers, so its absence proves nothing.
-        r.rejectedLabels.push(output.txn.mrnMissing ? '' : output.txn.labelPattern);
-        r.rejectedQuantities.push(rv.quantities[i]);
-        console.log('Test Case 5 - ' + rv.names[i] + ' rejected (' + output.txn.mrnLabel + ', quantity ' +
-            rv.quantities[i] + '): its incoming count went from ' + (r.expectedCounts[i] + 1) + ' to ' +
-            rv.counts[i] + ', ' + rv.names[o] + ' untouched');
-    }
+    console.log('Test Case 6 - incoming after Download Stock Data: ' + lv.names[0] + ' ' + lv.counts[0] + ', ' +
+        lv.names[1] + ' ' + lv.counts[1] + ' (expected ' + r.expectedCounts[0] + ', ' + r.expectedCounts[1] + ')');
+    r.failure = off.length ? 'Test Case 6 - the incoming list does not match the rejections: ' + off.join('; ') + '.' : '';
 } else if (ACTION === 'final') {
     var fv = output.variants;
     var moved = [];

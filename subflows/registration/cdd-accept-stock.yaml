@@ -53,7 +53,9 @@ name: cdd-accept-stock
 
 # --- The dispatch is listed --------------------------------------------------
 - runFlow: ../stock/accept-receipt/init-variants.yaml
-- evalScript: ${output.variants.expected = [output.reg.received1, output.reg.received2]}
+# Blank EXPECTED_CDD_RECEIVED_* (null) means no expected quantity (NaN):
+# open-transaction.yaml then checks the card against Stock Receipt Details only.
+- evalScript: "${output.variants.expected = [output.reg.received1 === null ? NaN : output.reg.received1, output.reg.received2 === null ? NaN : output.reg.received2]}"
 # The shared messages name the cases; set one by one - braces inside ${}
 # would end the expression early.
 - evalScript: ${output.variants.cases.blocked = 'BLOCKED - Steps 11 to 15'}

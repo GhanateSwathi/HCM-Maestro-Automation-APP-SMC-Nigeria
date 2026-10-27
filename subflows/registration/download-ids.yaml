@@ -11,7 +11,8 @@ name: download-beneficiary-ids
 # button "Download Beneficiary IDs". The download is a dialog of the same
 # title: "Download in progress..." with a count ("0/10"), then "100%",
 # "Download Completed", "600/600" and Close - about a minute. Afterwards
-# both counts read 600. Back (top left) returns to home.
+# both counts read 600. Back (top left) returns to home. The server's limit
+# on ID downloads is met with Re-Fetch IDs (below).
 - tapOn:
     text: "Download"
     below: "Low Beneficiary IDs"
@@ -41,10 +42,41 @@ name: download-beneficiary-ids
     below: "Total beneficiary IDs"
     label: "Download Beneficiary IDs"
 - extendedWaitUntil:
-    visible: "Download Completed|.*[Ff]ail.*|.*[Ee]rror.*|.*[Tt]ry again.*"
+    visible: "Download Completed|Limit exceeded.*|.*[Ff]ail.*|.*[Ee]rror.*|.*[Tt]ry again.*"
     timeout: 300000
     optional: true
     label: "The download finishes"
+# The server caps how many IDs a user may fetch. Read off the app as
+# AU-CDD-001, 2026-10-26 (run 20261026-182226), on a fresh sign-in after 600
+# had been downloaded at 17:56 - the IDs live on the device and clearState
+# drops them: a dialog "Limit exceeded to fetch Beneficiary IDs" with
+# Re-Fetch IDs and Close, and the counts stay 0. Re-Fetch IDs downloads the
+# IDs already given to this user again, and may be tapped again whenever the
+# dialog comes back (QA, 2026-10-26) - up to three times here, then the
+# check below fails with the dialog's text.
+- evalScript: ${output.reFetch = 0}
+- repeat:
+    times: 3
+    while:
+      visible: "Limit exceeded.*"
+    label: "Re-Fetch IDs while the limit dialog shows"
+    commands:
+      - evalScript: ${output.reFetch = output.reFetch + 1}
+      - takeScreenshot: artifacts/registration-ids-limit-exceeded
+      - evalScript: "${console.log('Beneficiary IDs - NOTE - Limit exceeded to fetch Beneficiary IDs - Re-Fetch IDs (' + output.reFetch + ')')}"
+      - tapOn:
+          text: "Re-Fetch IDs"
+          label: "Re-Fetch IDs"
+      - extendedWaitUntil:
+          notVisible: "Limit exceeded.*"
+          timeout: 15000
+          optional: true
+          label: "The limit dialog closes"
+      - extendedWaitUntil:
+          visible: "Download Completed|Limit exceeded.*|.*[Ff]ail.*|.*[Ee]rror.*|.*[Tt]ry again.*"
+          timeout: 300000
+          optional: true
+          label: "The re-fetch finishes"
 - runFlow:
     when:
       notVisible: "Download Completed"
@@ -53,10 +85,10 @@ name: download-beneficiary-ids
       - setClipboard: "no completion within 5 minutes"
       - runFlow:
           when:
-            visible: ".*[Ff]ail.*|.*[Ee]rror.*|.*[Tt]ry again.*"
+            visible: "Limit exceeded.*|.*[Ff]ail.*|.*[Ee]rror.*|.*[Tt]ry again.*"
           commands:
             - copyTextFrom:
-                text: ".*[Ff]ail.*|.*[Ee]rror.*|.*[Tt]ry again.*"
+                text: "Limit exceeded.*|.*[Ff]ail.*|.*[Ee]rror.*|.*[Tt]ry again.*"
                 label: "Read the download error"
       - runFlow:
           file: ../fail.yaml

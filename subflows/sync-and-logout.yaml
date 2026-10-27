@@ -1,0 +1,107 @@
+appId: ${HCM_APP_ID}
+name: sync-and-logout
+---
+# Ends a role's session: home, Sync Data until nothing is left, then Logout.
+# Syncing first is what puts this role's records on the server for the next
+# role (its Download Stock Data); the next sign-in clears the app anyway. Any
+# role - the stock roles' and the CDD's home both show "Stock Balance". Ends
+# on the Login screen.
+#
+# Read off the app as AU-SAT-001, 2026-10-23: the side menu ("Open navigation
+# menu") lists the user's QR code, Home, the version and Logout at its foot.
+# Logout asks "Are you sure you want to end the session?" with No and Ok; Ok
+# lands on the Login screen. Sync Data answers "No Data available for sync"
+# when the background Auto Sync has already sent everything, else "Sync in
+# progress" then "Data Synced Successfully" (Close); "Sync Up Failed" (for
+# example "Session Expired") fails here - the next role would not see this
+# role's records.
+
+# --- Home -------------------------------------------------------------------------
+- runFlow:
+    when:
+      visible:
+        id: "android:id/input_method_nav_back"
+    commands:
+      - tapOn:
+          id: "android:id/input_method_nav_back"
+          label: "Close the keyboard"
+- runFlow:
+    when:
+      notVisible: "Stock Balance"
+    commands:
+      - runFlow: open-side-menu.yaml
+      - tapOn:
+          text: "Home"
+          above: "Logout"
+          label: "Home"
+- extendedWaitUntil:
+    visible: "Stock Balance"
+    timeout: 15000
+    label: "On the home screen"
+
+# --- Sync Data until nothing is left ------------------------------------------------
+- evalScript: ${output.syncLog = ''}
+- repeat:
+    times: 4
+    while:
+      notVisible: "No Data available for sync"
+    label: "Sync until nothing is left"
+    commands:
+      - extendedWaitUntil:
+          notVisible: "Sync in progress"
+          timeout: 180000
+          optional: true
+          label: "Any sync running finishes"
+      - runFlow:
+          when:
+            visible: "Sync Up Failed.*"
+          commands:
+            - takeScreenshot: artifacts/sync-failed
+            - runFlow:
+                file: fail.yaml
+                env:
+                  MESSAGE: "Sync Data failed (Sync Up Failed) - this session's records are not on the server; not logging out."
+                label: "Sync Data succeeds"
+      - runFlow:
+          when:
+            visible: "Data Synced Successfully"
+          commands:
+            - evalScript: ${output.syncLog = output.syncLog + 'Data Synced Successfully, then '}
+            - tapOn: "Close"
+      - runFlow:
+          when:
+            notVisible: "No Data available for sync"
+          commands:
+            - tapOn:
+                text: "Sync Data"
+                label: "Sync Data"
+            - extendedWaitUntil:
+                visible: "No Data available for sync|Sync in progress|Data Synced Successfully|Sync Up Failed.*"
+                timeout: 60000
+                optional: true
+                label: "Sync Data answers"
+- assertVisible:
+    text: "No Data available for sync"
+    label: "Nothing left to sync"
+- takeScreenshot: artifacts/synced
+- tapOn: "Close"
+
+# --- Logout -------------------------------------------------------------------------
+- runFlow: open-side-menu.yaml
+- tapOn:
+    text: "Logout"
+    label: "Logout"
+- extendedWaitUntil:
+    visible: "Are you sure you want to end the session\\?"
+    timeout: 10000
+    label: "Logout asks to confirm"
+- tapOn:
+    text: "Ok"
+    below: "Are you sure you want to end the session\\?"
+    label: "Ok - end the session"
+- extendedWaitUntil:
+    visible: "User ID.*"
+    timeout: 60000
+    label: "Back on the Login screen"
+- takeScreenshot: artifacts/logged-out
+- evalScript: "${console.log('Logout - ' + output.syncLog + 'No Data available for sync; logged out')}"

@@ -12,9 +12,7 @@ name: registration-go-home
       - tapOn:
           id: "android:id/input_method_nav_back"
           label: "Close the keyboard"
-- tapOn:
-    text: "Open navigation menu"
-    label: "Open the side menu"
+- runFlow: ../open-side-menu.yaml
 - tapOn:
     text: "Home"
     above: "Logout"

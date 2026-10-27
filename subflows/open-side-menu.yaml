@@ -1,0 +1,40 @@
+appId: ${HCM_APP_ID}
+name: open-side-menu
+---
+# Opens the side menu ("Open navigation menu", top left) and waits for its
+# foot (Logout). Fails if the menu never opens.
+#
+# Why the retry: the background Auto Sync raises an Android heads-up
+# notification ("Auto Sync" / "Last synced at ...") that slides over the top
+# of the app for a few seconds, right over the menu button. On 2026-10-26
+# (CDD, runs 20261026-181013 and -181434) the tap went to the notification,
+# the menu stayed shut and "Home, above Logout" was not found. Same cause as
+# stock/view-transactions/tap-back.yaml's Back retry.
+- tapOn:
+    text: "Open navigation menu"
+    label: "Open the side menu"
+- extendedWaitUntil:
+    visible: "Logout"
+    timeout: 5000
+    optional: true
+    label: "The side menu opens"
+- repeat:
+    times: 3
+    while:
+      notVisible: "Logout"
+    label: "Open the menu again, once a notification has cleared"
+    commands:
+      - takeScreenshot: artifacts/side-menu-retry
+      - waitForAnimationToEnd:
+          timeout: 5000
+      - tapOn:
+          text: "Open navigation menu"
+          label: "Open the side menu again"
+      - extendedWaitUntil:
+          visible: "Logout"
+          timeout: 8000
+          optional: true
+          label: "The side menu opens"
+- assertVisible:
+    text: "Logout"
+    label: "The side menu is open"

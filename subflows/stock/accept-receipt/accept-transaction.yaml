@@ -59,7 +59,13 @@ name: accept-transaction
       MESSAGE: "${output.v.prefix + 'no \"Stock accepted successfully\" banner after Confirm.'}"
     label: "Accept - success banner shown"
 
-# The transaction has left the incoming list.
+# Back to the list, for the next step. Not counted: a whole-list count took
+# 4-5 minutes on 17 cards (2026-10-26). The acceptance is proven by the banner
+# above and, at the end, by the balance rising by the quantity received
+# (case2b-confirm, hf-receipt's Test Case 6, the CDD's Step 11). A real MRN is
+# also looked for in the whole list: it must be gone - after one Download Stock
+# Data, as on 2026-10-26 an accepted transaction stayed listed until then. A
+# placeholder ("MRN null_0") renumbers and cannot be looked for.
 - tapOn:
     text: "Record Stock Receipt"
     label: "Accept - reopen Record Stock Receipt"
@@ -70,33 +76,49 @@ name: accept-transaction
 - waitForAnimationToEnd:
     timeout: 3000
 - runFlow:
-    file: count-transactions.yaml
-    env:
-      INDEX: ${INDEX}
-- runFlow:
-    when:
-      true: ${output.variants.counts[output.v.index] != output.variants.countsBefore[output.v.index] - 1}
-    file: ../../fail.yaml
-    env:
-      MESSAGE: "${output.v.prefix + 'the ' + output.v.name + ' transaction is still listed after Confirm (' + output.variants.countsBefore[output.v.index] + ' before, ' + output.variants.counts[output.v.index] + ' after).'}"
-    label: "Accept - the transaction left the incoming list"
-# A real MRN names this transaction alone, so it must be gone. A placeholder
-# ("MRN null_0") passes to the next transaction as the list renumbers.
-- runFlow:
     when:
       true: ${!output.txn.mrnMissing}
     commands:
+      - scrollUntilVisible:
+          element:
+            text: ${output.txn.labelPattern}
+          direction: DOWN
+          timeout: 30000
+          optional: true
+          label: "Accept - look for the accepted MRN in the list"
       - runFlow:
           when:
             visible:
               text: ${output.txn.labelPattern}
-          file: ../../fail.yaml
-          env:
-            MESSAGE: "${output.v.prefix + output.txn.mrnLabel + ' is still listed in Incoming Transactions after Confirm.'}"
-          label: "Accept - the accepted MRN left the incoming list"
+          commands:
+            - evalScript: "${console.log('NOTE - ' + output.txn.mrnLabel + ' is still listed after Confirm - Download Stock Data and look again')}"
+            - runFlow: ../back-to-home.yaml
+            - runFlow: ../download-stock-data.yaml
+            - runFlow: ../open-incoming-transactions.yaml
+            - scrollUntilVisible:
+                element:
+                  text: ${output.txn.labelPattern}
+                direction: DOWN
+                timeout: 30000
+                optional: true
+                label: "Accept - look for the accepted MRN again"
+            - runFlow:
+                when:
+                  visible:
+                    text: ${output.txn.labelPattern}
+                file: ../../fail.yaml
+                env:
+                  MESSAGE: "${output.v.prefix + output.txn.mrnLabel + ' is still listed in Incoming Transactions after Confirm and Download Stock Data.'}"
+                label: "Accept - the accepted MRN left the incoming list"
+      - scrollUntilVisible:
+          element:
+            text: "Incoming Transactions"
+          direction: UP
+          timeout: 40000
+          optional: true
+          label: "Top of the list"
 - runScript:
     file: variants.js
     env:
       ACTION: accepted
-      COUNT_AFTER: ${output.variants.counts[output.v.index]}
     label: "Record the accepted variant"

@@ -55,6 +55,37 @@ name: launch-app
 
 - runFlow: accept-system-dialogs.yaml
 
+# On 2026-10-26 13:40 the app opened on "Internet not available. Try later."
+# with Close, though the emulator reached the server (mhbase-hcm-dev, port 443
+# open) a minute later - its own check at launch failed once. Close it and
+# relaunch, as above, up to twice; a lasting outage still fails below.
+- extendedWaitUntil:
+    visible: "User ID.*|Internet not available.*"
+    timeout: 60000
+    label: "Wait for the login screen, or the app's no-internet notice"
+- repeat:
+    times: 2
+    while:
+      visible: "Internet not available.*"
+    label: "Relaunch past a no-internet notice"
+    commands:
+      - takeScreenshot: artifacts/launch-internet-not-available
+      - tapOn:
+          text: "Close"
+          label: "Close the no-internet notice"
+      - waitForAnimationToEnd:
+          timeout: 5000
+      - launchApp:
+          clearState: true
+          permissions:
+            all: unset
+          label: "Launch the app again"
+      - runFlow: accept-system-dialogs.yaml
+      - extendedWaitUntil:
+          visible: "User ID.*|Internet not available.*"
+          timeout: 60000
+          label: "Wait for the login screen, or the notice again"
+
 - extendedWaitUntil:
     visible: "User ID.*"
     timeout: 60000

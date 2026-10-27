@@ -1,0 +1,30 @@
+appId: ${HCM_APP_ID}
+name: "Login - sync and log out of the current session"
+tags:
+  - chain
+  - login
+---
+# Ends whatever session the app holds: home, Sync Data until "No Data
+# available for sync", Logout, Ok, the Login screen
+# (subflows/sync-and-logout.yaml). For chained runs: scripts/run-chain.ps1
+# runs it after each role's flows, so the next role starts from the Login
+# screen with this role's records on the server.
+#
+# Signs nothing in, so on its own it needs an app already signed in. Tagged
+# chain, not smoke or regression, so a tag-filtered run leaves it out.
+- launchApp:
+    clearState: false
+    stopApp: false
+- extendedWaitUntil:
+    visible: "Stock Balance|Open navigation menu|User ID.*"
+    timeout: 60000
+    label: "The app is up"
+- runFlow:
+    when:
+      visible: "User ID.*"
+    commands:
+      - evalScript: ${console.log('Logout - already on the Login screen; nothing to do')}
+- runFlow:
+    when:
+      notVisible: "User ID.*"
+    file: ../../subflows/sync-and-logout.yaml

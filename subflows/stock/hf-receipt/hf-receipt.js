@@ -46,19 +46,23 @@ if (ACTION === 'init') {
         cancel: 'Test Case 4',
         accept: 'Test Case 5'
     };
-    var missing = [];
-    if (isNaN(output.hf.expectedInitial)) {
-        missing.push('EXPECTED_INITIAL_BALANCE');
+    // All three are optional since 2026-10-23: they change with every run, so
+    // blank means "take what the app shows" - Test Case 1 logs the opening
+    // balance, Test Case 3 checks the card against Stock Receipt Details, and
+    // Test Case 6 checks the balance rose by what was received. A value that
+    // is set must be a whole number.
+    var bad = [];
+    if (isSet(EXPECTED_INITIAL) && isNaN(output.hf.expectedInitial)) {
+        bad.push('EXPECTED_INITIAL_BALANCE');
     }
-    if (isNaN(pv.expected[0]) || pv.expected[0] === 0) {
-        missing.push('DISPATCHED_QTY_' + pv.names[0]);
+    if (isSet(QTY_1) && (isNaN(pv.expected[0]) || pv.expected[0] === 0)) {
+        bad.push('DISPATCHED_QTY_' + pv.names[0]);
     }
-    if (isNaN(pv.expected[1]) || pv.expected[1] === 0) {
-        missing.push('DISPATCHED_QTY_' + pv.names[1]);
+    if (isSet(QTY_2) && (isNaN(pv.expected[1]) || pv.expected[1] === 0)) {
+        bad.push('DISPATCHED_QTY_' + pv.names[1]);
     }
-    if (missing.length) {
-        output.hf.failure = 'Set in .env, as whole numbers: ' + missing.join(', ') +
-            '. DISPATCHED_QTY_* are the quantities in the Prompt 3 (dispatch) report.';
+    if (bad.length) {
+        output.hf.failure = 'In .env, set as whole numbers or leave blank: ' + bad.join(', ') + '.';
     } else if (isSet(TEST_USER) && isSet(USER_ID) &&
             String(TEST_USER).trim().toLowerCase() !== String(USER_ID).trim().toLowerCase()) {
         // Names TEST_USER only: the .env account is not repeated in the report.
@@ -71,13 +75,15 @@ if (ACTION === 'init') {
     var oh = output.hf;
     var names = output.variants.names;
     var wrong = [];
+    // Without EXPECTED_INITIAL_BALANCE the opening balance is only logged.
     for (var i = 0; i < 2; i++) {
-        if (oh.initial[i] !== oh.expectedInitial) {
+        if (!isNaN(oh.expectedInitial) && oh.initial[i] !== oh.expectedInitial) {
             wrong.push(names[i] + ' initial balance is ' + oh.initial[i] + ', expected ' + oh.expectedInitial + '.');
         }
     }
     console.log('Test Case 1 - initial balance ' + names[0] + ' ' + oh.initial[0] + ', ' +
-        names[1] + ' ' + oh.initial[1] + ' (expected ' + oh.expectedInitial + ')');
+        names[1] + ' ' + oh.initial[1] +
+        (isNaN(oh.expectedInitial) ? ' (no expected value set - logged only)' : ' (expected ' + oh.expectedInitial + ')'));
     oh.failure = wrong.length ? 'BLOCKED - Test Cases 2 to 6: Precondition not met: ' + wrong.join(' ') : '';
 } else if (ACTION === 'final') {
     output.hf.final[parseInt(INDEX, 10)] = output.stockBalance.value;
@@ -88,8 +94,22 @@ if (ACTION === 'init') {
     for (var j = 0; j < 2; j++) {
         var expected = ch.initial[j] + cv.received[j];
         if (ch.final[j] !== expected) {
-            problems.push('Balance mismatch for ' + cv.names[j] + ': expected ' + expected +
-                ', found ' + ch.final[j] + '.');
+            // A negative balance shows as 0 on home (2026-10-26; see
+            // accept-receipt/variants.js) - logged for QA, not failed.
+            var hidden = ch.final[j] - cv.received[j];
+            if (ch.initial[j] === 0 && ch.final[j] === 0) {
+                // Both shown as 0: the real balances are hidden, so the rise
+                // cannot be checked here (2026-10-26, health facility).
+                console.log('NOTE - UNVERIFIED - ' + cv.names[j] + ' Stock Balance shows 0 before and after accepting ' +
+                    cv.received[j] + ' - a negative balance shows as 0 on home, so the balance cannot confirm the receipt');
+            } else if (ch.initial[j] === 0 && hidden < 0 && ch.final[j] > 0) {
+                console.log('NOTE - ' + cv.names[j] + ' Stock Balance was shown as 0 before accepting; it was really ' +
+                    hidden + ' (a negative balance shows as 0 on home) - ' + hidden + ' + ' + cv.received[j] +
+                    ' = ' + ch.final[j]);
+            } else {
+                problems.push('Balance mismatch for ' + cv.names[j] + ': expected ' + expected +
+                    ', found ' + ch.final[j] + '.');
+            }
         }
     }
     ch.failure = problems.join(' ');

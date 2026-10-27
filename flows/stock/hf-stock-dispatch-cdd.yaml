@@ -78,6 +78,8 @@ tags:
             TEAM_CODE: ${TARGET_CDD}
             MISSING: "Facility To does not offer Delivery team, so no CDD can be chosen."
             ROLE: "Health Facility User"
+            # Blank: one dispatch. 2 in a chained run: one part to accept, one to reject.
+            PARTS: ${DISPATCH_PARTS}
 
 - evalScript: ${console.log('Prompt 6 - Health Facility ' + TEST_USER + ' dispatched to CDD ' + TARGET_CDD + ' (Team Code scanned from the QR by the emulator virtual camera)')}
 - runScript:

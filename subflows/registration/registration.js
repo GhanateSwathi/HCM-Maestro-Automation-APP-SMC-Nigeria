@@ -316,8 +316,11 @@ if (ACTION === 'init-consent') {
     if (!r.variant1 || !r.variant2) {
         missing.push('PRODUCT_VARIANT_1 / PRODUCT_VARIANT_2');
     }
-    if (r.received1 === null || r.received2 === null) {
-        missing.push('EXPECTED_CDD_RECEIVED_SPAQ1 / _SPAQ2 (what Prompt 6 dispatched to the CDD)');
+    // Optional since 2026-10-23: blank, Step 11 takes the quantity Stock
+    // Receipt Details shows (read during the run) instead of a value that
+    // changes with every dispatch. A value that is set must be a whole number.
+    if ((optional(QTY_1) && r.received1 === null) || (optional(QTY_2) && r.received2 === null)) {
+        missing.push('EXPECTED_CDD_RECEIVED_SPAQ1 / _SPAQ2 (whole numbers, or blank to take what the app shows)');
     }
     if (missing.length) {
         r.failure = 'Set in .env: ' + missing.join('; ') + '.';
@@ -454,7 +457,12 @@ if (ACTION === 'init-consent') {
     var rb = output.reg.balances;
     var rr = output.reg;
     var wrong = [];
-    var got = [rr.received1, rr.received2];
+    // What was received: EXPECTED_CDD_RECEIVED_* when set, else the quantity
+    // read off Stock Receipt Details for the accepted transaction.
+    var got = [
+        rr.received1 !== null ? rr.received1 : output.variants.received[0],
+        rr.received2 !== null ? rr.received2 : output.variants.received[1]
+    ];
     var names = [rr.variant1, rr.variant2];
     for (var vi = 0; vi < 2; vi++) {
         var want = rb.before[vi] + got[vi];

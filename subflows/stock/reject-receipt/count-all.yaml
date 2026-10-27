@@ -16,9 +16,9 @@ name: reject-count-all
 # sits between its MRN label and the next card's.
 - scrollUntilVisible:
     element:
-      text: "View and accept incoming stock transactions"
+      text: "Incoming Transactions"
     direction: UP
-    timeout: 10000
+    timeout: 40000
     optional: true
     label: "Count - top of the list"
 - runScript:
@@ -152,8 +152,8 @@ name: reject-count-all
     label: "Count - the totals"
 - scrollUntilVisible:
     element:
-      text: "View and accept incoming stock transactions"
+      text: "Incoming Transactions"
     direction: UP
-    timeout: 10000
+    timeout: 40000
     optional: true
     label: "Count - back to the top of the list"

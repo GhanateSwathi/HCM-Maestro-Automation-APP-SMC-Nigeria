@@ -45,8 +45,10 @@ name: reject-outcome
 - waitForAnimationToEnd:
     timeout: 3000
 
-# --- Gone from the list, the other variant untouched ------------------------------
-- runFlow: count-all.yaml
+# --- Gone from the list ---------------------------------------------------------
+# Not counted here (4-5 minutes per whole-list count on 17 cards,
+# 2026-10-26): Test Case 6 counts once, after Download Stock Data. A real MRN
+# names this transaction alone, so it is looked for in the whole list now.
 - runScript:
     file: reject.js
     env:
@@ -54,26 +56,47 @@ name: reject-outcome
     label: "Record the rejected variant"
 - runFlow:
     when:
-      true: ${output.rej.failure}
-    commands:
-      - takeScreenshot: artifacts/stock-reject-still-listed
-      - runFlow:
-          file: ../../fail.yaml
-          env:
-            MESSAGE: ${output.rej.failure}
-          label: "The transaction left the incoming list"
-# A real MRN names this transaction alone, so it must be gone.
-- runFlow:
-    when:
       true: ${!output.txn.mrnMissing}
     commands:
+      - scrollUntilVisible:
+          element:
+            text: ${output.txn.labelPattern}
+          direction: DOWN
+          timeout: 30000
+          optional: true
+          label: "Look for the rejected MRN in the list"
+      # Still listed: one Download Stock Data first - accepted transactions
+      # lagged in the list until then on 2026-10-26.
       - runFlow:
           when:
             visible:
               text: ${output.txn.labelPattern}
-          file: ../../fail.yaml
-          env:
-            MESSAGE: "${output.v.prefix + output.txn.mrnLabel + ' is still listed in Incoming Transactions after Reject.'}"
-          label: "The rejected MRN left the incoming list"
+          commands:
+            - evalScript: "${console.log('NOTE - ' + output.txn.mrnLabel + ' is still listed after Reject - Download Stock Data and look again')}"
+            - runFlow: ../back-to-home.yaml
+            - runFlow: ../download-stock-data.yaml
+            - runFlow: ../open-incoming-transactions.yaml
+            - scrollUntilVisible:
+                element:
+                  text: ${output.txn.labelPattern}
+                direction: DOWN
+                timeout: 30000
+                optional: true
+                label: "Look for the rejected MRN again"
+            - runFlow:
+                when:
+                  visible:
+                    text: ${output.txn.labelPattern}
+                file: ../../fail.yaml
+                env:
+                  MESSAGE: "${output.v.prefix + output.txn.mrnLabel + ' is still listed in Incoming Transactions after Reject and Download Stock Data.'}"
+                label: "The rejected MRN left the incoming list"
+      - scrollUntilVisible:
+          element:
+            text: "Incoming Transactions"
+          direction: UP
+          timeout: 40000
+          optional: true
+          label: "Top of the list"
 - evalScript: ${output.rej.pending = false}
 - takeScreenshot: artifacts/stock-reject-${output.v.name}-list

@@ -28,29 +28,25 @@ name: case2a-cancel
     label: "Cancel - Accept Stock still offered, so the stock was not accepted"
 - takeScreenshot: artifacts/stock-accept-cancelled
 
-# Neither variant accepted: back on the list, both still have every
-# transaction they had.
+# Back to the list. Not counted again: "Accept Stock" still offered on the
+# same transaction is the proof nothing was accepted, and a whole-list count
+# took 4-5 minutes on 17 cards (2026-10-26) - case2b-confirm's balance check
+# would catch an acceptance anyway.
 - tapOn:
     text: "Back"
     label: "Cancel - back to Incoming Transactions"
 - extendedWaitUntil:
-    visible: "Incoming Transactions"
+    visible: "Incoming Transactions|MRN .*"
     timeout: 15000
     label: "Cancel - Incoming Transactions is back"
-- runFlow:
-    file: count-transactions.yaml
-    env:
-      INDEX: "0"
-- runFlow:
-    file: count-transactions.yaml
-    env:
-      INDEX: "1"
-- evalScript: "${output.variants.failure = (output.variants.counts[0] == output.variants.countsBefore[0] && output.variants.counts[1] == output.variants.countsBefore[1]) ? '' : output.variants.cases.cancel + ' - the incoming list changed after Cancel: ' + output.variants.names[0] + ' ' + output.variants.countsBefore[0] + ' -> ' + output.variants.counts[0] + ', ' + output.variants.names[1] + ' ' + output.variants.countsBefore[1] + ' -> ' + output.variants.counts[1] + '.'}"
-- runFlow:
-    when:
-      true: ${output.variants.failure}
-    file: ../../fail.yaml
-    env:
-      MESSAGE: ${output.variants.failure}
-    label: "Cancel - neither product variant accepted"
-- evalScript: ${console.log(output.variants.cases.cancel + ' PASSED - Cancel returned to Stock Receipt Details; stock not accepted. ' + output.variants.names.join(' and ') + ' transactions all still listed')}
+# Back can leave the list scrolled, its title off screen (17 cards,
+# 2026-10-26), so the list is known by its cards too - then scrolled to the
+# top, so "the first card of a product" is the first in the list again.
+- scrollUntilVisible:
+    element:
+      text: "Incoming Transactions"
+    direction: UP
+    timeout: 40000
+    optional: true
+    label: "Top of the list"
+- evalScript: ${console.log(output.variants.cases.cancel + ' PASSED - Cancel returned to Stock Receipt Details with Accept Stock still offered; stock not accepted')}

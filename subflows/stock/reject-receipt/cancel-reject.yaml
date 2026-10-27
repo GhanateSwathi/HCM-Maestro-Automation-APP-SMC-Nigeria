@@ -35,19 +35,24 @@ name: reject-cancel
     text: "Back"
     label: "Test Case 3 - back to Incoming Transactions"
 - extendedWaitUntil:
-    visible: "Incoming Transactions"
+    visible: "Incoming Transactions|MRN .*"
     timeout: 15000
     label: "Test Case 3 - Incoming Transactions is back"
+# Back can leave the list scrolled, its title off screen (17 cards,
+# 2026-10-26), so the list is known by its cards too - then scrolled to the
+# top, so "the first card of a product" is the first in the list again.
+- scrollUntilVisible:
+    element:
+      text: "Incoming Transactions"
+    direction: UP
+    timeout: 40000
+    optional: true
+    label: "Top of the list"
 - waitForAnimationToEnd:
     timeout: 3000
-- runFlow: count-all.yaml
-- evalScript: "${output.rej.failure = (output.variants.counts[0] == output.variants.countsBefore[0] && output.variants.counts[1] == output.variants.countsBefore[1]) ? '' : 'Test Case 3 - the incoming list changed after Cancel: ' + output.variants.names[0] + ' ' + output.variants.countsBefore[0] + ' -> ' + output.variants.counts[0] + ', ' + output.variants.names[1] + ' ' + output.variants.countsBefore[1] + ' -> ' + output.variants.counts[1] + '.'}"
-- runFlow:
-    when:
-      true: ${output.rej.failure}
-    file: ../../fail.yaml
-    env:
-      MESSAGE: ${output.rej.failure}
-    label: "Test Case 3 - neither product variant rejected"
-- evalScript: ${output.rej.cancel = 'popup closed, still on Stock Receipt Details, ' + output.variants.names.join(' and ') + ' all still listed'}
-- evalScript: ${console.log('Test Case 3 PASSED - Cancel returned to Stock Receipt Details; stock not rejected. ' + output.variants.names.join(' and ') + ' transactions all still listed')}
+# Not counted again: Reject still offered on the same transaction is the
+# proof nothing was rejected, and a whole-list count took 4-5 minutes on 17
+# cards (2026-10-26). Test Case 6's count after both rejections would show a
+# transaction lost here.
+- evalScript: ${output.rej.cancel = 'popup closed, still on Stock Receipt Details with Accept Stock and Reject offered'}
+- evalScript: ${console.log('Test Case 3 PASSED - Cancel returned to Stock Receipt Details with Accept Stock and Reject still offered; stock not rejected')}

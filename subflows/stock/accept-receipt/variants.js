@@ -25,8 +25,8 @@
 //                    quantity, leaves its reason in output.variants.failure
 //   ACTION=balance   maestro.copiedText is a home "200 SPAQ 1" line; PHASE
 //                    is "before" or "after"
-//   ACTION=accepted  record output.v as accepted (COUNT_AFTER = the list's
-//                    count for it after Confirm)
+//   ACTION=accepted  record output.v as accepted (after Confirm, the banner
+//                    and - for a real MRN - the MRN gone from the list)
 //   ACTION=final     check the balances, build the summary
 //
 // Nothing is thrown: a script error reaches the report only as "Unknown
@@ -145,17 +145,34 @@ if (ACTION === 'init') {
     output.variants.acceptedMrns.push(output.txn.mrnLabel);
     output.variants.acceptedLabels.push(output.txn.mrnMissing ? '' : output.txn.labelPattern);
     console.log(output.variants.cases.accept + ' - ' + output.v.name + ' accepted (' + output.txn.mrnLabel +
-        '): "Stock accepted successfully", ' +
-        'its incoming count went from ' + output.variants.countsBefore[output.v.index] +
-        ' to ' + COUNT_AFTER);
+        ', quantity ' + output.variants.quantities[output.v.index] + '): "Stock accepted successfully"' +
+        (output.txn.mrnMissing ? '' : '; the MRN left Incoming Transactions'));
 } else if (ACTION === 'final') {
     var fv = output.variants;
     var problems = [];
     for (var j = 0; j < 2; j++) {
         var expected = fv.balanceBefore[j] + fv.quantities[j];
         if (fv.balanceAfter[j] !== expected) {
-            problems.push(fv.names[j] + ' balance ' + fv.balanceAfter[j] + ', expected ' +
-                fv.balanceBefore[j] + ' + ' + fv.quantities[j] + ' = ' + expected);
+            // Home shows a negative balance as 0: on 2026-10-26 the state user
+            // read 0 before and 410 after accepting 900 - really -490 (the 19
+            // Oct dispatch of 490 is on the device, the earlier receipt is
+            // not; Stock Reconciliation showed "Stock in hand -490" on 19 Oct).
+            // So a 0 before, with an after that implies a negative start, is
+            // logged for QA rather than failed.
+            var hidden = fv.balanceAfter[j] - fv.quantities[j];
+            if (fv.balanceBefore[j] === 0 && fv.balanceAfter[j] === 0) {
+                // Both shown as 0: the real balances are hidden, so the rise
+                // cannot be checked here (2026-10-26, health facility).
+                console.log('NOTE - UNVERIFIED - ' + fv.names[j] + ' Stock Balance shows 0 before and after accepting ' +
+                    fv.quantities[j] + ' - a negative balance shows as 0 on home, so the balance cannot confirm the receipt');
+            } else if (fv.balanceBefore[j] === 0 && hidden < 0 && fv.balanceAfter[j] > 0) {
+                console.log('NOTE - ' + fv.names[j] + ' Stock Balance was shown as 0 before accepting; it was really ' +
+                    hidden + ' (a negative balance shows as 0 on home) - ' + hidden + ' + ' + fv.quantities[j] +
+                    ' = ' + fv.balanceAfter[j]);
+            } else {
+                problems.push(fv.names[j] + ' balance ' + fv.balanceAfter[j] + ', expected ' +
+                    fv.balanceBefore[j] + ' + ' + fv.quantities[j] + ' = ' + expected);
+            }
         }
     }
     fv.summary = fv.cases.accept + ' - accepted ' + fv.accepted.join(' then ') + '; Stock Balance ' +

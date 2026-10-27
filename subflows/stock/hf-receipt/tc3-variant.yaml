@@ -16,6 +16,16 @@ name: hf-tc3-variant
     text: "Back"
     label: "Test Case 3 - back to Incoming Transactions"
 - extendedWaitUntil:
-    visible: "Incoming Transactions"
+    visible: "Incoming Transactions|MRN .*"
     timeout: 15000
     label: "Test Case 3 - Incoming Transactions is back"
+# Back can leave the list scrolled, its title off screen (17 cards,
+# 2026-10-26), so the list is known by its cards too - then scrolled to the
+# top, so "the first card of a product" is the first in the list again.
+- scrollUntilVisible:
+    element:
+      text: "Incoming Transactions"
+    direction: UP
+    timeout: 40000
+    optional: true
+    label: "Top of the list"

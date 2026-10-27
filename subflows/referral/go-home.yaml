@@ -5,9 +5,7 @@ name: referral-go-home
 # Back does not get there: Go Back on the success screen lays the referral
 # screen over the finished form's pages, and Back walks into them
 # (2026-10-21). The menu also holds Logout, so Home is fenced above it.
-- tapOn:
-    text: "Open navigation menu"
-    label: "Open the side menu"
+- runFlow: ../open-side-menu.yaml
 - tapOn:
     text: "Home"
     above: "Logout"

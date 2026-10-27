@@ -13,7 +13,7 @@ were taken from.
 
 | Screen | Cases | Automated | Gaps |
 | --- | :-: | :-: | --- |
-| Login | 6 | 6 | Wrong-credential rejection, password show/hide toggle (national stock user: out of scope) |
+| Login | 7 | 7 | Wrong-credential rejection, password show/hide toggle (national stock user: out of scope) |
 | Post-login onboarding | 11 | 11 | Choosing a configured facility, already-selected boundaries. Boundary data (BDD): the CDD's Data found / No data found paths not seen yet (its check fails - server-side issue, 2026-10-23); Proceed Without Downloading on Data found not run |
 | Stock — Manage Stock | 6 | 6 | (Reject and View Transactions: their own sections) |
 | Stock — Dispatch to a health facility | 4 | 4 | Transport Type, Scan Resource; receiving and dispatching in one session (see DSP-04) |
@@ -23,19 +23,54 @@ were taken from.
 | Stock — Health facility returns to the state | 3 | 3 | Return validation (0, above balance) |
 | Stock — Reconciliation (state user, health facility) | 4 | 4 | REC-03/04 fail by design against this build (see the section) |
 | Stock — View Reports (state user, health facility) | 5 | 5 | VR-02–05 fail against fresh sessions (reports are device-local); recipient columns not shown |
-| Stock — Reject a receipt (state user, health facility, CDD) | 6 | 6 | Passed for the state user 2026-10-23 (in two runs, one session); health facility and CDD not run - each needs a fresh dispatch of both variants. View Reports after a rejection (the sender's balance coming back: out of scope) |
+| Stock — Reject a receipt (state user, health facility, CDD) | 6 | 6 | Passed for the state user 2026-10-23 (in two runs, one session) and 2026-10-26 (one run, chained), and for the health facility 2026-10-26; CDD not run - needs a fresh dispatch of both variants from the health facility. View Reports after a rejection (the sender's balance coming back: out of scope) |
 | Stock — View Transactions (state user, health facility, CDD) | 6 | 6 | Passed end to end for all three roles 2026-10-23 (the CDD's list was empty). What the QR encodes; transactions with more than one product; received transactions' cards (Sender) not seen yet |
 | Beneficiary Referral (health facility) | 7 | 7 | Scan Beneficiary; Referred by (CDD team code); opening a listed referral; mandatory-field validation; referral ID (the app shows none) |
 | Registration & Delivery (CDD) | 16 | 16 | The mobile-number bounds (never run - no test number); Unable To Deliver, Redose, Near by households, Search by ID, Mark Closed Household. REG-01, 02, 08, 09, 13 (and REG-07's save) were done in session by hand, not yet as written; the full flow has not run end to end (see the section) |
 | Registration — consent No (CDD) | 7 | 7 | Done in session by hand 2026-10-22; the flow has not run as written. Reasons other than free text; a refused household found other than by name |
 | Registration — Unable to Deliver (CDD) | 9 | 9 | Comment on Unable to Deliver (optional, left empty); a 20-member household fully registered; UTD-09's sync not run (expired sign-in) |
 | Registration — dose and redose (CDD) | 10 | 10 | Redose reason Others; a redose's time window; RDS-10's sync not run (expired sign-in) |
-| **Total** | **113** | **113** | |
+| **Total** | **114** | **114** | |
 
 Status key: **Automated** — a flow asserts it. **Partial** — the flow performs
 the step but asserts nothing about it. **Blocked** — a flow exists but cannot
 run until its test data exists, and its locators stay unverified until then.
 **Manual** — not automated yet.
+
+## Chained runs — 2026-10-26
+
+Each role's flows run back to back in one app session, then sync and log out
+([`scripts/run-chain.ps1`](scripts/run-chain.ps1), LGN-07). Run folders are
+under `artifacts/runs/`.
+
+| Role | Flow | Result | Run |
+| --- | --- | --- | --- |
+| State user | Accept (Prompt 2) | Passed; balance shown 0 → 410, really -490 → 410 | `20261026-155703` |
+| State user | Reject (Prompt 15) | Passed, Test Cases 1–6 | `-162237` |
+| State user | Dispatch (Prompt 3), two parts | Passed: 200 + 200 per variant — `BFBE-4559-55E0`, `F7B8-600A-3F95`, `AC86-4096-BDD2`, `CC78-20FB-7219` | `-164616` |
+| State user | Return (Prompt 4) | Passed, 5 per variant | `-170154` |
+| State user | Logout | Passed | `-170707` |
+| Health facility | Accept (Prompt 5) | Passed: `F7B8-600A-3F95`, `CC78-20FB-7219` | `-171427` |
+| Health facility | Reject (Prompt 15) | Passed: `BFBE-4559-55E0`, `AC86-4096-BDD2` | `-172654` |
+| Health facility | Dispatch to a CDD (Prompt 6) | Blocked: balance 0 (below) | `-173617` |
+| CDD | Registration (Prompt 11) | Steps 1–10 passed; Step 11 blocked, no incoming stock | `-174831` |
+| CDD | Consent No, Unable to Deliver (Prompts 12, 13) | Failed: the Auto Sync notification took the side-menu tap; fixed (`open-side-menu.yaml`) | `-181013`, `-181434` |
+| CDD | Dose and redose (Prompt 14) | Blocked: balance 0 | `-181546` |
+| CDD | Logout | Passed | `-181636` |
+
+Reruns: Prompt 12 (`-182226`) met `Limit exceeded to fetch Beneficiary IDs`,
+now answered with Re-Fetch IDs (REG-02, passed `-185004`); Prompt 13 was
+stopped before it submitted anything.
+
+**Why the health facility had no stock.** After a fresh sign-in (every flow
+clears the app) a stock user's device gets its dispatches but not its own
+receipts. The health facility's Stock Reconciliation read Received 0, Issued
+480, Stock in hand -480 per variant (`20261026-185921`, read only), and home
+shows a negative balance as 0. From the app's source, the stock download
+skips records last changed by the signed-in user, and the balance "heal" may
+then lower the server's stored balance to that figure. Bug report written
+2026-10-26. Until it is fixed, a role can dispatch only when its session
+itself accepts more stock than the role has dispatched before.
 
 ---
 
@@ -117,6 +152,25 @@ Strings below were read from `com.digit.hcm` 2.2.113 (SMC-MC, UAT) on the
   gets (LGN-05). The two roles are indistinguishable on that screen; only the
   dropdown's options differ, and those are not asserted yet. On mhbase the
   label names the facility, and ONB-03 selects one.
+
+### LGN-07 — Sync, then log out
+- **Status:** Automated — [`flows/login/logout.yaml`](flows/login/logout.yaml) · `chain`, `login`
+  (through [`subflows/sync-and-logout.yaml`](subflows/sync-and-logout.yaml)).
+  Ends each role of a chained run ([`scripts/run-chain.ps1`](scripts/run-chain.ps1)).
+  Passed 2026-10-26 for the state user (`20261026-170707`) and the CDD
+  (`20261026-181636`).
+- **Preconditions:** a signed-in session (the flow keeps the app's state;
+  on the Login screen already, it does nothing).
+- **Steps:** Home through the side menu if elsewhere. `Sync Data` until
+  `No Data available for sync` (Close any `Data Synced Successfully`). Side
+  menu → `Logout` → `Ok`.
+- **Expected:** `Sync Up Failed` never shows (it fails the flow: the next
+  role would not see this role's records). Logout asks `Are you sure you
+  want to end the session?` with `No` and `Ok`; Ok lands on the Login screen.
+- **Notes:** Read off the app as AU-SAT-001, 2026-10-23. The background Auto
+  Sync's heads-up notification can cover the menu button for a few seconds
+  and take the tap; [`open-side-menu.yaml`](subflows/open-side-menu.yaml)
+  taps again until `Logout` shows (CDD, 2026-10-26).
 
 ### Not yet covered
 - **National stock user** — out of scope (decided 2026-10-23): no sign-in,
@@ -1025,6 +1079,15 @@ one go. **The health facility and the CDD have not been run:** each needs a
 fresh, unaccepted dispatch of both variants — from the state (as Prompt 3)
 and from the health facility (as Prompt 6). Every run rejects both.
 
+**2026-10-26, chained** (see [Chained runs](#chained-runs--2026-10-26)): the
+state user passed all six in one run (`20261026-162237`), rejecting
+National's `SPAQ 1: 900` and `SPAQ 2: 900` (placeholder MRNs); balances
+410 → 410. The health facility passed all six (`20261026-172654`), rejecting
+two of the state's four dispatches of the same chain — `BFBE-4559-55E0`
+(SPAQ 1, 200) and `AC86-4096-BDD2` (SPAQ 2, 200); after Download Stock Data
+both stayed gone. Its balances read 0 → 0, which proves nothing here: a
+negative balance shows as 0 on home. The CDD has not been run.
+
 **What the app does** — read off the app as AU-SAT-001, 2026-10-23: Reject
 raises `Reject Confirmation` / `Are you sure you want to reject this stock?`
 with a text area `Reason for rejection *`, then `Confirm` and `Cancel`.
@@ -1046,7 +1109,7 @@ once.
 ### RJT-01 — Stock Receipt Details offers Reject (Test Case 1)
 - **Status:** Automated — the flows above. State user passed 2026-10-23
   (`20261023-131008`): `SPAQ 1: 900`, `MRN null_0` (details `--`), sender
-  `FAC_F-2026-10-15-137945`, quantity 900. Health facility, CDD: not run.
+  `FAC_F-2026-10-15-137945`, quantity 900. State user and health facility passed again 2026-10-26 (`20261026-162237`, `-172654`). CDD: not run.
 - **Preconditions:** Download Stock Data run; at least one incoming
   transaction for each variant, else
   `BLOCKED - Test Cases 1 to 6: No incoming transactions for <role>; <prerequisite> not received.`
@@ -1059,7 +1122,7 @@ once.
 
 ### RJT-02 — Reject asks for confirmation (Test Case 2)
 - **Status:** Automated. State user passed 2026-10-23 (`20261023-131008`,
-  and again for SPAQ2 in `-132400`). Health facility, CDD: not run.
+  and again for SPAQ2 in `-132400`). State user and health facility passed again 2026-10-26 (`20261026-162237`, `-172654`). CDD: not run.
 - **Steps:** Tap `Reject`.
 - **Expected:** `Reject Confirmation` / `Are you sure you want to reject this
   stock?`, a `Reason for rejection *` text area, `Confirm` and `Cancel`; its
@@ -1070,7 +1133,7 @@ once.
 
 ### RJT-03 — Cancel leaves the stock pending (Test Case 3)
 - **Status:** Automated. State user passed 2026-10-23 (`20261023-131008`).
-  Health facility, CDD: not run.
+  State user and health facility passed again 2026-10-26 (`20261026-162237`, `-172654`). CDD: not run.
 - **Steps:** In the popup, `Cancel`; then `Back`.
 - **Expected:** The popup closes; Stock Receipt Details is still up for the
   same product with `Accept Stock` and `Reject` offered; back on the list,
@@ -1080,7 +1143,7 @@ once.
 ### RJT-04 — A reason is required (Test Case 4)
 - **Status:** Automated. State user passed 2026-10-23 (`20261023-131008`):
   Confirm with the reason empty showed `Reason for Rejection is required` and
-  the popup stayed up. Health facility, CDD: not run.
+  the popup stayed up. State user and health facility passed again 2026-10-26 (`20261026-162237`, `-172654`). CDD: not run.
 - **Expected (QA to confirm):** The popup's reason field is marked
   mandatory, and Confirm with it empty is refused (`<label> is required`),
   the popup staying up.
@@ -1094,7 +1157,7 @@ once.
   rejected in `20261023-131008` (gone from the list; the run's on-screen
   count misread it, since fixed), SPAQ2 `SPAQ 2: 900` in `-132400` —
   `Stock rejected successfully`, SPAQ2 2 → 1 listed, SPAQ1 untouched. Both
-  carried `Automation test - stock rejected`. Health facility, CDD: not run.
+  carried `Automation test - stock rejected`. State user and health facility passed again 2026-10-26 (`20261026-162237`, `-172654`). CDD: not run.
 - **Steps:** For each variant: its first transaction → `Reject` →
   `REJECT_REASON` in the reason field → confirm.
 - **Expected:** A message about the rejection (none is a DEVIATION); back on
@@ -1112,7 +1175,7 @@ once.
   `0 SPAQ 1` / `0 SPAQ 2` before and after; after Download Stock Data the
   list held only the health facility's two returns. Both rejected
   transactions had placeholder MRNs, so the "not listed again" check had no
-  MRN to look for. Health facility, CDD: not run.
+  MRN to look for. State user and health facility passed again 2026-10-26 (`20261026-162237`, `-172654`). CDD: not run.
 - **Steps:** Home; read both balances; Download Stock Data; Record Stock
   Receipt.
 - **Expected:** Each Stock Balance unchanged, else
@@ -1426,12 +1489,24 @@ fails at the end listing them):
 
 ### REG-02 — Beneficiary IDs download (Step 1)
 - **Status:** Automated — `download-ids.yaml`; passed by hand 2026-10-21
-  (`20261021-172151`…`-172504`), **not yet run as written**.
+  (`20261021-172151`…`-172504`); passed as written 2026-10-26
+  (`20261026-174831`, 600/600). Met the server's limit the same evening
+  (below, `20261026-182226`); Re-Fetch IDs then passed (`20261026-185004`:
+  one Re-Fetch, `Download Completed` 600/600, 598 available).
 - **Expected:** Download → `Beneficiary IDs` (0 available / 0 total) →
   Download Beneficiary IDs → `Download in progress...` (`0/10`) →
   `Download Completed`, `600/600`, about a minute → Close → 600 available →
   Back to home. A failure or 5-minute timeout fails `Beneficiary ID download
   failed: <message>.`
+- **Notes:** The server caps a user's ID downloads. On 2026-10-26 the CDD
+  downloaded 600 at 17:56 (Prompt 11); a fresh sign-in at 18:23 (clearState
+  drops the IDs from the device) then got `Limit exceeded to fetch Beneficiary IDs` with
+  `Re-Fetch IDs` and `Close`. Re-Fetch IDs downloads the IDs already given
+  to the user again and may be tapped again whenever the dialog comes back
+  (QA, 2026-10-26): the flow taps it up to three times, logging a `NOTE`
+  each time; a fourth `Limit exceeded` fails `Beneficiary ID download
+  failed: Limit exceeded…`. Chained runs sign the CDD in once, so one download
+  serves Prompts 11–14.
 
 ### REG-03 — Register Beneficiary again, no popup (Step 2)
 - **Status:** Automated — `open-registration.yaml`, `search-and-register.yaml`;
