@@ -70,6 +70,8 @@ $chains = [ordered]@{
             'flows\registration\cdd-consent-no.yaml',        # Prompt 12
             'flows\registration\cdd-household-utd.yaml',     # Prompt 13
             'flows\registration\cdd-household-redose.yaml',  # Prompt 14
+            'flows\registration\cdd-search-nearby-and-id.yaml', # Prompt 18
+            'flows\registration\cdd-eligibility-referral.yaml', # Prompt 19
             'flows\stock\cdd-stock-view-transactions.yaml'   # Prompt 16
         )
     }

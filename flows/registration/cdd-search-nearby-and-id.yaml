@@ -1,0 +1,75 @@
+appId: ${HCM_APP_ID}
+name: "Registration - CDD finds a household by Near by households and by ID"
+tags:
+  - regression
+  - registration
+  - cdd
+  - mhbase
+  - consumes-data
+---
+# Prompt 18 (prompts/prompt-18-cdd-search-nearby-and-id.md): the CDD
+# (AU-CDD-001) adds a household of a head and one child at the device's own
+# position, reads child 1's beneficiary ID (its Token ID), then on Search
+# Beneficiary: Test Case 1 (both switches shown, off), 2 and 3 (Near by
+# households on lists the household with no name typed; off clears the
+# list), 4 to 9 (Search by ID: the hint, the full ID, part of it, a name, an
+# unknown ID, off again), 10 (open the household found by ID) and 11 (sync).
+#
+# Search reads the households on the device. A fresh sign-in holds none while
+# the CDD's boundary data download fails (2026-10-27), hence the household
+# added first; in a chained session the earlier prompts' households are
+# listed by Near by households too.
+#
+# Needs HCM_CDD_USER_ID / HCM_CDD_PASSWORD, TEST_USER (the same user), the
+# SEARCH_* keys, PRODUCT_VARIANT_1 / _2, and optionally REGISTRATION_VILLAGE,
+# HEAD_MOBILE. TEST_LATITUDE / TEST_LONGITUDE are best left blank: the
+# household must be registered where the device is to count as near by.
+# Names are generated: AutoSearchHead<run time>, AutoSearchChild1<run time>.
+# IRREVERSIBLE: registers a household of two (and may download beneficiary
+# IDs) - hence consumes-data.
+#
+# Read off the app as AU-CDD-001, 2026-10-27.
+- runFlow: ../../subflows/registration/search-init.yaml
+- runFlow: ../../subflows/home/cdd.yaml
+
+# --- Add the new records: consent Yes, the head, child 1 --------------------------
+- runFlow: ../../subflows/registration/household-with-children.yaml
+- runScript:
+    file: ../../subflows/registration/registration.js
+    env:
+      ACTION: search-rows
+    label: "Child 1's beneficiary ID and the result rows"
+- runFlow:
+    when:
+      true: ${output.reg.failure}
+    file: ../../subflows/fail.yaml
+    env:
+      MESSAGE: ${output.reg.failure}
+    label: "Child 1 has a beneficiary ID"
+- evalScript: "${console.log('Search household - head ' + output.reg.head.first + ' (' + output.reg.head.age + ', ' + output.reg.head.gender + '), child 1 ' + output.reg.child1.first + ', beneficiary ID ' + output.reg.beneficiaryId)}"
+
+# --- Back to an empty Search Beneficiary in the same village ----------------------
+- runFlow: ../../subflows/registration/go-home.yaml
+- runFlow: ../../subflows/registration/open-registration.yaml
+
+# --- Test Cases 1 to 10 ------------------------------------------------------------
+- runFlow: ../../subflows/registration/search-nearby.yaml
+- runFlow: ../../subflows/registration/search-by-id.yaml
+
+# --- Test Case 11: the new records reach the server --------------------------------
+- runFlow:
+    file: ../../subflows/registration/sync-data.yaml
+    env:
+      STEP: "Test Case 11 - Sync Data"
+- runScript:
+    file: ../../subflows/registration/registration.js
+    env:
+      ACTION: search-summary
+    label: "Log the execution report"
+- runFlow:
+    when:
+      true: ${output.reg.failure}
+    file: ../../subflows/fail.yaml
+    env:
+      MESSAGE: ${output.reg.failure}
+    label: "Every search case passed"

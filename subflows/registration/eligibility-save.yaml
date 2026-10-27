@@ -1,0 +1,40 @@
+appId: ${HCM_APP_ID}
+name: eligibility-save
+---
+# After eligibility-checklist.yaml has answered every question: Save
+# Delivery, then Submit on "Ready to submit ?". STEP names the report line;
+# ANSWER is what the questions were answered (for the report). Ends where
+# Submit leads. Split out of eligibility-checklist.yaml on 2026-10-27 so
+# Prompt 19 can answer the checklist and handle what a Yes leads to itself.
+- tapOn:
+    text: "Save Delivery"
+    label: "Save Delivery"
+- extendedWaitUntil:
+    visible: "Ready to submit \\?|Fill the required fields"
+    timeout: 10000
+    optional: true
+    label: "Ready to submit"
+- runFlow:
+    when:
+      notVisible: "Ready to submit \\?"
+    commands:
+      - takeScreenshot: artifacts/registration-checklist-not-accepted
+      - runFlow:
+          file: ../fail.yaml
+          env:
+            MESSAGE: "${STEP + ' - Save Delivery did not offer Ready to submit after answering ' + output.reg.elig.answered.length + ' questions ' + ANSWER + '.'}"
+- tapOn:
+    text: "Submit"
+    below: "Ready to submit \\?"
+    label: "Submit the checklist"
+- extendedWaitUntil:
+    notVisible: "Ready to submit \\?"
+    timeout: 15000
+    label: "The checklist is submitted"
+- runScript:
+    file: registration.js
+    env:
+      ACTION: step
+      STEP: ${STEP}
+      RESULT: PASSED
+      DETAIL: "${'all ' + output.reg.elig.answered.length + ' questions answered ' + ANSWER + ' (' + output.reg.elig.summary + '); Ready to submit -> Submit'}"

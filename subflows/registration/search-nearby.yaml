@@ -1,0 +1,146 @@
+appId: ${HCM_APP_ID}
+name: search-nearby
+---
+# Prompt 18 Test Cases 1 to 3, on Search Beneficiary with its field empty:
+# the two switches, then Near by households on (the household just added is
+# listed without a name typed) and off again (the list clears).
+#
+# Read off the app as AU-CDD-001, 2026-10-27 (runs 20261027-130038 and
+# -130355): "Near by households" and "Search by ID" are each a text-less
+# switch left of its label, reporting no on/off state - a tap on the label
+# does nothing. The switches sit 114 px apart and the lower one's top is a few
+# pixels above its own label's, so Near by households' switch is the first
+# (index 0) left of its label and below the subtitle. Turned on, it shows
+# orange and Register Beneficiary becomes enabled with the field empty. The
+# app's configuration searches within a radius of the device's position
+# (proximityRadius 5 in the sample configuration), inside the village, and
+# keeps the switch disabled until the position is known.
+
+# --- Test Case 1: the search options --------------------------------------------
+- extendedWaitUntil:
+    visible: "Name of the individual"
+    timeout: 15000
+    label: "Search Beneficiary, its field empty"
+- assertVisible:
+    text: "Near by households"
+    label: "Near by households is offered"
+- assertVisible:
+    text: "Search by ID"
+    label: "Search by ID is offered"
+- assertVisible:
+    text: "Name of the individual"
+    below: "Search by ID"
+    label: "Search by ID is off - the name search is active"
+- takeScreenshot: artifacts/search-tc1-options
+- runScript:
+    file: registration.js
+    env:
+      ACTION: step
+      STEP: "Test Case 1 - search options"
+      RESULT: PASSED
+      DETAIL: "Near by households and Search by ID shown, both off; the field reads Name of the individual"
+
+# --- Test Case 2: Near by households on -----------------------------------------
+- tapOn:
+    leftOf: "Near by households"
+    below: "Search beneficiaries registered for the current campaign"
+    above: "Search by ID"
+    index: 0
+    label: "Near by households - on"
+- extendedWaitUntil:
+    visible:
+      text: "Open"
+      below: "Search by ID"
+    timeout: 20000
+    optional: true
+    label: "Households near by are listed"
+- takeScreenshot: artifacts/search-tc2-nearby-on
+- runFlow:
+    when:
+      visible:
+        text: "Open"
+        below: "Search by ID"
+    commands:
+      # The list may be long (a chained session holds earlier prompts'
+      # households, all registered at the device's position).
+      - scrollUntilVisible:
+          element:
+            text: ${output.reg.headRow}
+          direction: DOWN
+          timeout: 30000
+          optional: true
+          label: "Find the household added"
+      - takeScreenshot: artifacts/search-tc2-nearby-household
+- runFlow:
+    when:
+      visible:
+        text: ${output.reg.headRow}
+    commands:
+      - runScript:
+          file: registration.js
+          env:
+            ACTION: step
+            STEP: "Test Case 2 - Near by households on"
+            RESULT: PASSED
+            DETAIL: "${'households listed with no name typed, the one added among them (head ' + output.reg.head.age + ', ' + output.reg.head.gender + ')'}"
+- runFlow:
+    when:
+      notVisible:
+        text: ${output.reg.headRow}
+    commands:
+      - takeScreenshot: artifacts/search-tc2-household-missing
+      - runScript:
+          file: registration.js
+          env:
+            ACTION: step
+            STEP: "Test Case 2 - Near by households on"
+            RESULT: FAILED
+            DETAIL: "${'the household added at the device position (head ' + output.reg.head.age + ', ' + output.reg.head.gender + ') is not listed'}"
+- scrollUntilVisible:
+    element: "Near by households"
+    direction: UP
+    timeout: 30000
+    optional: true
+    label: "Back to the switches"
+
+# --- Test Case 3: Near by households off ----------------------------------------
+- tapOn:
+    leftOf: "Near by households"
+    below: "Search beneficiaries registered for the current campaign"
+    above: "Search by ID"
+    index: 0
+    label: "Near by households - off"
+- extendedWaitUntil:
+    notVisible:
+      text: "Open"
+      below: "Search by ID"
+    timeout: 10000
+    optional: true
+    label: "The list clears"
+- takeScreenshot: artifacts/search-tc3-nearby-off
+- runFlow:
+    when:
+      notVisible:
+        text: "Open"
+        below: "Search by ID"
+    commands:
+      - runScript:
+          file: registration.js
+          env:
+            ACTION: step
+            STEP: "Test Case 3 - Near by households off"
+            RESULT: PASSED
+            DETAIL: "the list cleared; the name search is back"
+- runFlow:
+    when:
+      visible:
+        text: "Open"
+        below: "Search by ID"
+    commands:
+      - runScript:
+          file: registration.js
+          env:
+            ACTION: step
+            STEP: "Test Case 3 - Near by households off"
+            RESULT: DEVIATION
+            DETAIL: "households stay listed after Near by households is turned off with the field empty"

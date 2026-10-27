@@ -52,7 +52,10 @@ name: household-check
                 env:
                   ACTION: step
                   STEP: "Household Overview names"
-                  RESULT: DEVIATION
+                  # Prompt 18 logs it as INFO (output.reg.namesResult): the
+                  # deviation is Prompt 11's, and there it only explains why
+                  # households are matched by age and gender.
+                  RESULT: "${output.reg.namesResult ? output.reg.namesResult : 'DEVIATION'}"
                   DETAIL: "Household Overview (and the search results) show -- for every member's name; Edit Individual and Beneficiary Details show the names typed"
 - evalScript: ${output.reg.ci = 0}
 - evalScript: ${output.reg.listed = output.reg.head.label + ' ' + output.reg.head.gender + ' ' + output.reg.head.age}

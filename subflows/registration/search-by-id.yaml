@@ -1,0 +1,250 @@
+appId: ${HCM_APP_ID}
+name: search-by-id
+---
+# Prompt 18 Test Cases 4 to 10, on Search Beneficiary with Near by households
+# off and the field empty: Search by ID on (the hint changes), the full
+# beneficiary ID, its first 6 digits, the head's name and SEARCH_UNKNOWN_ID
+# typed in ID mode, Search by ID off (the name search is back), then the
+# household opened from an ID search. Ends on Household Overview.
+#
+# Read off the app as AU-CDD-001, 2026-10-27 (run 20261027-130355): with
+# Search by ID on, the field's hint reads "Id Search" instead of "Name of the
+# individual" - the only sign of the switch's state. The app's configuration
+# searches the members' UNIQUE_BENEFICIARY_ID identifiers (the "Token ID" a
+# member gets when submitted) with a "contains" match, inside the village;
+# turning the switch either way clears the field.
+
+# --- Test Case 4: Search by ID on -----------------------------------------------
+- runScript:
+    file: registration.js
+    env:
+      ACTION: typed
+      VALUE: ""
+- tapOn:
+    leftOf: "Search by ID"
+    below: "Near by households"
+    label: "Search by ID - on"
+- extendedWaitUntil:
+    visible: "Id Search"
+    timeout: 10000
+    optional: true
+    label: "The hint becomes Id Search"
+- takeScreenshot: artifacts/search-tc4-id-on
+- runFlow:
+    when:
+      visible: "Id Search"
+    commands:
+      - runScript:
+          file: registration.js
+          env:
+            ACTION: step
+            STEP: "Test Case 4 - Search by ID on"
+            RESULT: PASSED
+            DETAIL: "the hint changed from Name of the individual to Id Search"
+- runFlow:
+    when:
+      notVisible: "Id Search"
+    commands:
+      - runScript:
+          file: registration.js
+          env:
+            ACTION: step
+            STEP: "Test Case 4 - Search by ID on"
+            RESULT: FAILED
+            DETAIL: "the hint did not change to Id Search - Search by ID did not turn on"
+      - runScript:
+          file: registration.js
+          env:
+            ACTION: search-summary
+      - runFlow:
+          file: ../fail.yaml
+          env:
+            MESSAGE: ${output.reg.failure}
+          label: "Search by ID turns on"
+
+# --- Test Case 5: the full beneficiary ID ---------------------------------------
+- runFlow:
+    file: search-type.yaml
+    env:
+      VALUE: ${output.reg.beneficiaryId}
+- takeScreenshot: artifacts/search-tc5-full-id
+- runFlow:
+    when:
+      visible:
+        text: ${output.reg.childRow}
+        below: "Search by ID"
+    commands:
+      - runScript:
+          file: registration.js
+          env:
+            ACTION: step
+            STEP: "Test Case 5 - search by the full ID"
+            RESULT: PASSED
+            DETAIL: "${output.reg.beneficiaryId + ' lists the household, with child 1 (' + output.reg.child1.age + ', ' + output.reg.child1.gender + ')'}"
+- runFlow:
+    when:
+      notVisible:
+        text: ${output.reg.childRow}
+        below: "Search by ID"
+    commands:
+      - runScript:
+          file: registration.js
+          env:
+            ACTION: step
+            STEP: "Test Case 5 - search by the full ID"
+            RESULT: FAILED
+            DETAIL: "${output.reg.beneficiaryId + (output.reg.listed ? ' lists a household, but not child 1 (' + output.reg.child1.age + ', ' + output.reg.child1.gender + ')' : ' lists nothing')}"
+
+# --- Test Case 6: part of the ID ------------------------------------------------
+- runFlow:
+    file: search-type.yaml
+    env:
+      VALUE: ${output.reg.partialId}
+- takeScreenshot: artifacts/search-tc6-partial-id
+- runScript:
+    file: registration.js
+    env:
+      ACTION: step
+      STEP: "Test Case 6 - search by part of the ID"
+      RESULT: INFO
+      DETAIL: "${output.reg.partialId + ' (the first 6 digits) ' + (output.reg.listed ? 'lists households' : 'lists nothing') + ' - QA to confirm which is intended'}"
+
+# --- Test Case 7: a name in ID mode ---------------------------------------------
+- runFlow:
+    file: search-type.yaml
+    env:
+      VALUE: ${output.reg.head.first}
+- takeScreenshot: artifacts/search-tc7-name-in-id-mode
+- runScript:
+    file: registration.js
+    env:
+      ACTION: step
+      STEP: "Test Case 7 - a name in ID mode"
+      RESULT: "${output.reg.listed ? 'DEVIATION' : 'PASSED'}"
+      DETAIL: "${output.reg.head.first + (output.reg.listed ? ' lists a household although ID mode should not search names' : ' lists nothing - ID mode does not search names')}"
+
+# --- Test Case 8: an unknown ID -------------------------------------------------
+- runFlow:
+    file: search-type.yaml
+    env:
+      VALUE: ${output.reg.unknownId}
+- takeScreenshot: artifacts/search-tc8-unknown-id
+- runScript:
+    file: registration.js
+    env:
+      ACTION: step
+      STEP: "Test Case 8 - an unknown ID"
+      RESULT: "${output.reg.listed ? 'DEVIATION' : 'PASSED'}"
+      DETAIL: "${output.reg.unknownId + (output.reg.listed ? ' (SEARCH_UNKNOWN_ID) lists a household' : ' (SEARCH_UNKNOWN_ID) lists nothing')}"
+
+# --- Test Case 9: Search by ID off ----------------------------------------------
+- tapOn:
+    leftOf: "Search by ID"
+    below: "Near by households"
+    label: "Search by ID - off"
+- extendedWaitUntil:
+    visible: "Name of the individual"
+    timeout: 10000
+    optional: true
+    label: "The hint is Name of the individual again"
+- takeScreenshot: artifacts/search-tc9-id-off
+# Whether the hint came back is recorded before anything is typed: typing the
+# name hides the hint again (run 20261027-131219 logged both outcomes when
+# the second branch looked after the first had typed).
+- evalScript: ${output.reg.idOff = false}
+- runFlow:
+    when:
+      visible: "Name of the individual"
+    commands:
+      - evalScript: ${output.reg.idOff = true}
+- runFlow:
+    when:
+      true: ${output.reg.idOff}
+    commands:
+      - runScript:
+          file: registration.js
+          env:
+            ACTION: typed
+            VALUE: ""
+      - runFlow:
+          file: search-type.yaml
+          env:
+            VALUE: ${output.reg.head.first}
+      - takeScreenshot: artifacts/search-tc9-name-search
+      - runScript:
+          file: registration.js
+          env:
+            ACTION: step
+            STEP: "Test Case 9 - Search by ID off"
+            RESULT: "${output.reg.listed ? 'PASSED' : 'FAILED'}"
+            DETAIL: "${'the field cleared and read Name of the individual; the head name ' + (output.reg.listed ? 'lists the household' : 'lists nothing')}"
+- runFlow:
+    when:
+      true: ${!output.reg.idOff}
+    commands:
+      - runScript:
+          file: registration.js
+          env:
+            ACTION: step
+            STEP: "Test Case 9 - Search by ID off"
+            RESULT: DEVIATION
+            DETAIL: "${'turning Search by ID off left the field holding ' + output.reg.typed + ' (the hint did not come back)'}"
+
+# --- Test Case 10: open the household found by ID -------------------------------
+# Back to an empty field in ID mode: when Test Case 9 cleared the field this
+# is one tap; else the field's text is replaced below anyway.
+- tapOn:
+    leftOf: "Search by ID"
+    below: "Near by households"
+    label: "Search by ID - on again"
+- extendedWaitUntil:
+    visible: "Id Search"
+    timeout: 10000
+    optional: true
+    label: "The hint is Id Search"
+- runFlow:
+    when:
+      visible: "Id Search"
+    commands:
+      - runScript:
+          file: registration.js
+          env:
+            ACTION: typed
+            VALUE: ""
+- runFlow:
+    file: search-type.yaml
+    env:
+      VALUE: ${output.reg.beneficiaryId}
+- runFlow:
+    when:
+      notVisible:
+        text: ${output.reg.childRow}
+        below: "Search by ID"
+    commands:
+      - takeScreenshot: artifacts/search-tc10-not-found
+      - runScript:
+          file: registration.js
+          env:
+            ACTION: step
+            STEP: "Test Case 10 - open the household found by ID"
+            RESULT: FAILED
+            DETAIL: "${output.reg.beneficiaryId + ' lists no household to open'}"
+      - runScript:
+          file: registration.js
+          env:
+            ACTION: search-summary
+      - runFlow:
+          file: ../fail.yaml
+          env:
+            MESSAGE: ${output.reg.failure}
+          label: "The household found by ID is listed"
+- tapOn:
+    text: "Open"
+    below: "Search by ID"
+    label: "Open the household"
+- runFlow:
+    file: household-check.yaml
+    env:
+      STEP: "${'Test Case 10 - the household found by ' + output.reg.beneficiaryId + ' opens on Household Overview, child 1 under that ID'}"
+      CHILDREN: "1"
+- takeScreenshot: artifacts/search-tc10-household

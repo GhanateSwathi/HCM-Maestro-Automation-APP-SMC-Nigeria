@@ -26,11 +26,13 @@ were taken from.
 | Stock — Reject a receipt (state user, health facility, CDD) | 6 | 6 | Passed for the state user 2026-10-23 (in two runs, one session) and 2026-10-26 (one run, chained), and for the health facility 2026-10-26; CDD not run - needs a fresh dispatch of both variants from the health facility. View Reports after a rejection (the sender's balance coming back: out of scope) |
 | Stock — View Transactions (state user, health facility, CDD) | 6 | 6 | Passed end to end for all three roles 2026-10-23 (the CDD's list was empty). What the QR encodes; transactions with more than one product; received transactions' cards (Sender) not seen yet |
 | Beneficiary Referral (health facility) | 7 | 7 | Scan Beneficiary; Referred by (CDD team code); opening a listed referral; mandatory-field validation; referral ID (the app shows none) |
-| Registration & Delivery (CDD) | 16 | 16 | The mobile-number bounds (never run - no test number); Unable To Deliver, Redose, Near by households, Search by ID, Mark Closed Household. REG-01, 02, 08, 09, 13 (and REG-07's save) were done in session by hand, not yet as written; the full flow has not run end to end (see the section) |
+| Registration & Delivery (CDD) | 16 | 16 | The mobile-number bounds (never run - no test number); Unable To Deliver, Redose, Mark Closed Household (Near by households and Search by ID: their own section). REG-01, 02, 08, 09, 13 (and REG-07's save) were done in session by hand, not yet as written; the full flow has not run end to end (see the section) |
 | Registration — consent No (CDD) | 7 | 7 | Done in session by hand 2026-10-22; the flow has not run as written. Reasons other than free text; a refused household found other than by name |
 | Registration — Unable to Deliver (CDD) | 9 | 9 | Comment on Unable to Deliver (optional, left empty); a 20-member household fully registered; UTD-09's sync not run (expired sign-in) |
 | Registration — dose and redose (CDD) | 10 | 10 | Redose reason Others; a redose's time window; RDS-10's sync not run (expired sign-in) |
-| **Total** | **114** | **114** | |
+| Registration — search by Near by households and by ID (CDD) | 11 | 11 | Whether part of an ID should match (QA); the radius, and a household outside it; Near by households with a name typed; Search by ID by scanning (no scanner on this screen) |
+| Registration — eligibility checklist: referral and ineligible (CDD) | 6 | 6 | Several Yes answers at once (which outcome wins); "SPAQ for the first time" Yes; Go Back on the referral success screen; ELG-06's sync (Server Error, 2026-10-27) |
+| **Total** | **131** | **131** | |
 
 Status key: **Automated** — a flow asserts it. **Partial** — the flow performs
 the step but asserts nothing about it. **Blocked** — a flow exists but cannot
@@ -1944,6 +1946,191 @@ SPAQ1 at 477.
 ### RDS-10 — Sync
 - **Status:** Automated — `sync-data.yaml`, the flow's last step; **not run**
   in the session (expired sign-in — CNS-07).
+
+---
+
+## Registration — search by Near by households and by ID (CDD)
+
+[`flows/registration/cdd-search-nearby-and-id.yaml`](flows/registration/cdd-search-nearby-and-id.yaml)
+· `regression`, `registration`, `cdd`, `mhbase`, `consumes-data` —
+[Prompt 18](prompts/prompt-18-cdd-search-nearby-and-id.md). The CDD (AU-CDD-001)
+adds a household of a head and one child at the device's own position, then
+finds it on Search Beneficiary without typing a name: by Near by households
+and by the child's beneficiary ID. **Registers a household of two in UAT.**
+Test data: the `SEARCH_*` keys; names generated — `AutoSearchHead<stamp>`,
+`AutoSearchChild1<stamp>`.
+
+**Why it adds a household first.** Search reads the households on the
+device. After a fresh sign-in the CDD has none: its boundary data check
+fails on the server ("Failed to check data in server", 2026-10-23 to 27), so
+nothing is downloaded — a name search for `Auto` listed nothing
+(`20261027-124949`).
+
+**What the app does** — read off the app as AU-CDD-001, 2026-10-27:
+- "Near by households" and "Search by ID" are each a text-less switch left of
+  its label; neither reports an on/off state, and a tap on the label does
+  nothing. On, a switch shows orange.
+- Near by households on, with the field empty: the households near the
+  device are listed and Register Beneficiary is enabled. A card shows the
+  household name (`--`), `Open`, and a Beneficiary / Age / Gender row per
+  member (`--`, `30y 0m`, `Female`); **no distance is shown**. The app's
+  configuration searches within a radius of the device's position, inside the
+  village, and keeps the switch disabled until the position is known.
+- Search by ID on: the field's hint changes from `Name of the individual` to
+  `Id Search` — the only sign of the switch's state. The full ID lists the
+  household with all its members; turning the switch off clears the field.
+
+**How it was run.** `20261027-131219` (17 min 57 s, sign-in kept): household
+added — head `AutoSearchHead20261027131252 Test`, 30y 0m, Female; child 1
+`AutoSearchChild120261027131252 Test`, 0y 6m, Female, beneficiary ID
+**172201651133**. Test Cases 1–11 all behaved as expected, but the run
+failed on two faults of the flow's own: Test Case 9 logged a false deviation
+next to its pass (it looked for the hint after typing), and Prompt 11's
+names deviation (`--`) failed it. Both fixed — the hint is recorded before
+typing, and the names finding is INFO here. Re-checked in the same session
+on the same household, without registering again: `20261027-133230` (Test
+Case 9 now logs one result; that check typed a newly generated name, so it
+found nothing) and **`-133847`, with the household's own name: Test Cases
+1–10 passed, no deviations** (5 min 32 s).
+
+### SRC-01 — The search options (Test Case 1)
+- **Status:** Automated — `search-nearby.yaml`. Passed 2026-10-27.
+- **Expected:** `Near by households` and `Search by ID`, both off; the field
+  reads `Name of the individual`.
+
+### SRC-02 — Near by households on (Test Case 2)
+- **Status:** Automated — `search-nearby.yaml`. Passed 2026-10-27: the
+  household added was listed with no name typed (the only one on the device).
+- **Expected:** With the field empty, households near the device are listed,
+  the one just added among them (found by its head's row).
+- **Notes:** No distance on the cards. **QA to confirm** the radius (5 km in
+  the app's sample configuration) — a household registered elsewhere is not
+  tried.
+
+### SRC-03 — Near by households off (Test Case 3)
+- **Status:** Automated — `search-nearby.yaml`. Passed 2026-10-27.
+- **Expected:** The list clears; the name search is back.
+
+### SRC-04 — Search by ID on (Test Case 4)
+- **Status:** Automated — `search-by-id.yaml`. Passed 2026-10-27.
+- **Expected:** The hint changes from `Name of the individual` to `Id Search`.
+
+### SRC-05 — Search by the full ID (Test Case 5)
+- **Status:** Automated — `search-by-id.yaml`. Passed 2026-10-27:
+  `172201651133` listed the household, both members.
+- **Expected:** The household is listed, with child 1's row.
+
+### SRC-06 — Search by part of the ID (Test Case 6)
+- **Status:** Automated, logged only — `search-by-id.yaml`. 2026-10-27:
+  `172201` (the first 6 digits) listed **nothing**.
+- **Notes:** The app's configuration matches with "contains", which suggests
+  part of an ID should match. **QA to confirm** which is intended.
+
+### SRC-07 — A name in ID mode (Test Case 7)
+- **Status:** Automated — `search-by-id.yaml`. Passed 2026-10-27.
+- **Expected:** The head's name lists nothing: ID mode does not search names.
+
+### SRC-08 — An unknown ID (Test Case 8)
+- **Status:** Automated — `search-by-id.yaml`. Passed 2026-10-27:
+  `000000000000` listed nothing, with no message.
+- **Notes:** **QA to confirm** whether a "no results" message should show.
+
+### SRC-09 — Search by ID off (Test Case 9)
+- **Status:** Automated — `search-by-id.yaml`. Passed 2026-10-27
+  (`20261027-131219`; as fixed, `-133847`).
+- **Expected:** The field clears and reads `Name of the individual`; the
+  head's name then lists the household.
+
+### SRC-10 — Open the household found by ID (Test Case 10)
+- **Status:** Automated — `search-by-id.yaml`, `household-check.yaml`. Passed
+  2026-10-27.
+- **Expected:** Household Overview lists the head and child 1 under
+  `172201651133`.
+
+### SRC-11 — Sync (Test Case 11)
+- **Status:** Automated — `sync-data.yaml`. Passed 2026-10-27: `No Data
+  available for sync` (the background Auto Sync had sent the household).
+
+---
+
+## Registration — eligibility checklist: referral and ineligible (CDD)
+
+[`flows/registration/cdd-eligibility-referral.yaml`](flows/registration/cdd-eligibility-referral.yaml)
+· `regression`, `registration`, `cdd`, `mhbase`, `consumes-data` —
+[Prompt 19](prompts/prompt-19-cdd-eligibility-referral-ineligible.md). The CDD
+(AU-CDD-001) registers a household of a head and four children and answers
+each child's eligibility checklist with one Yes: sick, fever, side effect
+from last cycle's SPAQ (referral) and SP or CTX in the past 28 days
+(ineligible). **Registers a household of five, three referrals and an
+ineligible child in UAT.** No stock is needed. Test data: the `ELIG_*`
+keys; names generated — `AutoEligHead<stamp>`, `AutoEligChild<n><stamp>`.
+
+**What the app does** — read off the app as AU-CDD-001, 2026-10-27:
+- The checklist: `Is the child sick?`, `Is the child having fever?`, `Is the
+  child given SPAQ for the first time?(Not administered in the previous
+  cycle)` (No adds `Is there any side effect to SPAQ which was administered
+  last cycle?`) and `Child has taken SP or CTX containing drugs in the past
+  28 days?`, each with Yes / No radios that report no state.
+- Save Delivery with sick, fever or side effect Yes: `Ready to submit ?` /
+  `Based on responses you are going to 'referral flow'. Are you sure you want
+  to proceed?` (Submit / Cancel). With SP or CTX Yes: the same popup with
+  `'Ineligible flow'`.
+- Referral: Submit opens **Refer Beneficiary** — `Admnistrative unit *`
+  (so spelt; the village) and `Referred by *` (CDD), both read-only, and
+  `Health facility *`, a searchable dropdown listing `Fac_f-2026-10-15-137947`
+  alone; empty, Submit shows `This field is required`. Submit then shows
+  `Referral recorded successfully`, `ID-<beneficiary ID>`, View Household
+  Details and Go Back. The card shows **`Beneficiary Referred`**, no Dose or
+  Unable To Deliver, Edit Individual greyed out.
+- Ineligible: Submit returns straight to Household Overview, no form; the
+  card shows **`Ineligible`**, no Dose.
+
+**How it was run.** Explored on the Prompt 18 household's child
+(`172201651133`, referred for sickness; runs `20261027-142832` to `-144801`).
+Then `20261027-145607` (31 min 26 s): household — head
+`AutoEligHead20261027145647 Test`, 34y 0m, Female; children 1–4
+`175611531811` (6 months), `176231419201` (9 months), `176118811091` (2 years),
+`181072141523` (4 years), all Female. Test Case 1 passed in full and Test
+Case 2's referral was recorded; the run then stopped on the flow's own
+20-second scroll limit to child 3's card (the ID was on screen when it ran
+out; now 60 s). Resumed in the same session on the same household
+(`20261027-153014`): child 2's card, Test Cases 3, 4 and 5 passed. **Test Case
+6 failed: `Sync Up Failed` / `Server Error`, twice** (retry `-154318`), with
+`There are 4 transactions yet to be synced` — Test Cases 3 and 4's records
+are on the device only; the app was left as it is.
+
+### ELG-01 — Sick: referral popup, Cancel, referral (Test Case 1)
+- **Status:** Automated — `elig-case.yaml`, `elig-refer.yaml`, `elig-card.yaml`.
+  Passed 2026-10-27 (`20261027-145607`, child 1 `175611531811`): the popup,
+  Cancel kept the answers, the prefilled form, `This field is required`,
+  `Referral recorded successfully` with `ID-175611531811`, card `Beneficiary
+  Referred` without Dose.
+- **Notes:** `Admnistrative unit` is logged as a DEVIATION once per run, so
+  the flow ends failed on it until the label is fixed or QA accepts it.
+
+### ELG-02 — Fever: referral (Test Case 2)
+- **Status:** Automated. Passed 2026-10-27: referral recorded
+  (`20261027-145607`), card `Beneficiary Referred` (`-153014`).
+
+### ELG-03 — Side effect from last cycle's SPAQ: referral (Test Case 3)
+- **Status:** Automated. Passed 2026-10-27 (`20261027-153014`, child 3
+  `176118811091`): first time No, side effect Yes, referral recorded, card
+  `Beneficiary Referred`.
+
+### ELG-04 — SP or CTX taken: ineligible (Test Case 4)
+- **Status:** Automated. Passed 2026-10-27 (`20261027-153014`, child 4
+  `181072141523`): `'Ineligible flow'` popup, no referral form, card
+  `Ineligible` without Dose.
+- **Notes:** **QA to confirm** the popup's and the card's wording.
+
+### ELG-05 — Every card (Test Case 5)
+- **Status:** Automated. Passed 2026-10-27: children 1–3 `Beneficiary
+  Referred`, child 4 `Ineligible`.
+
+### ELG-06 — Sync (Test Case 6)
+- **Status:** Automated — `sync-data.yaml`. **Failed 2026-10-27**: `Sync Up
+  Failed` / `Server Error`, also on a retry; 4 transactions pending on the
+  device.
 
 ---
 

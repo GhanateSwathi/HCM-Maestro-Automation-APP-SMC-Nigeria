@@ -1,0 +1,123 @@
+appId: ${HCM_APP_ID}
+name: "Registration - CDD eligibility checklist sends children to referral or ineligible"
+tags:
+  - regression
+  - registration
+  - cdd
+  - mhbase
+  - consumes-data
+---
+# Prompt 19 (prompts/prompt-19-cdd-eligibility-referral-ineligible.md): the
+# CDD (AU-CDD-001) registers a household of a head and four children, then
+# answers each child's eligibility checklist with one Yes:
+#   Test Case 1  child 1 - Is the child sick? - referral popup, Cancel keeps
+#                the answers, Refer Beneficiary (prefilled fields, facility
+#                mandatory), Referral recorded successfully, card Beneficiary
+#                Referred without Dose
+#   Test Case 2  child 2 - Is the child having fever? - referral
+#   Test Case 3  child 3 - SPAQ first time No, side effect last cycle Yes -
+#                referral
+#   Test Case 4  child 4 - SP or CTX in the past 28 days - ineligible, no form
+#   Test Case 5  every card's status; Test Case 6 sync.
+#
+# Needs HCM_CDD_USER_ID / HCM_CDD_PASSWORD, TEST_USER (the same user), the
+# ELIG_* keys, PRODUCT_VARIANT_1 / _2, and optionally REGISTRATION_VILLAGE,
+# TEST_LATITUDE / TEST_LONGITUDE, HEAD_MOBILE. No stock is needed - no dose
+# is given. Names are generated: AutoEligHead<run time>,
+# AutoEligChild<n><run time>. IRREVERSIBLE: a household of five, three
+# referrals and an ineligible child - hence consumes-data.
+#
+# Read off the app as AU-CDD-001, 2026-10-27.
+- runFlow: ../../subflows/registration/elig-init.yaml
+- runFlow: ../../subflows/home/cdd.yaml
+
+# --- The household: consent Yes, the head, four children --------------------------
+- runFlow: ../../subflows/registration/household-with-children.yaml
+
+# --- Test Cases 1 to 4: one child each -------------------------------------------
+- runFlow:
+    file: ../../subflows/registration/elig-case.yaml
+    env:
+      WHO: child1
+      TC: "1"
+      QUESTION: "Is the child sick?"
+      YES: "Is the child sick.*"
+      EXPECT: referral
+      CANCEL: "true"
+      VALIDATE: "true"
+- runFlow:
+    file: ../../subflows/registration/elig-case.yaml
+    env:
+      WHO: child2
+      TC: "2"
+      QUESTION: "Is the child having fever?"
+      YES: "Is the child having fever.*"
+      EXPECT: referral
+      CANCEL: "false"
+      VALIDATE: "false"
+# "Is the child given SPAQ for the first time?" is answered No (as every
+# question not matched), which adds the side-effect question - answered Yes.
+- runFlow:
+    file: ../../subflows/registration/elig-case.yaml
+    env:
+      WHO: child3
+      TC: "3"
+      QUESTION: "Is there any side effect to SPAQ which was administered last cycle?"
+      YES: "Is there any side effect.*"
+      EXPECT: referral
+      CANCEL: "false"
+      VALIDATE: "false"
+- runFlow:
+    file: ../../subflows/registration/elig-case.yaml
+    env:
+      WHO: child4
+      TC: "4"
+      QUESTION: "Child has taken SP or CTX containing drugs in the past 28 days?"
+      YES: "Child has taken SP or CTX.*"
+      EXPECT: ineligible
+      CANCEL: "false"
+      VALIDATE: "false"
+
+# --- Test Case 5: every card ---------------------------------------------------------
+- evalScript: ${output.reg.ci = 0}
+- evalScript: ${output.reg.finalBad = []}
+- evalScript: ${output.reg.finalCards = []}
+- repeat:
+    times: ${output.reg.children.length}
+    label: "Each child's card"
+    commands:
+      - runScript:
+          file: ../../subflows/registration/registration.js
+          env:
+            ACTION: member
+            WHO: ${'child' + (output.reg.ci + 1)}
+      - runFlow: ../../subflows/registration/elig-card.yaml
+      - evalScript: "${output.reg.finalCards.push(output.m.label + ' ' + output.m.status + (output.m.doseLeft ? ' (Dose offered)' : ''))}"
+      - evalScript: "${output.m.statusOk && !output.m.doseLeft ? 0 : output.reg.finalBad.push(output.m.label)}"
+      - evalScript: ${output.reg.ci = output.reg.ci + 1}
+- takeScreenshot: artifacts/elig-final
+- runScript:
+    file: ../../subflows/registration/registration.js
+    env:
+      ACTION: step
+      STEP: "Test Case 5 - every card"
+      RESULT: "${output.reg.finalBad.length ? 'FAILED' : 'PASSED'}"
+      DETAIL: "${output.reg.finalCards.join('; ') + (output.reg.finalBad.length ? ' - not as expected: ' + output.reg.finalBad.join(', ') : '')}"
+
+# --- Test Case 6: the records reach the server --------------------------------------
+- runFlow:
+    file: ../../subflows/registration/sync-data.yaml
+    env:
+      STEP: "Test Case 6 - Sync Data"
+- runScript:
+    file: ../../subflows/registration/registration.js
+    env:
+      ACTION: elig-summary
+    label: "Log the execution report"
+- runFlow:
+    when:
+      true: ${output.reg.failure}
+    file: ../../subflows/fail.yaml
+    env:
+      MESSAGE: ${output.reg.failure}
+    label: "Every eligibility case passed"

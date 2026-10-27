@@ -1,0 +1,55 @@
+appId: ${HCM_APP_ID}
+name: elig-card
+---
+# Prompt 19, on Household Overview: output.m's card - its status, checked
+# against output.m.expect (registration.js elig-status), and whether it still
+# offers Dose (output.m.doseLeft). Ends on Household Overview.
+#
+# A card (2026-10-27): its beneficiary ID, "--", "FEMALE | 0y 6m", a status
+# tag ("Beneficiary Referred", "Not Administered", ...), then any buttons
+# (Dose, Unable To Deliver). The page is scrolled until the next card's ID -
+# or Add Members, under the last card - shows, so the whole card is on
+# screen between the two.
+- evalScript: "${output.m.nextAnchor = output.m.index < output.reg.children.length - 1 ? output.reg.children[output.m.index + 1].id : 'Add Members'}"
+- scrollUntilVisible:
+    element: "Household Overview"
+    direction: UP
+    timeout: 15000
+    optional: true
+    label: "From the top"
+# 60 s: from the top to child 3 took longer than 20 s on 2026-10-27 (run
+# 20261027-145607 - the ID was on screen when the wait ran out), each swipe
+# slowed by the Auto Sync notification.
+- scrollUntilVisible:
+    element:
+      text: ${output.m.nextAnchor}
+    direction: DOWN
+    timeout: 60000
+    label: "Bring the card on screen"
+- setClipboard: "(no status)"
+- runFlow:
+    when:
+      visible:
+        text: "Beneficiary Referred|.*[Ee]ligib.*|Not Administered|Administered success|.*[Uu]nable to [Dd]eliver.*|.*[Cc]losed.*"
+        below: ${output.m.id}
+    commands:
+      - copyTextFrom:
+          text: "Beneficiary Referred|.*[Ee]ligib.*|Not Administered|Administered success|.*[Uu]nable to [Dd]eliver.*|.*[Cc]losed.*"
+          below: ${output.m.id}
+          index: 0
+          label: "Read the card's status"
+- runScript:
+    file: registration.js
+    env:
+      ACTION: elig-status
+      EXPECT: ${output.m.expect}
+- evalScript: ${output.m.doseLeft = false}
+- runFlow:
+    when:
+      visible:
+        text: "Dose"
+        below: ${output.m.id}
+        above: ${output.m.nextAnchor}
+    commands:
+      - evalScript: ${output.m.doseLeft = true}
+- takeScreenshot: artifacts/elig-card-${output.m.who}

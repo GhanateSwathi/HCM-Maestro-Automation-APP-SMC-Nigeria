@@ -1,0 +1,206 @@
+appId: ${HCM_APP_ID}
+name: elig-refer
+---
+# Prompt 19, on "Refer Beneficiary" for output.m: the prefilled fields, then
+# - VALIDATE "true" - Submit with no facility; the facility (ELIG_REFERRAL_
+# FACILITY, else the first offered), Submit, the success screen, View
+# Household Details. TC numbers the report lines. Ends on Household
+# Overview. Records the referral - IRREVERSIBLE.
+#
+# Read off the app as AU-CDD-001, 2026-10-27 (runs 20261027-143526 to
+# -144801): "Admnistrative unit *" (so spelt) holds the village and
+# "Referred by *" holds CDD, both greyed and read-only; "Health facility *" is
+# a searchable dropdown - a tap opens the keyboard and lists the facility
+# (Fac_f-2026-10-15-137947, alone) under the field. Submit with it empty
+# shows "This field is required". Submit with it set shows "Referral recorded
+# successfully", "ID-<beneficiary ID>", View Household Details and Go Back.
+- extendedWaitUntil:
+    visible: "Refer Beneficiary"
+    timeout: 15000
+    label: "Refer Beneficiary opens"
+- takeScreenshot: artifacts/elig-refer-form-${output.m.who}
+
+# --- The prefilled fields -----------------------------------------------------------
+- evalScript: ${output.m.formOk = true}
+- runFlow:
+    when:
+      notVisible:
+        text: ${output.reg.villageSelector}
+        below: "Adm(i)?nistrative unit.*"
+        above: "Referred by.*"
+    commands:
+      - evalScript: ${output.m.formOk = false}
+- runFlow:
+    when:
+      notVisible:
+        text: "CDD"
+        below: "Referred by.*"
+        above: "Health facility.*"
+    commands:
+      - evalScript: ${output.m.formOk = false}
+- runScript:
+    file: registration.js
+    env:
+      ACTION: step
+      STEP: "${'Test Case ' + TC + ' - Refer Beneficiary prefilled'}"
+      RESULT: "${output.m.formOk ? 'PASSED' : 'DEVIATION'}"
+      DETAIL: "${output.m.formOk ? 'Administrative unit ' + output.reg.village + ', Referred by CDD; Health facility empty' : 'Administrative unit is not ' + output.reg.village + ' or Referred by is not CDD'}"
+# The label's spelling, once per run.
+- runFlow:
+    when:
+      true: ${!output.reg.admLogged}
+    commands:
+      - evalScript: ${output.reg.admLogged = true}
+      - runFlow:
+          when:
+            visible: "Admnistrative unit.*"
+          commands:
+            - runScript:
+                file: registration.js
+                env:
+                  ACTION: step
+                  STEP: "Refer Beneficiary label"
+                  RESULT: DEVIATION
+                  DETAIL: "the first field is labelled Admnistrative unit (Administrative misspelt)"
+
+# --- Health facility is mandatory (VALIDATE) ---------------------------------------
+- runFlow:
+    when:
+      true: ${VALIDATE == 'true'}
+    commands:
+      - tapOn:
+          text: "Submit"
+          below: "Health facility.*"
+          label: "Submit with no facility"
+      - extendedWaitUntil:
+          visible: "This field is required|Referral recorded successfully"
+          timeout: 8000
+          optional: true
+          label: "The form answers"
+      - takeScreenshot: artifacts/elig-refer-empty-${output.m.who}
+      - runFlow:
+          when:
+            visible: "This field is required"
+          commands:
+            - runScript:
+                file: registration.js
+                env:
+                  ACTION: step
+                  STEP: "${'Test Case ' + TC + ' - Health facility is mandatory'}"
+                  RESULT: PASSED
+                  DETAIL: "Submit with no facility shows This field is required"
+      - runFlow:
+          when:
+            notVisible: "This field is required"
+          commands:
+            - runScript:
+                file: registration.js
+                env:
+                  ACTION: step
+                  STEP: "${'Test Case ' + TC + ' - Health facility is mandatory'}"
+                  RESULT: FAILED
+                  DETAIL: "Submit with no facility showed no This field is required"
+
+# --- The facility, Submit ------------------------------------------------------------
+- runFlow:
+    when:
+      visible: "Refer Beneficiary"
+    commands:
+      - tapOn:
+          below: "Health facility.*"
+          above: "version \\d+"
+          index: 0
+          label: "Open Health facility"
+      - extendedWaitUntil:
+          visible:
+            text: ${output.reg.facilityPattern}
+            below: "Health facility.*"
+            above: "Submit"
+          timeout: 10000
+          label: "A facility is offered"
+      - runFlow:
+          when:
+            true: ${output.reg.facility == ''}
+          commands:
+            - copyTextFrom:
+                text: ${output.reg.facilityPattern}
+                below: "Health facility.*"
+                above: "Submit"
+                index: 0
+                label: "Read the facility"
+            - runScript:
+                file: registration.js
+                env:
+                  ACTION: elig-facility
+      - tapOn:
+          text: ${output.reg.facilitySelector}
+          below: "Health facility.*"
+          above: "Submit"
+          label: "Choose the facility"
+      - runFlow:
+          when:
+            visible:
+              id: "android:id/input_method_nav_back"
+          commands:
+            - tapOn:
+                id: "android:id/input_method_nav_back"
+                label: "Close the keyboard"
+      - assertVisible:
+          text: ${output.reg.facilitySelector}
+          below: "Health facility.*"
+          label: "Health facility shows the facility"
+      - tapOn:
+          text: "Submit"
+          below: "Health facility.*"
+          label: "Submit the referral"
+- extendedWaitUntil:
+    visible: "Referral recorded successfully"
+    timeout: 30000
+    optional: true
+    label: "The referral is recorded"
+- takeScreenshot: artifacts/elig-refer-recorded-${output.m.who}
+- runFlow:
+    when:
+      notVisible: "Referral recorded successfully"
+    commands:
+      - runScript:
+          file: registration.js
+          env:
+            ACTION: step
+            STEP: "${'Test Case ' + TC + ' - referral recorded'}"
+            RESULT: FAILED
+            DETAIL: "Submit on Refer Beneficiary did not show Referral recorded successfully"
+      - runScript:
+          file: registration.js
+          env:
+            ACTION: elig-summary
+      - runFlow:
+          file: ../fail.yaml
+          env:
+            MESSAGE: ${output.reg.failure}
+          label: "The referral is recorded"
+- runScript:
+    file: registration.js
+    env:
+      ACTION: step
+      STEP: "${'Test Case ' + TC + ' - referral recorded'}"
+      RESULT: "${output.m.id ? 'PASSED' : 'INFO'}"
+      DETAIL: "${'Referral recorded successfully, facility ' + output.reg.facility + (output.m.id ? ', ID-' + output.m.id : '')}"
+- runFlow:
+    when:
+      notVisible: "${'ID-' + output.m.id}"
+    commands:
+      - runScript:
+          file: registration.js
+          env:
+            ACTION: step
+            STEP: "${'Test Case ' + TC + ' - the success screen names the child'}"
+            RESULT: DEVIATION
+            DETAIL: "${'ID-' + output.m.id + ' is not shown on the success screen'}"
+- tapOn:
+    text: "View Household Details"
+    label: "View Household Details"
+- extendedWaitUntil:
+    visible: "Household Overview|Edit Individual"
+    timeout: 15000
+    label: "Household Overview opens"

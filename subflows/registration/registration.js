@@ -19,6 +19,22 @@
 //   ACTION=init-redose  the dose-and-redose household's (Prompt 14, the
 //                     REDOSE_* keys): a head and six children,
 //                     AutoRedoseHead<stamp> / AutoRedoseChild<n><stamp>
+//   ACTION=init-elig  the eligibility household's test data (Prompt 19, the
+//                     ELIG_* keys): a head and four children,
+//                     AutoEligHead<stamp> / AutoEligChild<n><stamp>
+//   ACTION=elig-popup  EXPECT (referral | ineligible): maestro.copiedText is
+//                     the checklist popup's message, for output.m
+//   ACTION=elig-facility  maestro.copiedText is the referral facility picked
+//   ACTION=elig-status  EXPECT: maestro.copiedText is output.m's card status
+//   ACTION=elig-summary  log the report; failures become output.reg.failure
+//   ACTION=init-search  the search household's test data (Prompt 18, the
+//                     SEARCH_* keys): a head and one child,
+//                     AutoSearchHead<stamp> / AutoSearchChild1<stamp>
+//   ACTION=search-rows  after the household is added: the head's and child
+//                     1's result-card rows, the beneficiary ID to search for
+//                     and its first 6 digits
+//   ACTION=typed      VALUE is what the search field now holds
+//   ACTION=search-summary  log the report; failures become output.reg.failure
 //   ACTION=village    maestro.copiedText is the village picked
 //   ACTION=step       STEP, RESULT (PASSED | FAILED | BLOCKED | DEVIATION),
 //                     DETAIL: one line of the report
@@ -262,7 +278,67 @@ if (ACTION === 'init-consent') {
         ages: [CHILD_1_MONTHS, CHILD_2_MONTHS, CHILD_3_MONTHS, CHILD_4_MONTHS, CHILD_5_MONTHS, CHILD_6_MONTHS],
         childGender: CHILD_GENDER, reasons: []
     });
-    output.reg.redoseReason = optional(REDOSE_REASON);} else if (ACTION === 'init') {
+    output.reg.redoseReason = optional(REDOSE_REASON);
+} else if (ACTION === 'init-search') {
+    output.reg = household({
+        prefix: 'AutoSearch', key: 'SEARCH_', title: 'Search by Near by households and by ID',
+        members: MEMBERS, headYears: HEAD_YEARS, headMonths: HEAD_MONTHS, headGender: HEAD_GENDER,
+        ages: [CHILD_1_MONTHS], childGender: CHILD_GENDER, reasons: []
+    });
+    // Names reading "--" is Prompt 11's deviation (household-check.yaml);
+    // here it is logged as INFO - it is why households are matched by age
+    // and gender, not a search failure.
+    output.reg.namesResult = 'INFO';
+    // Typed in ID mode, where it must find nothing: test data from .env,
+    // never made up here.
+    output.reg.unknownId = optional(UNKNOWN_ID);
+    if (!/^\d+$/.test(output.reg.unknownId)) {
+        output.reg.failure = (output.reg.failure ? output.reg.failure.replace(/\.$/, '; ') : 'Set in .env: ') +
+            'SEARCH_UNKNOWN_ID (digits - an ID no beneficiary has).';
+    }
+} else if (ACTION === 'init-elig') {
+    output.reg = household({
+        prefix: 'AutoElig', key: 'ELIG_', title: 'Eligibility referral and ineligible',
+        members: MEMBERS, headYears: HEAD_YEARS, headMonths: HEAD_MONTHS, headGender: HEAD_GENDER,
+        ages: [CHILD_1_MONTHS, CHILD_2_MONTHS, CHILD_3_MONTHS, CHILD_4_MONTHS], childGender: CHILD_GENDER,
+        reasons: []
+    });
+    output.reg.namesResult = 'INFO';
+    output.reg.facilityTarget = optional(FACILITY);
+    output.reg.facilityPattern = output.reg.facilityTarget ? escape(output.reg.facilityTarget) :
+        '(?!This field is required|version \\d|Submit$).+';
+    output.reg.facility = '';
+} else if (ACTION === 'elig-popup') {
+    // maestro.copiedText is the popup's message; EXPECT is referral or
+    // ineligible.
+    var ep = String(maestro.copiedText).trim();
+    output.m.popup = ep;
+    output.m.popupOk = String(EXPECT) === 'referral' ? /referral flow/i.test(ep) : /ineligib|not eligible/i.test(ep);
+} else if (ACTION === 'elig-facility') {
+    output.reg.facility = String(maestro.copiedText).trim();
+    output.reg.facilitySelector = escape(output.reg.facility);
+} else if (ACTION === 'elig-status') {
+    // maestro.copiedText is the status on output.m's card.
+    var es = String(maestro.copiedText).trim();
+    output.m.status = es;
+    output.m.statusOk = String(EXPECT) === 'referral' ? /^beneficiary referred$/i.test(es) : /ineligib|not eligible/i.test(es);
+} else if (ACTION === 'search-rows') {
+    // After the household is added: a member's row on a search result card
+    // ("--\n30y 0m\nFemale", 2026-10-21), and the ID to search for.
+    var sw = output.reg;
+    sw.headRow = '(?s).*' + escape(sw.head.age) + '\\s+' + escape(sw.head.gender);
+    sw.childRow = '(?s).*' + escape(sw.child1.age) + '\\s+' + escape(sw.child1.gender);
+    sw.beneficiaryId = /^\d+$/.test(String(sw.child1.id)) ? String(sw.child1.id) : '';
+    sw.partialId = sw.beneficiaryId.substring(0, 6);
+    sw.failure = sw.beneficiaryId ? '' : 'Child 1 was submitted, but the success screen showed no Token ID to search for.';
+} else if (ACTION === 'typed') {
+    // VALUE is what the search field holds now ('' when cleared): the field
+    // is found by that text, or by its hint when empty.
+    var tv = unset(VALUE) ? '' : String(VALUE);
+    output.reg.typed = tv;
+    output.reg.typedLength = tv.length;
+    output.reg.fieldSelector = tv ? escape(tv) : 'Name of the individual|Id Search';
+} else if (ACTION === 'init') {
     var stamp = makeStamp();
     var r = {
         user: unset(TEST_USER) ? '' : String(TEST_USER).trim(),
@@ -408,10 +484,15 @@ if (ACTION === 'init-consent') {
 } else if (ACTION === 'checklist') {
     output.reg.elig = {
         answer: String(ANSWER),
+        // Optional (Prompt 19): a regex - questions it matches are answered
+        // Yes, the rest ANSWER. Callers that do not pass it answer all alike.
+        yes: typeof YES === 'undefined' || unset(YES) ? '' : String(YES),
         // The answer's radio is the n-th clickable below its question: Yes
         // first, then No.
         position: String(ANSWER) === 'Yes' ? 0 : 1,
+        nextAnswer: String(ANSWER),
         answered: [],
+        answers: [],
         next: '',
         nextSelector: '',
         k: 0,
@@ -423,14 +504,18 @@ if (ACTION === 'init-consent') {
     if (!e.next && e.answered.indexOf(q) < 0) {
         e.next = q;
         e.nextSelector = escape(q);
+        e.nextAnswer = e.yes && new RegExp(e.yes, 'i').test(q) ? 'Yes' : e.answer;
+        e.position = e.nextAnswer === 'Yes' ? 0 : 1;
     }
 } else if (ACTION === 'answered') {
     var el = output.reg.elig;
     el.answered.push(el.next);
+    el.answers.push(el.next.replace(/\s*\*$/, '') + ' = ' + el.nextAnswer);
     // For the report line - a function inside a YAML ${} would end it at
     // its first closing brace.
     el.summary = el.answered.map(function (x) { return x.replace(/\s*\*$/, ''); }).join('; ');
-    console.log('Eligibility - ' + el.next.replace(/\s*\*$/, '') + ' = ' + el.answer);
+    el.answerSummary = el.answers.join('; ');
+    console.log('Eligibility - ' + el.next.replace(/\s*\*$/, '') + ' = ' + el.nextAnswer);
 } else if (ACTION === 'balance') {
     var phase = String(PHASE);
     output.reg.balances = output.reg.balances || {};
@@ -681,6 +766,38 @@ if (ACTION === 'init-consent') {
     s.failure = problems.length ? 'CDD registration - ' + problems.join('; ') : '';
     if (s.failure && !/\.$/.test(s.failure)) {
         s.failure += '.';
+    }
+} else if (ACTION === 'elig-summary') {
+    var gr = output.reg;
+    console.log('CDD eligibility checklist - referral and ineligible - Distributor/CDD ' + gr.user +
+        '\n  Village ' + gr.village + ', referral facility ' + (gr.facility || '(none chosen)') +
+        '\n  Household: head ' + gr.head.first + ' ' + gr.head.last + ' (' + gr.head.age + ', ' + gr.head.gender + ')' +
+        '\n  ' + gr.children.map(function (x) {
+            return x.label + ' ' + x.first + ' (' + x.age + ', ID ' + (x.id || '?') + '): Yes to ' + (x.yesTo || '(not run)') +
+                '; popup "' + (x.popup || '') + '"; card ' + (x.status || '(not read)');
+        }).join('\n  ') +
+        '\n  ' + gr.steps.join('\n  ') +
+        (gr.deviations.length ? '\n  Deviations: ' + gr.deviations.length : '') +
+        (gr.failures.length ? '\n  Failed / blocked: ' + gr.failures.length : ''));
+    var gp = gr.failures.concat(gr.deviations.map(function (d) { return 'DEVIATION - ' + d; }));
+    gr.failure = gp.length ? 'CDD eligibility checklist - ' + gp.join('; ') : '';
+    if (gr.failure && !/\.$/.test(gr.failure)) {
+        gr.failure += '.';
+    }
+} else if (ACTION === 'search-summary') {
+    var sr = output.reg;
+    console.log('CDD search by Near by households and by ID - Distributor/CDD ' + sr.user +
+        '\n  Village ' + sr.village + ', location ' + sr.location +
+        '\n  Household added: head ' + sr.head.first + ' ' + sr.head.last + ' (' + sr.head.age + ', ' + sr.head.gender +
+        '), child 1 ' + sr.child1.first + ' ' + sr.child1.last + ' (' + sr.child1.age + ', ' + sr.child1.gender +
+        ', beneficiary ID ' + (sr.beneficiaryId || '(none)') + ')' +
+        '\n  ' + sr.steps.join('\n  ') +
+        (sr.deviations.length ? '\n  Deviations: ' + sr.deviations.length : '') +
+        (sr.failures.length ? '\n  Failed / blocked: ' + sr.failures.length : ''));
+    var sp = sr.failures.concat(sr.deviations.map(function (d) { return 'DEVIATION - ' + d; }));
+    sr.failure = sp.length ? 'CDD search by Near by households and by ID - ' + sp.join('; ') : '';
+    if (sr.failure && !/\.$/.test(sr.failure)) {
+        sr.failure += '.';
     }
 } else if (ACTION === 'consent-summary') {
     var k = output.reg;

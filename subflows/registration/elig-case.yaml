@@ -1,0 +1,227 @@
+appId: ${HCM_APP_ID}
+name: elig-case
+---
+# Prompt 19, one test case, from Household Overview: Dose on child WHO's
+# card, the eligibility checklist with the questions matching YES answered
+# Yes and the rest No, Save Delivery, the popup (its message checked against
+# EXPECT: referral | ineligible), - CANCEL "true" - Cancel and back, then
+# Submit; for a referral the Refer Beneficiary form (elig-refer.yaml,
+# VALIDATE), for ineligible no form; then the child's card status. TC numbers
+# the report lines; QUESTION names the Yes for the report. Ends on Household
+# Overview. IRREVERSIBLE: the checklist and the referral are recorded.
+#
+# Read off the app as AU-CDD-001, 2026-10-27 (runs 20261027-142832 to
+# -144801), for "Is the child sick?" Yes: Save Delivery raises "Ready to
+# submit ?" / "Based on responses you are going to 'referral flow'. Are you
+# sure you want to proceed?" with Submit and Cancel; Cancel returns to the
+# checklist with every answer kept; Submit opens Refer Beneficiary. Once
+# referred, the card shows "Beneficiary Referred" and no Dose or Unable To
+# Deliver, its Edit Individual greyed out.
+- runFlow:
+    file: start-dose.yaml
+    env:
+      WHO: ${WHO}
+- evalScript: ${output.m.yesTo = QUESTION}
+- evalScript: ${output.m.expect = EXPECT}
+- runFlow:
+    when:
+      notVisible: "Eligibility Assessment|Save Delivery"
+    commands:
+      - takeScreenshot: artifacts/elig-no-checklist-${WHO}
+      - runScript:
+          file: registration.js
+          env:
+            ACTION: step
+            STEP: "${'Test Case ' + TC + ' - the eligibility checklist'}"
+            RESULT: FAILED
+            DETAIL: "${'Dose on ' + output.m.label + ' did not open the eligibility checklist'}"
+      - runScript:
+          file: registration.js
+          env:
+            ACTION: elig-summary
+      - runFlow:
+          file: ../fail.yaml
+          env:
+            MESSAGE: ${output.reg.failure}
+          label: "Dose opens the eligibility checklist"
+- runFlow:
+    file: eligibility-checklist.yaml
+    env:
+      ANSWER: "No"
+      YES: ${YES}
+      SAVE: "false"
+      STEP: "${'Test Case ' + TC + ' - checklist'}"
+- runScript:
+    file: registration.js
+    env:
+      ACTION: step
+      STEP: "${'Test Case ' + TC + ' - checklist (' + output.m.label + ')'}"
+      RESULT: PASSED
+      DETAIL: ${output.reg.elig.answerSummary}
+
+# --- Save Delivery: the popup -------------------------------------------------------
+- tapOn:
+    text: "Save Delivery"
+    label: "Save Delivery"
+- extendedWaitUntil:
+    visible: "Ready to submit \\?"
+    timeout: 10000
+    optional: true
+    label: "The popup"
+- runFlow:
+    when:
+      notVisible: "Ready to submit \\?"
+    commands:
+      - takeScreenshot: artifacts/elig-no-popup-${WHO}
+      - runScript:
+          file: registration.js
+          env:
+            ACTION: step
+            STEP: "${'Test Case ' + TC + ' - popup'}"
+            RESULT: FAILED
+            DETAIL: "${'Save Delivery with ' + QUESTION + ' Yes raised no Ready to submit popup'}"
+      - runScript:
+          file: registration.js
+          env:
+            ACTION: elig-summary
+      - runFlow:
+          file: ../fail.yaml
+          env:
+            MESSAGE: ${output.reg.failure}
+          label: "Save Delivery raises the popup"
+- takeScreenshot: artifacts/elig-popup-${WHO}
+- setClipboard: "(no message)"
+- copyTextFrom:
+    text: "(?s)(Based on.*|.*(referral|eligib|proceed).*)"
+    below: "Ready to submit \\?"
+    above: "Submit"
+    optional: true
+    label: "Read the popup's message"
+- runScript:
+    file: registration.js
+    env:
+      ACTION: elig-popup
+      EXPECT: ${EXPECT}
+- runScript:
+    file: registration.js
+    env:
+      ACTION: step
+      STEP: "${'Test Case ' + TC + ' - popup'}"
+      RESULT: "${output.m.popupOk ? 'PASSED' : 'DEVIATION'}"
+      DETAIL: "${'Ready to submit ? - ' + output.m.popup + (output.m.popupOk ? '' : ' (expected the ' + EXPECT + ' outcome)')}"
+
+# --- Cancel keeps the answers (CANCEL) -----------------------------------------------
+- runFlow:
+    when:
+      true: ${CANCEL == 'true'}
+    commands:
+      - tapOn:
+          text: "Cancel"
+          below: "Submit"
+          label: "Cancel"
+      - extendedWaitUntil:
+          notVisible: "Ready to submit \\?"
+          timeout: 10000
+          label: "The popup closes"
+      - takeScreenshot: artifacts/elig-cancelled-${WHO}
+      - runScript:
+          file: registration.js
+          env:
+            ACTION: step
+            STEP: "${'Test Case ' + TC + ' - Cancel'}"
+            RESULT: PASSED
+            DETAIL: "Cancel closed the popup and left the checklist with its answers; nothing was submitted"
+      - tapOn:
+          text: "Save Delivery"
+          label: "Save Delivery again"
+      - extendedWaitUntil:
+          visible: "Ready to submit \\?"
+          timeout: 10000
+          label: "The popup again"
+
+# --- Submit ----------------------------------------------------------------------------
+- tapOn:
+    text: "Submit"
+    below: "Ready to submit \\?"
+    label: "Submit"
+- extendedWaitUntil:
+    visible: "Refer Beneficiary|Household Overview|Edit Individual|View Household Details"
+    timeout: 20000
+    optional: true
+    label: "Submit leads on"
+- takeScreenshot: artifacts/elig-after-submit-${WHO}
+- runFlow:
+    when:
+      visible: "Refer Beneficiary"
+    commands:
+      - runFlow:
+          when:
+            true: ${EXPECT == 'referral'}
+          file: elig-refer.yaml
+          env:
+            TC: ${TC}
+            VALIDATE: ${VALIDATE}
+      # Not expected for an ineligible child: leave the form unsubmitted.
+      - runFlow:
+          when:
+            true: ${EXPECT != 'referral'}
+          commands:
+            - runScript:
+                file: registration.js
+                env:
+                  ACTION: step
+                  STEP: "${'Test Case ' + TC + ' - outcome'}"
+                  RESULT: FAILED
+                  DETAIL: "${QUESTION + ' Yes opened Refer Beneficiary - expected the child marked ineligible'}"
+            - tapOn:
+                text: "Back"
+                below: "Open navigation menu"
+                label: "Leave the referral form unsubmitted"
+            - extendedWaitUntil:
+                visible: "Household Overview|Edit Individual"
+                timeout: 15000
+                label: "Household Overview"
+- runFlow:
+    when:
+      notVisible: "Refer Beneficiary|Household Overview|Edit Individual"
+    commands:
+      # A success screen of its own (ineligible): note it and go on.
+      - runFlow:
+          when:
+            visible: "View Household Details"
+          commands:
+            - runScript:
+                file: registration.js
+                env:
+                  ACTION: step
+                  STEP: "${'Test Case ' + TC + ' - outcome screen'}"
+                  RESULT: INFO
+                  DETAIL: "Submit showed a success screen with View Household Details"
+            - tapOn:
+                text: "View Household Details"
+                label: "View Household Details"
+      - extendedWaitUntil:
+          visible: "Household Overview|Edit Individual"
+          timeout: 15000
+          label: "Household Overview"
+- runFlow:
+    when:
+      true: ${EXPECT != 'referral'}
+    commands:
+      - runScript:
+          file: registration.js
+          env:
+            ACTION: step
+            STEP: "${'Test Case ' + TC + ' - no referral form'}"
+            RESULT: PASSED
+            DETAIL: "Submit returned to Household Overview without Refer Beneficiary"
+
+# --- The child's card --------------------------------------------------------------------
+- runFlow: elig-card.yaml
+- runScript:
+    file: registration.js
+    env:
+      ACTION: step
+      STEP: "${'Test Case ' + TC + ' - ' + output.m.label + ' card'}"
+      RESULT: "${output.m.statusOk && !output.m.doseLeft ? 'PASSED' : 'FAILED'}"
+      DETAIL: "${output.m.id + ' shows ' + output.m.status + (output.m.doseLeft ? ', still offering Dose' : ', no Dose') + ' (expected ' + (EXPECT == 'referral' ? 'Beneficiary Referred' : 'an ineligible status') + ')'}"

@@ -1,0 +1,65 @@
+appId: ${HCM_APP_ID}
+name: search-type
+---
+# On Search Beneficiary: replaces the search field's text with VALUE ('' to
+# just clear it), closes the keyboard and waits for the answer. Sets
+# output.reg.listed - true when a result card ("Open") shows under the
+# switches - and output.reg.typed (registration.js typed).
+#
+# The field has no id: it is found by what it holds - its hint when empty
+# ("Name of the individual", or "Id Search" with Search by ID on; read off
+# the app 2026-10-27), else the text typed last. A tap leaves the cursor
+# mid-text and eraseText deletes only before it, so the cursor is walked to
+# the end first (as in age-entry.yaml). The search answers as you type
+# (300 ms debounce).
+- tapOn:
+    text: ${output.reg.fieldSelector}
+    below: "Search by ID"
+    label: "Focus the search field"
+- assertVisible:
+    text: ${output.reg.fieldSelector}
+    below: "Search by ID"
+    focused: true
+    label: "The search field has the focus"
+- runFlow:
+    when:
+      true: ${output.reg.typedLength > 0}
+    commands:
+      - repeat:
+          times: ${output.reg.typedLength}
+          commands:
+            - pressKey: Remote Dpad Right
+      - eraseText: 40
+- runFlow:
+    when:
+      true: ${VALUE != ''}
+    commands:
+      - inputText: ${VALUE}
+- runScript:
+    file: registration.js
+    env:
+      ACTION: typed
+      VALUE: ${VALUE}
+- runFlow:
+    when:
+      visible:
+        id: "android:id/input_method_nav_back"
+    commands:
+      - tapOn:
+          id: "android:id/input_method_nav_back"
+          label: "Close the keyboard"
+- evalScript: ${output.reg.listed = false}
+- extendedWaitUntil:
+    visible:
+      text: "Open"
+      below: "Search by ID"
+    timeout: 8000
+    optional: true
+    label: "Search answers"
+- runFlow:
+    when:
+      visible:
+        text: "Open"
+        below: "Search by ID"
+    commands:
+      - evalScript: ${output.reg.listed = true}

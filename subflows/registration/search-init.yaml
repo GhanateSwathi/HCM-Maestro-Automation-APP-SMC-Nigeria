@@ -1,0 +1,44 @@
+appId: ${HCM_APP_ID}
+name: search-init
+---
+# Reads the search household's test data (Prompt 18, the SEARCH_* keys - see
+# .env.example) before anything touches the device, and fails at once if any
+# is missing or out of range. Generates the names: AutoSearchHead<stamp>
+# (also the search text that starts the registration) and
+# AutoSearchChild1<stamp>.
+- runScript:
+    file: registration.js
+    env:
+      ACTION: init-search
+      TEST_USER: ${TEST_USER}
+      VILLAGE: ${REGISTRATION_VILLAGE}
+      LATITUDE: ${TEST_LATITUDE}
+      LONGITUDE: ${TEST_LONGITUDE}
+      MEMBERS: ${SEARCH_HOUSEHOLD_MEMBERS}
+      HEAD_YEARS: ${SEARCH_HEAD_AGE_YEARS}
+      HEAD_MONTHS: ${SEARCH_HEAD_AGE_MONTHS}
+      HEAD_GENDER: ${SEARCH_HEAD_GENDER}
+      MOBILE: ${HEAD_MOBILE}
+      CHILD_1_MONTHS: ${SEARCH_CHILD_1_AGE_MONTHS}
+      CHILD_GENDER: ${SEARCH_CHILD_GENDER}
+      UNKNOWN_ID: ${SEARCH_UNKNOWN_ID}
+      VARIANT_1: ${PRODUCT_VARIANT_1}
+      VARIANT_2: ${PRODUCT_VARIANT_2}
+    label: "Read the Prompt 18 test data"
+- runFlow:
+    when:
+      true: ${output.reg.failure}
+    file: ../fail.yaml
+    env:
+      MESSAGE: ${output.reg.failure}
+    label: "Prompt 18 test data is set in .env"
+# TEST_USER is reported as the account under test, so it must be the one
+# signing in. Only TEST_USER is named in the message.
+- evalScript: "${output.userCheck = (String(TEST_USER).trim().toLowerCase() == String(HCM_CDD_USER_ID).trim().toLowerCase()) ? '' : 'TEST_USER ' + TEST_USER + ' is not the CDD user .env signs in with (HCM_CDD_USER_ID).'}"
+- runFlow:
+    when:
+      true: ${output.userCheck}
+    file: ../fail.yaml
+    env:
+      MESSAGE: ${output.userCheck}
+    label: "TEST_USER is the account signing in"
