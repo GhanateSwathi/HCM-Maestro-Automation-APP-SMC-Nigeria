@@ -61,6 +61,9 @@ tags:
     env:
       ACTION: summary
     label: "Log the reconciliation report"
+# Wait until every reconciliation submitted is on the server - before the
+# findings fail the run, which a chained run goes on past.
+- runFlow: ../../subflows/sync-data.yaml
 - runFlow:
     when:
       true: ${output.recon.failure}

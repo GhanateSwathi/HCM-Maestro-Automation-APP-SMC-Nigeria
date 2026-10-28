@@ -87,3 +87,7 @@ tags:
     env:
       ACTION: summary
     label: "Log the dispatch summary"
+
+# Wait until every record this flow made is on the server, so the next flow
+# - or the next role's Download Stock Data - finds them.
+- runFlow: ../../subflows/sync-data.yaml

@@ -35,3 +35,7 @@ tags:
 - runFlow: ../../subflows/stock/download-stock-data.yaml
 
 - runFlow: ../../subflows/stock/reject-receipt/reject-receipt.yaml
+
+# Wait until every record this flow made is on the server, so the next flow
+# - or the next role's Download Stock Data - finds them.
+- runFlow: ../../subflows/sync-data.yaml

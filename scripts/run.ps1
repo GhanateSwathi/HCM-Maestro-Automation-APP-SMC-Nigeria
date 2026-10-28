@@ -88,12 +88,57 @@ $cliArgs += '--output';          $cliArgs += (Join-Path $runDir 'report.html')
 # grouped into feature-area subfolders - passing 'flows' here would find none.
 if ($Flow) { $cliArgs += $Flow } else { $cliArgs += '.' }
 
+# Keep the PC awake and its display on while Maestro runs: on 2026-10-27 the
+# PC went to sleep at 19:51 (5 minutes idle on the charger, 3 on battery) and
+# froze a chained flow for 15 hours. Released when the run ends.
+if (-not ('HcmRun.Power' -as [type])) {
+    Add-Type -Namespace HcmRun -Name Power -MemberDefinition '[DllImport("kernel32.dll")] public static extern uint SetThreadExecutionState(uint flags);'
+}
+# 0x80000003 = ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED; the
+# call answers the state before, restored at the end.
+$awakeBefore = [HcmRun.Power]::SetThreadExecutionState([uint32]2147483651)
+
+# Screenshots that are all black: the emulator's screen capture has broken.
+# On 2026-10-27 from 19:18 every screenshot was the same black frame while
+# the flows went on passing (Maestro reads the view hierarchy, not pixels);
+# only a cold restart brought it back (restart-emulator.ps1). Each PNG is
+# sampled on a 12 x 24 grid; one lit point is enough.
+function Get-BlackScreenshots([string] $dir) {
+    Add-Type -AssemblyName System.Drawing
+    foreach ($png in Get-ChildItem $dir -Recurse -Filter *.png -ErrorAction SilentlyContinue) {
+        $bmp = $null
+        try {
+            $bmp = [System.Drawing.Bitmap]::FromFile($png.FullName)
+            $lit = $false
+            for ($x = 0; $x -lt 12 -and -not $lit; $x++) {
+                for ($y = 0; $y -lt 24 -and -not $lit; $y++) {
+                    $p = $bmp.GetPixel([int](($x + 0.5) * $bmp.Width / 12), [int](($y + 0.5) * $bmp.Height / 24))
+                    if ($p.R + $p.G + $p.B -gt 24) { $lit = $true }
+                }
+            }
+            if (-not $lit) { $png.Name }
+        } catch {
+            # An unreadable PNG is not a black one.
+        } finally {
+            if ($bmp) { $bmp.Dispose() }
+        }
+    }
+}
+
 Push-Location $root
 try {
     & $maestro @cliArgs
     $code = $LASTEXITCODE
+    $black = @(Get-BlackScreenshots $runDir)
+    if ($black.Count) {
+        # run-chain.ps1 looks for this file to restart the emulator before
+        # the next role.
+        Set-Content -Path (Join-Path $runDir 'SCREENSHOTS-BLACK.txt') -Value $black -Encoding utf8
+        Write-Warning ("{0} of this run's screenshots are all black - the emulator's screen capture is broken. Cold-restart it before the next run: scripts\restart-emulator.ps1" -f $black.Count)
+    }
     Write-Host "Report, screenshots and logs: $runDir"
     exit $code
 } finally {
+    if ($awakeBefore) { [HcmRun.Power]::SetThreadExecutionState($awakeBefore) | Out-Null }
     Pop-Location
 }

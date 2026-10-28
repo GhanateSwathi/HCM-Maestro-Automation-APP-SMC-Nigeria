@@ -198,6 +198,35 @@ To use a different report format with `run.sh`, pass your own `--format`
 > whole folder. That is also why the default report is `HTML` and not
 > `HTML-DETAILED`, which lists each executed step, password included.
 
+### Black screenshots and a sleeping PC
+
+On 2026-10-27 the emulator's screen capture broke in the middle of a chained
+run: from 19:18 every screenshot was the same black frame and
+`adb exec-out screencap` returned stripes, while the flows went on passing -
+Maestro finds elements in the view hierarchy, not in pixels, so nothing
+failed. It stayed broken until the emulator was cold-booted. The trigger was
+not reproduced on 2026-10-28: not the QR camera, not 20 seconds of display
+off, not a minimized emulator window. That evening the PC also went to sleep
+(5 minutes idle on the charger, 3 on battery) and froze a flow for 15 hours.
+
+`run.ps1` now:
+
+- keeps the PC awake, display on, while Maestro runs;
+- checks every screenshot of the run afterwards and, when any is all black,
+  warns and writes `SCREENSHOTS-BLACK.txt` (the files) into the run folder.
+
+The cure is a cold restart of the emulator, between flows - the app's data
+survives, a running flow and the QR camera's pose do not:
+
+```powershell
+.\scripts\restart-emulator.ps1                      # emulator-5554
+.\scripts\restart-emulator.ps1 -Device emulator-5556
+```
+
+`run-chain.ps1` keeps the PC awake for the whole chain and restarts the
+emulator by itself before the next role when a role's screenshots came out
+black. `run.sh` does neither.
+
 ### Chained runs
 
 Every flow signs in at the start, and signing in clears the app. Stock,
@@ -209,15 +238,17 @@ one app session instead, then syncs and logs out:
 
 ```powershell
 .\scripts\run-chain.ps1                                   # state user, health facility, CDD
+.\scripts\run-chain.ps1 -StockOnly                        # state to CDD, stock flows only
 .\scripts\run-chain.ps1 -Role State                       # one role
 .\scripts\run-chain.ps1 -Role HealthFacility,Cdd -Device emulator-5554
 ```
 
 | Role | Flows, in order |
 | --- | --- |
-| `State` | `state-stock-accept-receipt`, `state-stock-reject-receipt`, `state-stock-dispatch` (in 2 parts), `state-stock-return`, `login/logout` |
-| `HealthFacility` | `hf-stock-accept-receipt`, `hf-stock-reject-receipt`, `hf-stock-dispatch-cdd` (in 2 parts; the QR camera is prepared and stopped by the script), `hf-stock-return-state`, `login/logout` |
+| `State` | `state-stock-accept-receipt`, `state-stock-reject-receipt`, `state-stock-dispatch` (in 2 parts), `state-stock-return`, `state-stock-reconciliation`, `state-stock-view-reports`, `state-stock-view-transactions`, `login/logout` |
+| `HealthFacility` | `hf-stock-accept-receipt`, `hf-stock-reject-receipt`, `hf-stock-dispatch-cdd` (in 2 parts; the QR camera is prepared and stopped by the script), `hf-stock-return-state`, `hf-stock-reconciliation`, `hf-stock-view-reports`, `hf-stock-view-transactions`, `login/logout` |
 | `Cdd` | `cdd-stock-reject-receipt` (first, while the balance is 0), `cdd-registration-full` (accepts the other part), `cdd-consent-no`, `cdd-household-utd`, `cdd-household-redose`, `cdd-search-nearby-and-id`, `cdd-eligibility-referral`, `cdd-stock-view-transactions`, `login/logout` |
+| `Cdd`, with `-StockOnly` | `cdd-stock-reject-receipt`, `cdd-registration-full` (the only flow in which the CDD accepts stock; it also registers a household and doses two children), `cdd-stock-view-transactions`, `login/logout` |
 
 - The flows are the prompts' own, unchanged. A role's first flow signs in
   fresh; the rest run with `-KeepSession`, and
@@ -230,9 +261,20 @@ one app session instead, then syncs and logs out:
   every dispatch. Each flow checks what it reads on the screen - a card
   against its Stock Receipt Details, a balance against the quantity received.
 - A failing flow stops the chain there, without logging out. Each flow writes
-  its own run folder.
-- Irreversible: a full chain accepts, rejects, dispatches and returns stock,
-  registers households and records doses on UAT. Before it, National must
+  its own run folder. Reconciliation, View Reports and View Transactions
+  (Prompts 8, 9, 16) are the exception: their soft checks fail at the end with
+  a list of findings, which leaves the stock the next flow needs as it was, so
+  the chain reports `FAILED (findings; chain went on)` and carries on.
+- Reconciliation and the reports read the device's own records, so they run
+  here, in the session that made the transactions, after Return.
+- The PC is kept awake for the whole chain, and the emulator is
+  cold-restarted before the next role when a role's screenshots came out
+  black ([Black screenshots](#black-screenshots-and-a-sleeping-pc)).
+- A chain must finish the day it starts: a session signed in the day before
+  can no longer download stock data (`Download failed!`, 2026-10-28) - sync
+  it, then start that role again with a fresh sign-in.
+- Irreversible: a full chain accepts, rejects, dispatches, returns and
+  reconciles stock, registers households and records doses on UAT. Before it, National must
   have dispatched at least two transactions of each product variant to the
   state, not yet downloaded or accepted.
 
@@ -679,7 +721,8 @@ subflows/                   reusable building blocks, pulled in via runFlow
   launch-app.yaml
   accept-system-dialogs.yaml  answers Android's permission and system prompts
   login.yaml                the one login, for every role
-  sync-and-logout.yaml      Sync Data until nothing is left, then Logout
+  sync-data.yaml            home, Sync Data until nothing is left - the end of every submitting stock flow
+  sync-and-logout.yaml      sync-data.yaml, then Logout
   open-side-menu.yaml       opens the side menu, retrying past the Auto Sync notification
   allow-permissions.yaml    the app's post-sync Allow Permissions screen
   fail.yaml                 fail with a readable message
@@ -724,8 +767,10 @@ prompts/                    the specification prompts, one file each
   prompt-17-boundary-data-download.md  the data check after login, health facility and CDD
   prompt-18-cdd-search-nearby-and-id.md  CDD search by Near by households and by ID
   prompt-19-cdd-eligibility-referral-ineligible.md  CDD checklist: referral or ineligible
-scripts/                    run.ps1 (Windows) and run.sh (bash) - same behaviour
+scripts/                    run.ps1 (Windows) and run.sh (bash) - same runs; only run.ps1 keeps
+                              the PC awake and checks for black screenshots
                             run-chain.ps1 - each role's flows back to back in one session, then logout
+                            restart-emulator.ps1 - cold restart, the cure for black screenshots
                             prepare-qr-camera.ps1 / .sh - flash the QR to the emulator camera
 assets/qr/cdd_qr.png        the CDD's QR code (QR_CODE_PATH; gitignored, like .env)
 artifacts/                  run reports and screenshots (gitignored)
@@ -757,8 +802,9 @@ Two rules keep this working, and both are easy to break:
 | [`home/cdd.yaml`](subflows/home/cdd.yaml) | The same for the CDD user: the first `ADMIN_Health Facility` and the first three `ADMIN_Community` options (logged), Submit, the boundary data check (`boundary-data.yaml`; it failed three times on 2026-10-21 and 23 - registering a new household does not need the boundary's existing records), and home. Logs which answer it was. |
 | [`home/boundary-data.yaml`](subflows/home/boundary-data.yaml) | Prompt 17 - the check the health facility's and the CDD's Submit runs: `Data found!` (both choices offered; Download → `Go To Home Screen`, or Proceed Without Downloading, per `BOUNDARY_DATA_CHOICE`), `No data found!` (Go Back), `Failed to check data in server` (Retry up to `BOUNDARY_DATA_RETRIES`, then Proceed Without Downloading), or straight home; ends on the caller's `HOME_SCREEN`. [`boundary-data.js`](subflows/home/boundary-data.js) records the first answer, the retries, the outcome and the test cases covered. |
 | [`home/keep-session.yaml`](subflows/home/keep-session.yaml) | Chained runs (`KEEP_SESSION=true`): brings the app to the front without clearing it and sets `output.session` - `home` (signed in, on the caller's `HOME_SCREEN`: sign-in and boundary skipped), `boundary` (signed in, but the restarted app asks for the boundary again: no sign-in), or `fresh` (anything else, or `KEEP_SESSION` unset: the usual sign-in, which clears the app). Used at the start of `home/state-stock.yaml`, `home/hf-stock.yaml` and `home/cdd.yaml`. |
-| [`sync-and-logout.yaml`](subflows/sync-and-logout.yaml) | Home (side menu), Sync Data until `No Data available for sync` - `Sync Up Failed` fails - then Logout, Ok, the Login screen. Read off the app 2026-10-23. Used by `flows/login/logout.yaml`. |
-| [`open-side-menu.yaml`](subflows/open-side-menu.yaml) | Tap `Open navigation menu` until the menu's `Logout` shows (up to 4 taps): the background Auto Sync's heads-up notification can cover the button for a few seconds and take the tap (CDD, 2026-10-26). Used by `home/keep-session.yaml`, both `go-home.yaml`s and `sync-and-logout.yaml`. |
+| [`sync-data.yaml`](subflows/sync-data.yaml) | Home (side menu), Sync Data until `No Data available for sync` - `Sync Up Failed` fails. Read off the app 2026-10-23. Every stock flow that submits ends with it (accept, reject, dispatch, return; reconciliation before its findings fail the run), so the next flow or role finds the records on the server (added 2026-10-27). Used by `sync-and-logout.yaml` too. |
+| [`sync-and-logout.yaml`](subflows/sync-and-logout.yaml) | `sync-data.yaml`, then Logout, Ok, the Login screen. Read off the app 2026-10-23. Used by `flows/login/logout.yaml`. |
+| [`open-side-menu.yaml`](subflows/open-side-menu.yaml) | Tap `Open navigation menu` until the menu's `Logout` shows (up to 4 taps): the background Auto Sync's heads-up notification can cover the button for a few seconds and take the tap (CDD, 2026-10-26). Used by `home/keep-session.yaml`, both `go-home.yaml`s and `sync-data.yaml`. |
 | [`fail.yaml`](subflows/fail.yaml) | Fail the flow with a plain-English `MESSAGE` that reaches the run summary and `report.html` — for checks whose failure should read as a sentence (`BLOCKED - …`, `MRN mismatch: …`). Run it inside a `runFlow: when:` that detects the failure. |
 | [`stock/download-stock-data.yaml`](subflows/stock/download-stock-data.yaml) | From home: Download Stock Data → Download (when `Data Found`) → Go To Home Screen. Copies records to the device; changes nothing on the server. |
 | [`stock/open-incoming-transactions.yaml`](subflows/stock/open-incoming-transactions.yaml) | From home: Manage Stock card (scrolled to if needed) → Record Stock Receipt → wait for the list. Sets `output.incoming` to `present` or `absent`. |

@@ -71,3 +71,7 @@ tags:
     file: ../../subflows/stock/return/finish.yaml
     env:
       VARIANT: ${PRODUCT_VARIANT_1}
+
+# Wait until every record this flow made is on the server, so the next flow
+# - or the next role's Download Stock Data - finds them.
+- runFlow: ../../subflows/sync-data.yaml

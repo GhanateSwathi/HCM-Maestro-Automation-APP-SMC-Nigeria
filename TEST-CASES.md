@@ -23,7 +23,7 @@ were taken from.
 | Stock — Health facility returns to the state | 3 | 3 | Return validation (0, above balance) |
 | Stock — Reconciliation (state user, health facility) | 4 | 4 | REC-03/04 fail by design against this build (see the section) |
 | Stock — View Reports (state user, health facility) | 5 | 5 | VR-02–05 fail against fresh sessions (reports are device-local); recipient columns not shown |
-| Stock — Reject a receipt (state user, health facility, CDD) | 6 | 6 | Passed for the state user 2026-10-23 (in two runs, one session) and 2026-10-26 (one run, chained), and for the health facility 2026-10-26; CDD not run - needs a fresh dispatch of both variants from the health facility. View Reports after a rejection (the sender's balance coming back: out of scope) |
+| Stock — Reject a receipt (state user, health facility, CDD) | 6 | 6 | Passed for the state user 2026-10-23 (in two runs, one session), 2026-10-26 and 2026-10-27 (chained), and for the health facility 2026-10-26 and 2026-10-27; CDD not run - needs a fresh dispatch of both variants from the health facility. View Reports after a rejection (the sender's balance coming back: out of scope) |
 | Stock — View Transactions (state user, health facility, CDD) | 6 | 6 | Passed end to end for all three roles 2026-10-23 (the CDD's list was empty). What the QR encodes; transactions with more than one product; received transactions' cards (Sender) not seen yet |
 | Beneficiary Referral (health facility) | 7 | 7 | Scan Beneficiary; Referred by (CDD team code); opening a listed referral; mandatory-field validation; referral ID (the app shows none) |
 | Registration & Delivery (CDD) | 16 | 16 | The mobile-number bounds (never run - no test number); Unable To Deliver, Redose, Mark Closed Household (Near by households and Search by ID: their own section). REG-01, 02, 08, 09, 13 (and REG-07's save) were done in session by hand, not yet as written; the full flow has not run end to end (see the section) |
@@ -38,6 +38,58 @@ Status key: **Automated** — a flow asserts it. **Partial** — the flow perfor
 the step but asserts nothing about it. **Blocked** — a flow exists but cannot
 run until its test data exists, and its locators stay unverified until then.
 **Manual** — not automated yet.
+
+## Chained run, stock only — 2026-10-27/28
+
+The first run after the dev team's backend fix for stock balances (no new
+build: 2.2.113, mhbase UAT). `run-chain.ps1 -StockOnly` on a cleared app.
+From the state's Return on, every flow that submits ends with Sync Data until
+`No Data available for sync` (`subflows/sync-data.yaml`, added during the
+run); Reconciliation, View Reports and View Transactions now run in the
+chain, and their findings no longer stop it.
+
+| Role | Flow | Result | Run |
+| --- | --- | --- | --- |
+| State user | Accept (Prompt 2) | Passed: National's SPAQ1 and SPAQ2, 1020 each (`MRN null_0`); balance 0 → 1020 | `20261027-175855` |
+| State user | Reject (Prompt 15) | Passed, Test Cases 1–6: National's other SPAQ1 and SPAQ2 (1020 each, `MRN null_0`); balance 1020 → 1020 | `-181034` |
+| State user | Dispatch (Prompt 3), two parts | Passed: 505 + 505 per variant, 1020 → 10 — SPAQ1 `166B-259D-5274`, `F147-C853-2ABB`; SPAQ2 `744B-C17E-6202`, `0177-67AA-9F26` | `-182335` |
+| State user | Return (Prompt 4) | Passed: 5 per variant, 10 → 5 — `740B-2F2F-B138`, `C031-E072-3DEE`; synced | `-183642` |
+| State user | Reconciliation (Prompt 8) | Findings, as REC-03/04: a differing count needs no comment, and stock in hand stays 5 after reconciling to 4 or 6 | `-184231` |
+| State user | View Reports (Prompt 9) | Findings: in Stock Received, Issued and Returned the quantity column header is the key `STOCKREPORTS_REPORT_DETAILS_TABLE_HEADER_4_LABEL` | `-190249` |
+| State user | View Transactions (Prompt 16) | Finding: for the return `740B-2F2F-B138`, the details' MRN number shows `FAC_F-2026-10-15-137945` (the National warehouse) | `-190824` |
+| State user | Logout | Passed | `-191242` |
+| Health facility | Accept (Prompt 5) | Passed: `F147-C853-2ABB` (SPAQ1), `0177-67AA-9F26` (SPAQ2), 505 each; balance 505 each. Screenshots black (below) | `-191438` |
+| Health facility | Reject (Prompt 15) | Passed: `166B-259D-5274`, `744B-C17E-6202`; balance stays 505. Screenshots black | `-192637` |
+| Health facility | Dispatch to the CDD (Prompt 6) | SPAQ1 passed: 247 + 248 to AU-CDD-001 by QR, 505 → 10 — `DC27-EB06-8B4A`, `7C5C-DDD8-38D4` (synced). SPAQ2 failed: the PC slept 19:51 → 10:35 and the QR bursts, timed by the clock, had run out — `nothing was read within 30 seconds` | `-193637` |
+| Health facility | Dispatch, SPAQ2 only, next morning | Stopped at Download Stock Data: `Download failed!` (below) | `20261028-104416` |
+
+Not run: the health facility's Return, Reconciliation, View Reports, View
+Transactions, and the CDD. The run was stopped 2026-10-28 10:53 at the HF's
+fresh sign-in, nothing submitted.
+
+**The backend fix.** The health facility read 505 per variant after
+accepting 505 each and could dispatch it; on 10-26 the same flows read 0
+(really -480) and Dispatch was blocked. The state read 0 before accepting,
+although the 10-26 chain had left it 5 per variant — **dev to confirm**.
+
+**A session from the day before cannot download stock (app bug).** The
+health facility, signed in 2026-10-27 19:15, got `Download failed!` (Go Back,
+Retry) from Download Stock Data at 10:44 the next day, and Retry gave the
+same, while the server answered and Sync Data (nothing to send) passed. From
+the app's source (main, `1da23ab`): `AuthTokenInterceptor` only attaches the
+stored access token — no handling of a 401 or an expired token, and the
+stored refresh token is never used — and `stock_downsync.dart` turns every
+error into the generic `Download failed!` dialog, which never sends the user
+back to sign in. Chains now have to finish the day they start; a session left
+overnight is synced, then signed in afresh.
+
+**Black screenshots.** From 19:18 on 10-27 every screenshot was the same
+black frame (11,838 bytes) while the flows passed — Maestro reads the view
+hierarchy, not pixels. Only a cold restart of the emulator cured it; the QR
+camera, 20 s of display off and a minimized window did not reproduce it
+(2026-10-28, `-110857`, `-111205`). `run.ps1` now flags black screenshots
+(`SCREENSHOTS-BLACK.txt`) and keeps the PC awake; `run-chain.ps1` restarts the
+emulator before the next role (`restart-emulator.ps1`; checked `-112231`).
 
 ## Chained runs — 2026-10-26
 

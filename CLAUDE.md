@@ -59,6 +59,7 @@ Balances, incoming transactions, reconciliation stock-in-hand, View Reports and 
 - `scrollUntilVisible` with `centerElement: true` can overshoot an element low on a card and run on to the bottom; scroll to the last element you need instead (e.g. the card's button) and leave centring out. Household Overview comes back scrolled, its title off screen - wait for `"Household Overview|Edit Individual"`.
 - Radio buttons and checkboxes are text-less clickables left of their labels and report no state; tap them by position (`below: <question>, leftOf: <label>, index: n`) and record the choice with a screenshot.
 - Running the Maestro CLI kills the Maestro MCP / Studio device connection (`DeviceServerDiedException`); after a CLI run, inspect with `maestro hierarchy` or `adb exec-out screencap -p` instead. Don't run two Maestro clients against one device.
+- The emulator's screen capture can break mid-run: every screenshot the same black frame (adb screencap: stripes) while flows still pass. Only a cold boot cures it - `scripts\restart-emulator.ps1`, between flows. `run.ps1` flags it (`SCREENSHOTS-BLACK.txt` in the run folder) and keeps the PC awake; `run-chain.ps1` restarts the emulator before the next role.
 - The app's QR scanner reads only the camera. On the emulator the camera is a virtual room; `prepare-qr-camera` flashes `QR_CODE_PATH` on its wall (a QR held in view re-triggers a "Code already scanned" banner over Submit).
 
 ## Keeping docs in step

@@ -60,3 +60,7 @@ tags:
 - runFlow: ../../subflows/stock/accept-receipt/case2-popup.yaml
 - runFlow: ../../subflows/stock/accept-receipt/case2a-cancel.yaml
 - runFlow: ../../subflows/stock/accept-receipt/case2b-confirm.yaml
+
+# Wait until every record this flow made is on the server, so the next flow
+# - or the next role's Download Stock Data - finds them.
+- runFlow: ../../subflows/sync-data.yaml
