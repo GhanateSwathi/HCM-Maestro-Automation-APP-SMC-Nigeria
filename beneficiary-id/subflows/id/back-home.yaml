@@ -1,0 +1,20 @@
+appId: ${HCM_APP_ID}
+name: id-back-home
+---
+# From the Beneficiary IDs screen: its Back link, then home scrolled back to
+# the top, so "Registration & Delivery|Stock Balance" - how every case part
+# recognises home - is on screen again.
+- tapOn:
+    text: "Back"
+    above: "Beneficiary IDs"
+    label: "Back to home"
+- extendedWaitUntil:
+    visible: "Registration & Delivery|Stock Balance|Sync Data"
+    timeout: 15000
+    label: "Back on the home screen"
+- scrollUntilVisible:
+    element: "Registration & Delivery|Stock Balance"
+    direction: UP
+    timeout: 10000
+    optional: true
+    label: "Home, from the top"

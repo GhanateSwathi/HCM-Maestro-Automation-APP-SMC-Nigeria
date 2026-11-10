@@ -1,0 +1,25 @@
+appId: ${HCM_APP_ID}
+name: X9 part 2 - device 1 registers A
+tags:
+  - phase-a
+---
+# X9 part 2 (see 1-start.yaml), device 1, from the home screen, online, while
+# device 2 registers B. Ends on the home screen, A not yet synced.
+- extendedWaitUntil:
+    visible: "Registration & Delivery|Stock Balance"
+    timeout: 15000
+    label: "Part 1 left device 1 on the home screen"
+- runFlow: ../../subflows/registration/open-search.yaml
+- runFlow:
+    file: ../../subflows/registration/register-and-read.yaml
+    env:
+      NAME: "QAID-X9-A-${QAID_RUN}"
+      KEY: X9_ID_A
+- runFlow: ../../subflows/common/go-home.yaml
+- runFlow: ../../subflows/id/read-available.yaml
+- runScript:
+    file: ../../subflows/id/id.js
+    env:
+      ACTION: check
+      OK: ${Number(N0) - output.id.available == 1}
+      TEXT: "${'Device 1 N available drops by exactly 1 for A - ' + N0 + ' to ' + output.id.available}"

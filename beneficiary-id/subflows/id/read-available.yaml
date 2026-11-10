@@ -1,0 +1,73 @@
+appId: ${HCM_APP_ID}
+name: id-read-available
+---
+# From the home screen: Beneficiary IDs -> read "Number of available IDs"
+# and "Total beneficiary IDs" into output.id.available / output.id.total ->
+# Back to home. The ID check's step 3: N available drops by exactly 1 per
+# person created.
+#
+# Read off the app as AU-CDD-001, 2026-10-21 (root suite,
+# registration/download-ids.yaml): the screen "Beneficiary IDs" shows a dial
+# (the count / "Beneficiary IDs left"), "Low on Beneficiary IDs" while
+# empty, "Number of available IDs" and "Total beneficiary IDs" as label /
+# figure rows, and "Download Beneficiary IDs"; Back (top left) returns home.
+# The home card "Beneficiary IDs" sits below Sync Data, so it is scrolled to.
+- scrollUntilVisible:
+    element: "Beneficiary IDs"
+    direction: DOWN
+    timeout: 10000
+    optional: true
+    label: "Find the Beneficiary IDs card"
+- tapOn:
+    text: "Beneficiary IDs"
+    label: "Open Beneficiary IDs"
+- extendedWaitUntil:
+    visible: "Number of available IDs"
+    timeout: 15000
+    label: "Beneficiary IDs opens"
+# On the AZM builds the counts painted as 0 and filled in about 3 s later
+# (2026-10-30 18:54: "0 available of 0" read 0.3 s after the screen opened,
+# 599 / 599 three seconds on). Wait for the total to leave 0; a device that
+# really has no IDs reads 0 after the 15 s.
+- extendedWaitUntil:
+    notVisible:
+      text: "0"
+      rightOf: "Total beneficiary IDs"
+    timeout: 15000
+    optional: true
+    label: "The counts load"
+# Fenced as the root suite reads it: below the dial's "Beneficiary IDs
+# left", whose figure is also right of the label's row.
+- copyTextFrom:
+    text: "\\d+"
+    rightOf: "Number of available IDs"
+    below: "Beneficiary IDs left"
+    above: "Total beneficiary IDs"
+    label: "Read N available"
+- runScript:
+    file: id.js
+    env:
+      ACTION: count
+      WHAT: available
+# Fenced below the available row too: "rightOf" alone also matches the
+# available figure, and on the AZM build the total was once read as N
+# available - "597 available of 597" logged while the screen showed 597 of
+# 600 (X4, 2026-11-02 12:09).
+- copyTextFrom:
+    text: "\\d+"
+    rightOf: "Total beneficiary IDs"
+    below: "Number of available IDs"
+    label: "Read the total"
+- runScript:
+    file: id.js
+    env:
+      ACTION: count
+      WHAT: total
+- runFlow:
+    when:
+      true: ${output.id.failure}
+    file: ../common/fail.yaml
+    env:
+      MESSAGE: ${output.id.failure}
+- evalScript: "${console.log('Beneficiary IDs - ' + output.id.available + ' available of ' + output.id.total)}"
+- runFlow: back-home.yaml

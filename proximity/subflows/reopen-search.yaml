@@ -1,0 +1,52 @@
+appId: ${HCM_APP_ID}
+name: prox-reopen-search
+---
+# Leave Search Beneficiary and open it again. The Near by search centre is
+# the first GPS fix after the search screen opens (PROXIMITY-CASES.md F5),
+# so after the emulator's GPS moves (adb emu geo fix) the screen has to be
+# opened again. Ends on a fresh Search Beneficiary with Near by households
+# off. Works from the search screen, Select Your Village, home, or any
+# screen with the side menu.
+#
+# The search screen's Back link (AZM build, 2026-11-06) is tried first; on
+# this build it is not read yet, so home through the side menu is the
+# fallback.
+- extendedWaitUntil:
+    visible: "Near by households|Select Your Village|Registration & Delivery|Stock Balance|Open navigation menu"
+    timeout: 30000
+    label: "Search Beneficiary, Select Your Village, home or a screen with the side menu"
+- runFlow:
+    when:
+      visible: "Near by households"
+    commands:
+      - tapOn:
+          text: "Back"
+          optional: true
+          label: "Back"
+      - extendedWaitUntil:
+          visible: "Select Your Village|Registration & Delivery|Stock Balance"
+          timeout: 10000
+          optional: true
+          label: "Left the search screen"
+- runFlow:
+    when:
+      notVisible: "Select Your Village|Registration & Delivery|Stock Balance"
+    file: ../../beneficiary-id/subflows/common/go-home.yaml
+- runFlow:
+    when:
+      visible: "Select Your Village"
+    commands:
+      - runFlow: ../../beneficiary-id/subflows/registration/pick-village.yaml
+      - extendedWaitUntil:
+          visible: "Name of the individual"
+          timeout: 30000
+          label: "Search Beneficiary opens"
+- runFlow:
+    when:
+      visible: "Registration & Delivery|Stock Balance"
+      notVisible: "Name of the individual"
+    file: ../../beneficiary-id/subflows/registration/open-search.yaml
+- extendedWaitUntil:
+    visible: "Near by households"
+    timeout: 30000
+    label: "Search Beneficiary is open"

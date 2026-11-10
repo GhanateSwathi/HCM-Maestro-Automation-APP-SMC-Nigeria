@@ -1,0 +1,76 @@
+appId: ${HCM_APP_ID}
+name: NB2 - from the centre, which NB2 households are near by; then sync
+tags:
+  - proximity
+---
+# After register-and-check.yaml ran at C, 1 km, 4.9 km, 5.1 km and 10 km
+# north of C (scripts/run-sequence.ps1 -Sequence NB2). Run with the GPS
+# back on C. Near by on + "QAID-NB2-<tag>" typed: at most 5 results, one
+# page, so the paging bug (PROXIMITY-CASES.md B1-B3) cannot hide any.
+# Expected with a 5 km radius: C, 1KM, 4K9 listed; 5K1 and 10KM not.
+# Then Sync Data: the upload's log holds each household's saved lat/long.
+#
+# The households are told apart by their heads' ages (run-sequence.ps1):
+# C 102, 1KM 103, 4K9 104, 5K1 105, 10KM 106.
+- runFlow: ../../subflows/reopen-search.yaml
+- runFlow: ../../subflows/nearby-switch.yaml
+- runFlow:
+    file: ../../../beneficiary-id/subflows/registration/search-field.yaml
+    env:
+      TEXT: "QAID-NB2-${QAID_RUN}"
+- extendedWaitUntil:
+    visible:
+      text: "Open"
+      below: "Search by ID"
+    timeout: 20000
+    optional: true
+    label: "Results show"
+- takeScreenshot: artifacts/nb2-from-centre
+- evalScript: ${output.seenC = false}
+- evalScript: ${output.seen1KM = false}
+- evalScript: ${output.seen4K9 = false}
+- evalScript: ${output.seen5K1 = false}
+- evalScript: ${output.seen10KM = false}
+# Three screens: the first, then two swipes down.
+- repeat:
+    times: 3
+    commands:
+      - runFlow:
+          file: ../../subflows/is-listed.yaml
+          env:
+            AGE: "102"
+      - evalScript: ${output.seenC = output.seenC || output.listed}
+      - runFlow:
+          file: ../../subflows/is-listed.yaml
+          env:
+            AGE: "103"
+      - evalScript: ${output.seen1KM = output.seen1KM || output.listed}
+      - runFlow:
+          file: ../../subflows/is-listed.yaml
+          env:
+            AGE: "104"
+      - evalScript: ${output.seen4K9 = output.seen4K9 || output.listed}
+      - runFlow:
+          file: ../../subflows/is-listed.yaml
+          env:
+            AGE: "105"
+      - evalScript: ${output.seen5K1 = output.seen5K1 || output.listed}
+      - runFlow:
+          file: ../../subflows/is-listed.yaml
+          env:
+            AGE: "106"
+      - evalScript: ${output.seen10KM = output.seen10KM || output.listed}
+      - swipe:
+          start: "97%,80%"
+          end: "97%,30%"
+          duration: 500
+      - waitForAnimationToEnd:
+          timeout: 5000
+- takeScreenshot: artifacts/nb2-from-centre-scrolled
+- evalScript: "${console.log((output.seenC ? 'CHECK|PASS|' : 'CHECK|FAIL|') + 'From C: QAID-NB2-C ' + (output.seenC ? 'listed' : 'NOT listed') + ' (expected listed, 0 km)')}"
+- evalScript: "${console.log((output.seen1KM ? 'CHECK|PASS|' : 'CHECK|FAIL|') + 'From C: QAID-NB2-1KM ' + (output.seen1KM ? 'listed' : 'NOT listed') + ' (expected listed, within 5 km)')}"
+- evalScript: "${console.log((output.seen4K9 ? 'CHECK|PASS|' : 'CHECK|FAIL|') + 'From C: QAID-NB2-4K9 ' + (output.seen4K9 ? 'listed' : 'NOT listed') + ' (expected listed, within 5 km)')}"
+- evalScript: "${console.log((output.seen5K1 ? 'CHECK|FAIL|' : 'CHECK|PASS|') + 'From C: QAID-NB2-5K1 ' + (output.seen5K1 ? 'listed' : 'not listed') + ' (expected not listed, beyond 5 km)')}"
+- evalScript: "${console.log((output.seen10KM ? 'CHECK|FAIL|' : 'CHECK|PASS|') + 'From C: QAID-NB2-10KM ' + (output.seen10KM ? 'listed' : 'not listed') + ' (expected not listed, beyond 5 km)')}"
+- runFlow: ../../../beneficiary-id/subflows/common/go-home.yaml
+- runFlow: ../../../beneficiary-id/subflows/common/sync-data.yaml

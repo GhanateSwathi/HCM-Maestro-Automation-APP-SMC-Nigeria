@@ -47,6 +47,7 @@ says why.
 | [17](prompts/prompt-17-boundary-data-download.md) | Boundary data download after login, health facility and CDD | `flows/onboarding/*-boundary-data`, and `subflows/home/boundary-data.yaml` in every flow that signs in as either |
 | [18](prompts/prompt-18-cdd-search-nearby-and-id.md) | CDD: find a household by Near by households and by ID | `cdd-search-nearby-and-id` |
 | [19](prompts/prompt-19-cdd-eligibility-referral-ineligible.md) | CDD: eligibility checklist leading to referral (sick, fever, side effect) or ineligible (SP or CTX) | `cdd-eligibility-referral` |
+| [20](prompts/prompt-20-beneficiary-id-fix.md) | CDD: the Beneficiary ID Fix test plan's cases, ported from HCM-Maestro-Beneficiary-ID-Fix; then its Search by proximity cases | [`beneficiary-id/`](beneficiary-id/README.md) and [`proximity/`](proximity/README.md), suites of their own (see [Beneficiary ID cases](#beneficiary-id-cases), [Search by proximity](#search-by-proximity)) |
 
 ## Prerequisites
 
@@ -135,6 +136,10 @@ template is tracked.
 | `DISPATCH_PARTS` | How many dispatches Case 3 of the dispatch flows makes (`state-stock-dispatch.yaml`, `hf-stock-dispatch-cdd.yaml`): blank, one. `run-chain.ps1` passes `2`, so the next role has one transaction to accept and one to reject; the parts are equal but for the last, which takes what is left over, so `REMAINING_BALANCE` is still left |
 | `KEEP_SESSION` | **Not set in `.env`.** `run-chain.ps1` (or `run.ps1 -KeepSession`) passes `true` per run: the sign-in reuses the session the app already holds instead of wiping it - see [Chained runs](#chained-runs). Set in `.env`, every flow would do so |
 | `VIEW_TXN_EXPECTED_STATE` / `_HF` / `_CDD` | Optional. Transactions the role's View Transactions list must hold, comma-separated, each `<variant> <quantity>` or `<variant> <MRN> <quantity>` (e.g. `SPAQ1 490,SPAQ2 490`). Blank: the list is logged and nothing is expected. A receiver's acceptance can change the MRN the sender sees, so give an MRN only when it is known to be stable |
+| `ID_HOUSEHOLD_MEMBERS` / `ID_HEAD_AGE_YEARS` / `ID_HEAD_GENDER` / `ID_LAST_NAME` | The [Beneficiary ID cases](#beneficiary-id-cases)' households - `5` (room to add members), `30`, `Female`, `Test`; kept apart from Prompt 11's keys |
+| `ID_MEMBER_AGE_MONTHS` / `ID_MEMBER_GENDER` | Their added members' default age, 3 to 59 months (`24`), and gender (`Female`). A case that adds several members to one household gives each its own age |
+| `DEVICE_ID` / `DEVICE_ID_2` | Optional. The adb serials `beneficiary-id/scripts/run-case.ps1` uses: the device, else the one connected; the second device for X9, X9b and D5 |
+| `QAID_RUN` | **Not set in `.env`.** `run-case.ps1` (and `proximity\run.ps1`, `-Tag`) passes it per run, the run's tag (`ddHHmm`) that the Beneficiary ID and proximity cases add to every name they register. The proximity flows' own values (`NAME`, `HEAD_AGE`, `TARGET`, `TYPE`, ...) are passed per part by `proximity\scripts\run-sequence.ps1`, never set in `.env` |
 
 Leave a role's pair blank if you are not testing that role. See
 [Roles](#roles) for how a flow signs in as one.
@@ -279,7 +284,43 @@ one app session instead, then syncs and logs out:
   state, not yet downloaded or accepted.
 
 `run.ps1` takes the same switches for a single flow: `-KeepSession`, and
-`-Set KEY=VALUE,...` to replace `.env` values for that run.
+`-Set KEY=VALUE,...` to replace `.env` values for that run. `-RunDir`
+names the run's output folder instead of `artifacts/runs/<stamp>`.
+
+### Beneficiary ID cases
+
+[`beneficiary-id/`](beneficiary-id/README.md) holds the Beneficiary ID Fix
+test plan's cases ([Prompt 20](prompts/prompt-20-beneficiary-id-fix.md)),
+ported from the HCM-Maestro-Beneficiary-ID-Fix repo. It is a suite of its
+own: its cases run in parts, in one app session that is never cleared,
+through their own runner, with an ID ledger and a report. `config.yaml`
+never discovers them, so a plain `.\scripts\run.ps1` never runs them.
+
+```powershell
+.\scripts\run.ps1 -Flow beneficiary-id\setup\download-ids.yaml   # IDs on the device first
+.\beneficiary-id\scripts\run-case.ps1 -Case SETUP                  # the fixture households, once
+.\beneficiary-id\scripts\run-case.ps1 -Case P1                     # one case
+```
+
+Every root-suite flow wipes the app at sign-in, and with it the device's
+beneficiary IDs; download them again before the next Beneficiary ID case.
+Results: [`beneficiary-id/TEST-CASES.md`](beneficiary-id/TEST-CASES.md).
+
+### Search by proximity
+
+[`proximity/`](proximity/README.md) holds the Near by households cases
+(QA's report: a new household missing from Near by after the village's
+data is downloaded), ported from the same repo (Prompt 20, follow-up). It
+is another suite of its own. It reuses `beneficiary-id/`'s subflows and moves
+the emulator's GPS between parts (`adb emu geo fix`), one sequence per
+test:
+
+```powershell
+.\proximity\scripts\run-sequence.ps1 -Sequence NB1                   # the reported state at the centre
+.\proximity\scripts\run-sequence.ps1 -Sequence NB2                   # households 0-10 km away
+```
+
+Cases and results: [`proximity/PROXIMITY-CASES.md`](proximity/PROXIMITY-CASES.md).
 
 ### QR codes on the emulator
 
@@ -760,6 +801,20 @@ subflows/                   reusable building blocks, pulled in via runFlow
   dropdown/
     select-first-options.yaml  pick the first N options of a boundary dropdown
     dropdown.js                its book-keeping
+beneficiary-id/             the Beneficiary ID Fix cases (Prompt 20) - a suite of its own,
+                              outside config.yaml's flows/**; see beneficiary-id/README.md
+  cases/<case>/             one folder per case, in parts run by run-case.ps1
+  setup/                    sign in and home, download IDs, the fixture households
+  subflows/                 common/, registration/, id/, cases/ - over the root subflows
+  scripts/                  run-case.ps1, cases.csv, report.py
+  TEST-CASES.md             the cases, their results and the ID ledger
+proximity/                  the Search by proximity cases (Near by households) - a suite of its
+                              own over beneficiary-id/'s subflows; see proximity/README.md
+  cases/NB1..NB6/           the flows each sequence runs
+  subflows/                 the Near by switch, "is this household listed", reopen Search
+  scripts/                  run-sequence.ps1 (GPS moves + parts), nearby-list.py, saved-latlong.py
+  run.ps1                   one flow, with the run's tag
+  PROXIMITY-CASES.md        the cases, the AZM build's bugs, results
 prompts/                    the specification prompts, one file each
   prompt-01-…-14-….md       Prompts 1-14, word for word as given
   prompt-15-stock-reject.md rejecting incoming stock, all three receiving roles
@@ -767,6 +822,7 @@ prompts/                    the specification prompts, one file each
   prompt-17-boundary-data-download.md  the data check after login, health facility and CDD
   prompt-18-cdd-search-nearby-and-id.md  CDD search by Near by households and by ID
   prompt-19-cdd-eligibility-referral-ineligible.md  CDD checklist: referral or ineligible
+  prompt-20-beneficiary-id-fix.md  the Beneficiary ID Fix cases, ported
 scripts/                    run.ps1 (Windows) and run.sh (bash) - same runs; only run.ps1 keeps
                               the PC awake and checks for black screenshots
                             run-chain.ps1 - each role's flows back to back in one session, then logout

@@ -1,0 +1,89 @@
+appId: ${HCM_APP_ID}
+name: NB2 - register NAME where the device is, then Near by at once
+tags:
+  - proximity
+---
+# PROXIMITY-CASES.md "moving" check (QA, 2026-11-06), also NB3 and NB4: the
+# runner (scripts/run-sequence.ps1) moves the emulator's GPS (adb emu geo
+# fix) before this part, without restarting the app. Registers NAME there
+# (head aged HEAD_AGE - how it is recognised in the list, see
+# subflows/is-listed.yaml), comes back to a fresh Search Beneficiary at the
+# same spot, switches Near by households on and checks NAME:
+#   1. in the plain Near by list (no name typed) - first screen and 3 swipes
+#   2. with its name typed, Near by still on.
+# The location page shows only the fix's accuracy, not the lat/long; the
+# saved lat/long is read from the sync log afterwards (scripts/
+# saved-latlong.py). KEY names the VAR the head's ID goes to.
+# IRREVERSIBLE: creates a household and uses an ID.
+- runFlow: ../../subflows/reopen-search.yaml
+- runFlow:
+    file: ../../../beneficiary-id/subflows/registration/register-and-read.yaml
+    env:
+      NAME: ${NAME}
+      KEY: ${KEY}
+      HEAD_AGE: ${HEAD_AGE}
+- takeScreenshot: artifacts/overview-${NAME}
+- back
+- extendedWaitUntil:
+    visible: "Register (New )?Beneficiary"
+    timeout: 15000
+    optional: true
+    label: "Back on Search Beneficiary"
+# A fresh screen, so the Near by centre is this spot (the first fix after
+# the screen opens).
+- runFlow: ../../subflows/reopen-search.yaml
+- runFlow: ../../subflows/nearby-switch.yaml
+- extendedWaitUntil:
+    visible:
+      text: "Open"
+      below: "Search by ID"
+    timeout: 20000
+    optional: true
+    label: "Near by results show"
+- takeScreenshot: artifacts/nearby-plain-${NAME}
+- evalScript: ${output.plain = false}
+- repeat:
+    times: 4
+    commands:
+      - runFlow:
+          file: ../../subflows/is-listed.yaml
+          env:
+            AGE: ${HEAD_AGE}
+      - evalScript: ${output.plain = output.plain || output.listed}
+      - runFlow:
+          when:
+            true: ${!output.plain}
+          commands:
+            - swipe:
+                start: "97%,80%"
+                end: "97%,30%"
+                duration: 500
+            - waitForAnimationToEnd:
+                timeout: 6000
+- evalScript: "${console.log((output.plain ? 'CHECK|PASS|' : 'CHECK|FAIL|') + NAME + ' in the plain Near by list right after registering (first screen + 3 swipes)')}"
+- takeScreenshot: artifacts/nearby-plain-end-${NAME}
+# Back to the top, then the name with Near by still on.
+- repeat:
+    times: 6
+    commands:
+      - swipe:
+          start: "97%,30%"
+          end: "97%,85%"
+          duration: 300
+- runFlow:
+    file: ../../../beneficiary-id/subflows/registration/search-field.yaml
+    env:
+      TEXT: ${NAME}
+- extendedWaitUntil:
+    visible:
+      text: "Open"
+      below: "Search by ID"
+    timeout: 20000
+    optional: true
+    label: "NAME found with Near by on"
+- runFlow:
+    file: ../../subflows/is-listed.yaml
+    env:
+      AGE: ${HEAD_AGE}
+- evalScript: "${console.log((output.listed ? 'CHECK|PASS|' : 'CHECK|FAIL|') + NAME + ' found by name with Near by on, right after registering')}"
+- takeScreenshot: artifacts/nearby-named-${NAME}

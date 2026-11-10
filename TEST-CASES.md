@@ -32,7 +32,9 @@ were taken from.
 | Registration — dose and redose (CDD) | 10 | 10 | Redose reason Others; a redose's time window; RDS-10's sync not run (expired sign-in) |
 | Registration — search by Near by households and by ID (CDD) | 11 | 11 | Whether part of an ID should match (QA); the radius, and a household outside it; Near by households with a name typed; Search by ID by scanning (no scanner on this screen) |
 | Registration — eligibility checklist: referral and ineligible (CDD) | 6 | 6 | Several Yes answers at once (which outcome wins); "SPAQ for the first time" Yes; Go Back on the referral success screen; ELG-06's sync (Server Error, 2026-10-27) |
-| **Total** | **131** | **131** | |
+| Beneficiary ID Fix cases (CDD) — [`beneficiary-id/`](beneficiary-id/TEST-CASES.md) | 20 | 20 | Ported 2026-11-10 from HCM-Maestro-Beneficiary-ID-Fix (Prompt 20); **not run yet on this app** - selectors still to verify (beneficiary-id/README.md). P1b's dose way (needs stock); P6 (out of scope); no server-side check of each ID |
+| Search by proximity (CDD) — [`proximity/`](proximity/PROXIMITY-CASES.md) | 41 | 11 | Ported 2026-11-10 (Prompt 20, follow-up); **not run yet on this app**. Automated: P-01 (via NB6), P-02, P-04, P-05, N-01, N-02, E-01, E-04, E-09, E-11, E-14, plus the moving check, the radius probe and B1's cause. The other 30 are by hand (points in PROXIMITY-CASES section 2) |
+| **Total** | **192** | **162** | |
 
 Status key: **Automated** — a flow asserts it. **Partial** — the flow performs
 the step but asserts nothing about it. **Blocked** — a flow exists but cannot

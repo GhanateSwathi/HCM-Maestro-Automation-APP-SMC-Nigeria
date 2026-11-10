@@ -1,0 +1,57 @@
+appId: ${HCM_APP_ID}
+name: id-d11-reopen
+---
+# D11 (cases/D11), round R, after d11-kill.yaml: open the app -> N
+# available -> search QAID-D11-<R>A-<run>. Saved: read its ID (a ledger row)
+# and N must be 1 lower than N_BEFORE; not saved: N unchanged. Passes on
+# VARs D11_N_AFTER_<R> and D11_ID_<R>A (empty when not saved). Ends on the
+# home screen.
+#
+# The result card's name reads "--" on this build: A is "found" when the
+# search for its name (unique to the run) lists a household
+# (find-by-name.yaml).
+- runFlow: ../common/sign-in-cdd.yaml
+- runFlow: ../common/home.yaml
+- runFlow: ../id/read-available.yaml
+- evalScript: ${output.nAfter = output.id.available}
+- runScript:
+    file: ../id/id.js
+    env:
+      ACTION: var
+      NAME: ${'D11_N_AFTER_' + R}
+      VALUE: ${output.nAfter}
+- runFlow: ../registration/open-search.yaml
+- runFlow:
+    file: ../registration/find-by-name.yaml
+    env:
+      TEXT: ${'QAID-D11-' + R + 'A-' + QAID_RUN}
+- takeScreenshot: artifacts/d11-round-${R}-search
+- evalScript: ${output.savedA = output.households > 0}
+- evalScript: ${output.idA = ''}
+- runFlow:
+    when:
+      true: ${output.savedA}
+    commands:
+      - tapOn:
+          text: "Open"
+          below: "Search by ID"
+          label: "Open A's household"
+      - runFlow:
+          file: ../id/read-card.yaml
+          env:
+            PERSON: ${'QAID-D11-' + R + 'A-' + QAID_RUN + ' ' + ID_LAST_NAME}
+            HOUSEHOLD: ${'QAID-D11-' + R + 'A-' + QAID_RUN}
+      - evalScript: ${output.idA = output.id.last}
+- runScript:
+    file: ../id/id.js
+    env:
+      ACTION: var
+      NAME: ${'D11_ID_' + R + 'A'}
+      VALUE: ${output.idA}
+- runScript:
+    file: ../id/id.js
+    env:
+      ACTION: check
+      OK: "${output.savedA ? (Number(N_BEFORE) - output.nAfter == 1 && String(output.idA).length == 12) : Number(N_BEFORE) == output.nAfter}"
+      TEXT: "${'Round ' + R + ' - A was ' + (output.savedA ? 'saved with ' + output.idA + ' and N available went ' : 'not saved and N available went ') + N_BEFORE + ' to ' + output.nAfter + (output.savedA ? ' (expected -1)' : ' (expected unchanged)') + (output.households > 1 ? ' - the search listed more than one household' : '')}"
+- runFlow: ../common/go-home.yaml

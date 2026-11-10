@@ -1,0 +1,19 @@
+appId: ${HCM_APP_ID}
+name: id-connection-dialog
+---
+# Closes the app's no-connection dialog, if it is up. With airplane mode on
+# (P4, X6, D5) the AZM builds raised it with raw localisation keys - title
+# CORE_COMMON_CONNECTION_LABEL, text CORE_COMMON_CONNECTION_CONTENT, button
+# Core_common_ok (Beneficiary ID Fix suite, 2026-11-02). Its wording on the
+# SMC build is not read yet, so the translated forms are matched too. A no-op
+# when nothing is up.
+- runFlow:
+    when:
+      visible: "CORE_COMMON_CONNECTION_LABEL|CORE_COMMON_CONNECTION_CONTENT|Connection Alert|No internet.*"
+    commands:
+      - takeScreenshot: artifacts/connection-dialog
+      - tapOn:
+          text: "Core_common_ok|OK|Ok"
+          label: "Close the no-connection dialog"
+      - waitForAnimationToEnd:
+          timeout: 3000

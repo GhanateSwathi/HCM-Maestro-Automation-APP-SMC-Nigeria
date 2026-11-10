@@ -1,0 +1,112 @@
+appId: ${HCM_APP_ID}
+name: id-download-ids
+---
+# From the home screen: Beneficiary IDs -> Download Beneficiary IDs -> wait
+# for Download Completed -> Close -> Back to home. Logs which happened - a
+# new download, or "Limit exceeded" answered with Re-Fetch IDs - for P4's
+# and X8's expected results.
+#
+# Read off the app as AU-CDD-001 (root suite, registration/download-ids.yaml,
+# 2026-10-21 and 26): the download is a dialog "Download in progress..."
+# with a count ("0/10"), then "Download Completed", "600/600" and Close -
+# about a minute. The server caps a user's downloads: "Limit exceeded to
+# fetch Beneficiary IDs" with Re-Fetch IDs and Close; Re-Fetch IDs downloads
+# the IDs already given to the user again and may be tapped again whenever
+# the dialog comes back (QA, 2026-10-26) - up to three times here.
+#
+# TRY: "yes" goes on without a download when no dialog opens within 45 s:
+# on the AZM builds the button was greyed out (not clickable) while the
+# device held 597-600 of 600 (2026-11-03), and a tap did nothing.
+- scrollUntilVisible:
+    element: "Beneficiary IDs"
+    direction: DOWN
+    timeout: 10000
+    optional: true
+    label: "Find the Beneficiary IDs card"
+- tapOn:
+    text: "Beneficiary IDs"
+    label: "Open Beneficiary IDs"
+- extendedWaitUntil:
+    visible: "Download Beneficiary IDs"
+    timeout: 15000
+    label: "Beneficiary IDs opens"
+- tapOn:
+    text: "Download Beneficiary IDs"
+    below: "Total beneficiary IDs"
+    label: "Download Beneficiary IDs"
+- evalScript: ${output.downloadSkipped = false}
+- runFlow:
+    when:
+      true: ${typeof TRY != 'undefined' && TRY == 'yes'}
+    commands:
+      - extendedWaitUntil:
+          visible: "Download Completed|Limit exceeded.*|Re-Fetch IDs|(?s).*Download in progress.*|(?s).*\\d+ ?/ ?\\d+.*"
+          timeout: 45000
+          optional: true
+          label: "The download dialog opens"
+      - runFlow:
+          when:
+            notVisible: "Download Completed|Limit exceeded.*|Re-Fetch IDs|(?s).*Download in progress.*|(?s).*\\d+ ?/ ?\\d+.*"
+          commands:
+            - takeScreenshot: artifacts/download-ids-greyed
+            - evalScript: ${output.downloadSkipped = true}
+            - evalScript: "${console.log('NOTE|Download Beneficiary IDs did not respond (the button greyed out) - went on with the IDs on the device')}"
+- runFlow:
+    when:
+      true: ${!output.downloadSkipped}
+    commands:
+      - extendedWaitUntil:
+          visible: "Download Completed|Limit exceeded.*|.*[Ff]ail.*|.*[Ee]rror.*|.*[Tt]ry again.*"
+          timeout: 300000
+          optional: true
+          label: "The download finishes or hits the limit"
+      - takeScreenshot: artifacts/download-ids
+      - evalScript: ${output.refetched = 0}
+      - repeat:
+          times: 3
+          while:
+            visible: "Limit exceeded.*"
+          label: "Re-Fetch IDs while the limit dialog shows"
+          commands:
+            - evalScript: ${output.refetched = output.refetched + 1}
+            - tapOn:
+                text: "Re-Fetch IDs"
+                label: "Re-Fetch IDs"
+            - extendedWaitUntil:
+                notVisible: "Limit exceeded.*"
+                timeout: 15000
+                optional: true
+                label: "The limit dialog closes"
+            - extendedWaitUntil:
+                visible: "Download Completed|Limit exceeded.*|.*[Ff]ail.*|.*[Ee]rror.*|.*[Tt]ry again.*"
+                timeout: 300000
+                optional: true
+                label: "The re-fetch finishes"
+            - takeScreenshot: artifacts/refetch-ids
+      - runFlow:
+          when:
+            notVisible: "Download Completed"
+          commands:
+            - takeScreenshot: artifacts/download-ids-failed
+            - setClipboard: "no completion within 5 minutes"
+            - runFlow:
+                when:
+                  visible: "Limit exceeded.*|.*[Ff]ail.*|.*[Ee]rror.*|.*[Tt]ry again.*"
+                commands:
+                  - copyTextFrom:
+                      text: "Limit exceeded.*|.*[Ff]ail.*|.*[Ee]rror.*|.*[Tt]ry again.*"
+                      label: "Read the download error"
+            - runFlow:
+                file: ../common/fail.yaml
+                env:
+                  MESSAGE: "${'Beneficiary ID download failed: ' + maestro.copiedText + '.'}"
+      - evalScript: "${console.log('NOTE|Download Beneficiary IDs - ' + (output.refetched ? 'Limit exceeded, tapped Re-Fetch IDs (' + output.refetched + ')' : 'new download'))}"
+      - tapOn:
+          text: "Close"
+          below: "Download Completed"
+          label: "Close"
+      - extendedWaitUntil:
+          notVisible: "Download Completed"
+          timeout: 10000
+          label: "The download dialog closes"
+- runFlow: back-home.yaml

@@ -1,0 +1,81 @@
+appId: ${HCM_APP_ID}
+name: NB2 - E-09 search centre when the device moves with Search open
+tags:
+  - proximity
+---
+# PROXIMITY-CASES.md E-09 (B9, B10 on the AZM build). The runner
+# (scripts/run-sequence.ps1 -Sequence E09) puts the GPS on C; this opens a
+# fresh Search there and logs a STEP line; the runner, watching for it,
+# moves the GPS 10 km north while this flow waits on the open screen. Then
+# Near by on + "QAID-NB2-<tag>": NB2-C (head 102) listed means the search
+# used the old position; NB2-10KM (head 106) listed means it used the new
+# one. Then Near by off and on again: does the centre update, and is the
+# typed name kept (E-14)?
+- runFlow: ../../subflows/reopen-search.yaml
+- waitForAnimationToEnd:
+    timeout: 5000
+- evalScript: "${console.log('STEP|search open at C - move the GPS now')}"
+# The runner moves the GPS during this wait (it watches for the STEP line).
+- extendedWaitUntil:
+    visible: "NEVER-SHOWN-TEXT"
+    timeout: 25000
+    optional: true
+    label: "Wait while the GPS moves 10 km north"
+- runFlow: ../../subflows/nearby-switch.yaml
+- runFlow:
+    file: ../../../beneficiary-id/subflows/registration/search-field.yaml
+    env:
+      TEXT: "QAID-NB2-${QAID_RUN}"
+- extendedWaitUntil:
+    visible:
+      text: "Open"
+      below: "Search by ID"
+    timeout: 15000
+    optional: true
+    label: "Results show"
+- runFlow:
+    file: ../../subflows/is-listed.yaml
+    env:
+      AGE: "102"
+- evalScript: ${output.c = output.listed}
+- runFlow:
+    file: ../../subflows/is-listed.yaml
+    env:
+      AGE: "106"
+- evalScript: ${output.far = output.listed}
+- evalScript: "${console.log('E09|' + (output.c ? 'old position C used (NB2-C listed) ' : '') + (output.far ? 'new position used (NB2-10KM listed)' : '') + (!output.c && !output.far ? 'neither listed' : ''))}"
+- takeScreenshot: artifacts/e09-stale-centre
+# Same screen, switch Near by off and on again: does the centre update, and
+# is the typed name kept?
+- runFlow: ../../subflows/nearby-switch.yaml
+- waitForAnimationToEnd:
+    timeout: 4000
+- runFlow: ../../subflows/nearby-switch.yaml
+- extendedWaitUntil:
+    visible:
+      text: "Open"
+      below: "Search by ID"
+    timeout: 15000
+    optional: true
+    label: "Results show"
+- evalScript: ${output.nameKept = false}
+- runFlow:
+    when:
+      visible:
+        text: "QAID-NB2-${QAID_RUN}"
+        below: "Search by ID"
+    commands:
+      - evalScript: ${output.nameKept = true}
+- runFlow:
+    file: ../../subflows/is-listed.yaml
+    env:
+      AGE: "102"
+- evalScript: ${output.c2 = output.listed}
+- runFlow:
+    file: ../../subflows/is-listed.yaml
+    env:
+      AGE: "106"
+- evalScript: ${output.far2 = output.listed}
+- evalScript: "${console.log('E09b|after Near by off/on: ' + (output.c2 ? 'old position C used (NB2-C listed) ' : '') + (output.far2 ? 'new position used (NB2-10KM listed)' : '') + (!output.c2 && !output.far2 ? 'neither listed' : ''))}"
+- evalScript: "${console.log('E14|after Near by off/on the typed name was ' + (output.nameKept ? 'kept' : 'CLEARED (B10)'))}"
+- takeScreenshot: artifacts/e09-after-toggle

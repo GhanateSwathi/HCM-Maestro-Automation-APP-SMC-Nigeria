@@ -1,0 +1,15 @@
+appId: ${HCM_APP_ID}
+name: "Beneficiary ID setup - download beneficiary IDs"
+tags:
+  - setup
+---
+# Not a test case: signs in if needed (keeping the app's data), then
+# Beneficiary IDs -> Download Beneficiary IDs (Re-Fetch IDs on "Limit
+# exceeded") and logs the count. A device that was never given IDs, or was
+# wiped by a root-suite flow's sign-in (clearState), holds none, and every
+# case's first part BLOCKs with fewer than it needs. Fetches IDs from the
+# server; registers nothing.
+- runFlow: ../subflows/common/sign-in-cdd.yaml
+- runFlow: ../subflows/common/home.yaml
+- runFlow: ../subflows/id/download-ids.yaml
+- runFlow: ../subflows/id/read-available.yaml

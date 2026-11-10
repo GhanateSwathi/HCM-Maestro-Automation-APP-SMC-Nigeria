@@ -1,0 +1,62 @@
+appId: ${HCM_APP_ID}
+name: id-home
+---
+# From wherever sign-in-cdd.yaml left the app to the CDD's home screen.
+#
+# Boundary selection comes after a sign-in, and sometimes after a restart
+# of a signed-in app (root suite, home/keep-session.yaml, 2026-10-23). It is
+# answered as the root suite's home/cdd.yaml does: the first ADMIN_Health
+# Facility and the first three ADMIN_Community options (mhbase labels),
+# Submit, then the boundary data check (home/boundary-data.yaml, Prompt 17 -
+# BOUNDARY_DATA_CHOICE decides Download or Proceed on "Data found!"). The
+# cases then register in the first village Registration & Delivery offers,
+# or REGISTRATION_VILLAGE.
+#
+# Home is "Registration & Delivery" or "Stock Balance": the CDD's home opens
+# with the Stock Balance card on top, and Registration & Delivery can be
+# below the fold (root suite, registration/open-registration.yaml).
+- extendedWaitUntil:
+    visible: "(ADMIN_)?Health Facility.*|Registration & Delivery|Stock Balance|No data found!|Data found!|Failed to check data in server|CORE_COMMON_CONNECTION_LABEL|Open navigation menu"
+    timeout: 60000
+    label: "The boundary form, a notice or home has drawn"
+- runFlow: connection-dialog.yaml
+- runFlow:
+    when:
+      visible: "No data found!|Data found!|Failed to check data in server"
+    file: ../../../subflows/home/boundary-data.yaml
+    env:
+      HOME_SCREEN: "Registration & Delivery|Stock Balance"
+      ROLE: "CDD"
+- runFlow:
+    when:
+      visible: "ADMIN_Health Facility.*"
+    commands:
+      - runFlow:
+          file: ../../../subflows/dropdown/select-first-options.yaml
+          env:
+            FIELD: "ADMIN_Health Facility.*"
+            COUNT: "1"
+      - evalScript: ${output.cddFacility = output.dropdown.options[0]}
+      - runFlow:
+          file: ../../../subflows/dropdown/select-first-options.yaml
+          env:
+            FIELD: "ADMIN_Community.*"
+            COUNT: "3"
+      - evalScript: "${console.log('NOTE|Boundary - ' + output.cddFacility + '; communities ' + output.dropdown.options.join(', '))}"
+      - tapOn:
+          text: "Submit"
+          label: "Submit the boundary selection"
+      - runFlow:
+          file: ../../../subflows/home/boundary-data.yaml
+          env:
+            HOME_SCREEN: "Registration & Delivery|Stock Balance"
+            ROLE: "CDD"
+- runFlow:
+    when:
+      notVisible: "Registration & Delivery|Stock Balance"
+      visible: "Open navigation menu"
+    file: go-home.yaml
+- extendedWaitUntil:
+    visible: "Registration & Delivery|Stock Balance"
+    timeout: 60000
+    label: "On the home screen"

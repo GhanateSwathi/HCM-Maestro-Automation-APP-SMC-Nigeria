@@ -1,0 +1,52 @@
+appId: ${HCM_APP_ID}
+name: id-read-head-id
+---
+# On Household Overview: the head of household's ID into output.id.head
+# (and maestro.copiedText, for read-card.yaml). Reads only.
+#
+# Read off the app as AU-CDD-001, 2026-10-21 (root suite,
+# registration/household-check.yaml): the overview lists "Head of the
+# household", "Settlement Area", "Member Count", "Caregiver consent", then a
+# card per member - its beneficiary ID (12 digits, e.g. 157722141110), "Edit
+# Individual", the name, "FEMALE | 30y 0m", and the tag "Head of household"
+# (the head) or a dose status. Every name reads "--" on this build, so the
+# head's card is found by its "Head of household" tag, not by name (the
+# Beneficiary ID Fix suite anchored on the name). The overview may come back
+# scrolled: from the top first.
+#
+# The card's ID is the LAST ID above the tag: Maestro's "above" returns
+# every match above the anchor, top one first (the AZM suite read a head's
+# ID for every member until it counted them, P5, 2026-11-02).
+- extendedWaitUntil:
+    visible: "Household Overview|Edit Individual"
+    timeout: 15000
+    label: "Household Overview is open"
+- scrollUntilVisible:
+    element: "Household Overview"
+    direction: UP
+    timeout: 10000
+    optional: true
+    label: "From the top"
+- extendedWaitUntil:
+    visible: "Head of household"
+    timeout: 10000
+    label: "The head's card is shown"
+- evalScript: ${output.tagIdx = 0}
+- repeat:
+    times: 10
+    while:
+      visible:
+        text: "\\d{12}|No Beneficiary ID"
+        above: "Head of household"
+        index: ${output.tagIdx + 1}
+    commands:
+      - evalScript: ${output.tagIdx = output.tagIdx + 1}
+- copyTextFrom:
+    text: "\\d{12}|No Beneficiary ID"
+    above: "Head of household"
+    index: ${output.tagIdx}
+    label: "Read the head's ID (the last ID above Head of household)"
+- runScript:
+    file: id.js
+    env:
+      ACTION: head

@@ -1,0 +1,64 @@
+appId: ${HCM_APP_ID}
+name: id-reg-search
+---
+# From Search Beneficiary: NAME as the search text -> Register Beneficiary.
+# Ends on Beneficiary Location.
+#
+# ON_POPUP says what to do with the Low Beneficiary IDs popup: unset, it
+# fails the flow (IDs are on the device, so the popup is the bug P3 looks
+# for); "skip" taps Skip. The SMC popup offers Skip and Download (root
+# suite, registration/low-id-popup.yaml, 2026-10-21); a popup without Skip
+# blocks a case that needs it (the AZM builds dropped Skip on purpose,
+# 2026-11-03).
+- runFlow:
+    file: search-field.yaml
+    env:
+      TEXT: ${NAME}
+- tapOn:
+    text: "Register (New )?Beneficiary"
+    label: "Register Beneficiary"
+- extendedWaitUntil:
+    visible: "Low Beneficiary IDs|Household Location|Beneficiary Location"
+    timeout: 15000
+    label: "Register Beneficiary opens the popup or the form"
+- runFlow:
+    when:
+      visible: "Low Beneficiary IDs"
+    commands:
+      - takeScreenshot: artifacts/low-id-popup-${NAME}
+      - runFlow:
+          when:
+            true: ${typeof ON_POPUP != 'undefined' && ON_POPUP == 'skip'}
+            notVisible: "Skip"
+          commands:
+            - runScript:
+                file: ../id/id.js
+                env:
+                  ACTION: blocked
+                  TEXT: "${'The Low Beneficiary IDs popup for ' + NAME + ' offers only Download, no Skip - the Skip this case needs is not there'}"
+            - runFlow:
+                file: ../common/fail.yaml
+                env:
+                  MESSAGE: ${output.id.failure}
+      - runFlow:
+          when:
+            true: ${typeof ON_POPUP != 'undefined' && ON_POPUP == 'skip'}
+          commands:
+            - evalScript: "${console.log('NOTE|Register Beneficiary for ' + NAME + ' raised the Low Beneficiary IDs popup; tapped Skip')}"
+            - tapOn:
+                text: "Skip"
+                below: "Low Beneficiary IDs"
+                label: "Skip"
+            - extendedWaitUntil:
+                visible: "Household Location|Beneficiary Location"
+                timeout: 15000
+                label: "Skip opens the form"
+      - runFlow:
+          when:
+            true: ${typeof ON_POPUP == 'undefined' || ON_POPUP != 'skip'}
+          commands:
+            - evalScript: "${console.log('CHECK|FAIL|Register Beneficiary for ' + NAME + ' raised the Low Beneficiary IDs popup with IDs on the device')}"
+            - runFlow:
+                file: ../common/fail.yaml
+                env:
+                  MESSAGE: "${'Low Beneficiary IDs popup shown for ' + NAME + ' although IDs were on the device.'}"

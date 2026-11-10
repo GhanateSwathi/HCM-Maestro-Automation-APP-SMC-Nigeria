@@ -1,0 +1,29 @@
+appId: ${HCM_APP_ID}
+name: NB2 - is TARGET near by from here
+tags:
+  - proximity
+---
+# B8: measures the radius the app really uses. The runner
+# (scripts/run-sequence.ps1 -Sequence Radius) puts the GPS DIST north of
+# TARGET's saved point; this opens a fresh search (new centre), switches
+# Near by on, types TARGET (the name) and logs whether the household whose
+# head is TARGET_AGE shows.
+- runFlow: ../../subflows/reopen-search.yaml
+- runFlow: ../../subflows/nearby-switch.yaml
+- runFlow:
+    file: ../../../beneficiary-id/subflows/registration/search-field.yaml
+    env:
+      TEXT: ${TARGET}
+- extendedWaitUntil:
+    visible:
+      text: "Open"
+      below: "Search by ID"
+    timeout: 15000
+    optional: true
+    label: "TARGET shows"
+- runFlow:
+    file: ../../subflows/is-listed.yaml
+    env:
+      AGE: ${TARGET_AGE}
+- evalScript: "${console.log('PROBE|' + DIST + '|' + (output.listed ? 'FOUND' : 'not found'))}"
+- takeScreenshot: artifacts/probe-${DIST}

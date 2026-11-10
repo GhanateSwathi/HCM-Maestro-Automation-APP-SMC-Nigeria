@@ -1,0 +1,21 @@
+appId: ${HCM_APP_ID}
+name: NB1 part 2 - beneficiary IDs, open Search Beneficiary
+tags:
+  - proximity
+---
+# From home (part 1): download beneficiary IDs (a cleared app has none, and
+# registering needs one) - a try, which goes on with the IDs on the device
+# when the download does not answer - then open Search Beneficiary. Ends on
+# the search screen with Near by households off.
+- extendedWaitUntil:
+    visible: "Registration & Delivery|Stock Balance"
+    timeout: 60000
+    label: "Home"
+- runFlow:
+    file: ../../../beneficiary-id/subflows/id/download-ids.yaml
+    env:
+      TRY: "yes"
+- runFlow: ../../../beneficiary-id/subflows/id/read-available.yaml
+- takeScreenshot: artifacts/nb1-home-ids
+- runFlow: ../../../beneficiary-id/subflows/registration/open-search.yaml
+- takeScreenshot: artifacts/nb1-search-open

@@ -1,0 +1,108 @@
+appId: ${HCM_APP_ID}
+name: id-reg-details
+---
+# "Register a household", second part (see reg-start.yaml): from Household
+# Details, ID_HOUSEHOLD_MEMBERS -> Save Household Details -> the head's form
+# filled in (NAME, ID_LAST_NAME, ID_HEAD_AGE_YEARS, ID_HEAD_GENDER). Ends on
+# the filled-in form, before Save Beneficiary - X5 double-taps it and D11
+# kills the app right after it.
+#
+# Read off the app as AU-CDD-001, 2026-10-21 (root suite,
+# registration/household-details.yaml, member-form.yaml): "Total household
+# members *" is a stepper - "-", the count (starts at 1), "+" - that takes
+# no typing; Save Household Details opens "Beneficiary Details": "First
+# name *" (prefilled with the search text), "Last name *", "Is head of
+# family? *" (ticked), "Date of birth" (or) "Age" - Year(s) / Month(s),
+# "Gender *" (Female / Male buttons, no state reported), "Mobile number"
+# (optional), Save Beneficiary. The plan asks for 5 members, so members can
+# be added later.
+- copyTextFrom:
+    text: "\\d+"
+    below: "Total household members \\*"
+    above: "Save Household Details|Next"
+    label: "Read the member count"
+- evalScript: ${output.count = Number(maestro.copiedText)}
+- runFlow:
+    when:
+      true: ${output.count < Number(ID_HOUSEHOLD_MEMBERS)}
+    commands:
+      - repeat:
+          times: ${Number(ID_HOUSEHOLD_MEMBERS) - output.count}
+          commands:
+            - tapOn:
+                text: "\\+"
+                below: "Total household members \\*"
+                label: "+ (towards ID_HOUSEHOLD_MEMBERS)"
+- runFlow:
+    when:
+      true: ${output.count > Number(ID_HOUSEHOLD_MEMBERS)}
+    commands:
+      - repeat:
+          times: ${output.count - Number(ID_HOUSEHOLD_MEMBERS)}
+          commands:
+            - tapOn:
+                text: "-"
+                below: "Total household members \\*"
+                label: "- (towards ID_HOUSEHOLD_MEMBERS)"
+- assertVisible:
+    text: ${ID_HOUSEHOLD_MEMBERS}
+    below: "Total household members \\*"
+    above: "Save Household Details|Next"
+    label: "The member count is ID_HOUSEHOLD_MEMBERS"
+- tapOn:
+    text: "Save Household Details|Next"
+    label: "Save Household Details"
+
+# --- The head ------------------------------------------------------------------------
+- extendedWaitUntil:
+    visible: "First name \\*"
+    timeout: 15000
+    label: "The head's form opens"
+- assertVisible:
+    text: ${NAME}
+    below: "First name \\*"
+    above: "Last name \\*"
+    label: "First name is prefilled with NAME"
+- tapOn:
+    below: "Last name \\*"
+    above: "Date of birth"
+    index: 0
+    label: "Focus Last name"
+- inputText: ${ID_LAST_NAME}
+- runFlow: ../common/close-keyboard.yaml
+- assertVisible:
+    text: ${ID_LAST_NAME}
+    below: "Last name \\*"
+    above: "Date of birth"
+    label: "Last name is typed"
+# HEAD_AGE (optional) replaces ID_HEAD_AGE_YEARS: the proximity suite gives
+# each of its households its own head age, the only thing that tells them
+# apart in a result list where every name reads "--".
+- evalScript: "${output.headAge = typeof HEAD_AGE == 'undefined' || String(HEAD_AGE) == '' ? String(ID_HEAD_AGE_YEARS) : String(HEAD_AGE)}"
+- runFlow:
+    file: ../../../subflows/registration/age-entry.yaml
+    env:
+      FIELD: "Year\\(s\\)"
+      VALUE: ${output.headAge}
+- runFlow:
+    when:
+      visible: "Age should be from.*"
+    commands:
+      - takeScreenshot: artifacts/head-age-refused
+      - runFlow:
+          file: ../common/fail.yaml
+          env:
+            MESSAGE: "${'The head' + String.fromCharCode(39) + 's age ' + output.headAge + ' years is refused on the form (18 to 150).'}"
+# Gender sits just above the save bar until the page scrolls (AZM build,
+# 2026-10-30).
+- scrollUntilVisible:
+    element: "Mobile number.*"
+    direction: DOWN
+    timeout: 5000
+    optional: true
+    label: "Bring Gender clear of the save bar"
+- tapOn:
+    text: ${ID_HEAD_GENDER}
+    below: "Gender \\*"
+    label: "Pick ID_HEAD_GENDER"
+- takeScreenshot: artifacts/head-${NAME}

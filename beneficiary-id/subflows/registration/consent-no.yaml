@@ -1,0 +1,74 @@
+appId: ${HCM_APP_ID}
+name: id-consent-no
+---
+# From Search Beneficiary: NAME -> Register Beneficiary -> Beneficiary
+# Location -> Care giver's consent No with a reason -> Submit -> Ready to
+# Submit? -> Submit -> Back To Search. Ends on Search Beneficiary. Saves a
+# household with no person, so no ID (X4, P1b).
+#
+# Read off the app as AU-CDD-001, 2026-10-22 (root suite,
+# registration/consent-no.yaml, consent-no-submit.yaml): No adds "Enter
+# Reason *", a text field; Submit raises "Ready to Submit?" (Submit /
+# Cancel); the success screen reads "Data recorded successfully" with Back
+# To Search only - no Token ID. The reason is CONSENT_REASON (the root
+# suite's, ASCII only).
+- runFlow:
+    file: reg-search.yaml
+    env:
+      NAME: ${NAME}
+- extendedWaitUntil:
+    visible:
+      text: "\\d+(\\.\\d+)? meters"
+      below: "Lat/Long \\*|Geo-coordinates \\*"
+    timeout: 60000
+    label: "The location is captured"
+- tapOn:
+    text: "Save Location|Next"
+    label: "Save Location"
+- extendedWaitUntil:
+    visible: "Care giver's consent"
+    timeout: 15000
+    label: "Care giver's consent opens"
+- tapOn:
+    leftOf: "No"
+    below: "Yes"
+    label: "Consent - No"
+- extendedWaitUntil:
+    visible: "Enter Reason \\*"
+    timeout: 10000
+    label: "The reason field appears"
+- tapOn:
+    below: "Enter Reason \\*"
+    index: 0
+    label: "Focus the reason"
+- assertVisible:
+    focused: true
+    below: "Enter Reason \\*"
+    label: "The reason field has focus"
+- inputText: ${CONSENT_REASON}
+- runFlow: ../common/close-keyboard.yaml
+- takeScreenshot: artifacts/consent-no-${NAME}
+- tapOn:
+    text: "Submit"
+    below: "Care giver's consent"
+    label: "Submit the consent"
+- extendedWaitUntil:
+    visible: "Ready to Submit\\?"
+    timeout: 15000
+    label: "Ready to Submit?"
+- tapOn:
+    text: "Submit"
+    below: "Ready to Submit\\?"
+    label: "Confirm"
+- extendedWaitUntil:
+    visible: "Data recorded successfully"
+    timeout: 30000
+    label: "Saved"
+- takeScreenshot: artifacts/consent-no-saved-${NAME}
+- tapOn:
+    text: "Back To Search"
+    label: "Back To Search"
+- extendedWaitUntil:
+    visible: "Register (New )?Beneficiary"
+    timeout: 15000
+    label: "Back on Search Beneficiary"

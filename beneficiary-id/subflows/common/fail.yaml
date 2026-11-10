@@ -1,0 +1,10 @@
+appId: ${HCM_APP_ID}
+name: id-fail
+---
+# Fails the flow with MESSAGE as the reason - the root suite's fail.yaml,
+# kept at this path so the cases call it as they did in the Beneficiary ID
+# Fix suite.
+- runFlow:
+    file: ../../../subflows/fail.yaml
+    env:
+      MESSAGE: ${MESSAGE}

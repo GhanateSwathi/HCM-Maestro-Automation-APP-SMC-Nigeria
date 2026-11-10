@@ -1,0 +1,120 @@
+appId: ${HCM_APP_ID}
+name: id-read-member-card
+---
+# On Household Overview: a member's ID off their card into output.id.last,
+# logged to the ledger as PERSON of HOUSEHOLD.
+#
+# Every name reads "--" on this build (read-head-id.yaml), so the member's
+# card is found another way:
+#   1. by ACK, the ID the success screen showed ("Token ID: <id>") - the
+#      card carrying it, with the member's age line (AGE_MONTHS, GENDER:
+#      "FEMALE | 2y 0m") below it, as the root suite's household-check.yaml
+#      finds a child's card;
+#   2. else by the age line alone - the last ID above it. Each case gives
+#      the members of one household different ages for this.
+# When 1 fails the card holds another ID than the success screen showed -
+# X2's failure - and 2 reads what the card holds.
+- runScript:
+    file: id.js
+    env:
+      ACTION: age
+      AGE_MONTHS: ${AGE_MONTHS}
+      GENDER: ${GENDER}
+- runFlow:
+    when:
+      true: ${output.id.failure}
+    file: ../common/fail.yaml
+    env:
+      MESSAGE: ${output.id.failure}
+- extendedWaitUntil:
+    visible: "Household Overview|Edit Individual"
+    timeout: 15000
+    label: "Household Overview is open"
+- scrollUntilVisible:
+    element: "Household Overview"
+    direction: UP
+    timeout: 10000
+    optional: true
+    label: "From the top"
+- evalScript: ${output.cardFound = false}
+
+# --- 1. The card carrying the success screen's ID ----------------------------
+- runFlow:
+    when:
+      # No "}" or "$" inside a ${...}: it ends at its first "}", and with a
+      # "$" in it Maestro leaves it unevaluated (AZM suite, P1, 2026-10-30).
+      true: ${typeof ACK != 'undefined' && String(ACK).length == 12 && !/\D/.test(ACK)}
+    commands:
+      - scrollUntilVisible:
+          element:
+            text: ${output.id.ageLine}
+            below: ${ACK}
+          direction: DOWN
+          timeout: 15000
+          optional: true
+          label: "Find the card with the success screen's ID"
+      - runFlow:
+          when:
+            visible:
+              text: ${output.id.ageLine}
+              below: ${ACK}
+          commands:
+            - copyTextFrom:
+                text: ${ACK}
+                label: "Read the member's ID (the card with the success screen's ID)"
+            - evalScript: ${output.cardFound = true}
+
+# --- 2. The last ID above the member's age line ------------------------------
+- runFlow:
+    when:
+      true: ${!output.cardFound}
+    commands:
+      - scrollUntilVisible:
+          element: "Household Overview"
+          direction: UP
+          timeout: 10000
+          optional: true
+          label: "From the top again"
+      - scrollUntilVisible:
+          element: ${output.id.ageLine}
+          direction: DOWN
+          timeout: 15000
+          optional: true
+          label: "Find the member's age line"
+      - runFlow:
+          when:
+            notVisible: ${output.id.ageLine}
+          commands:
+            - takeScreenshot: artifacts/member-card-missing
+            - runFlow:
+                file: ../common/fail.yaml
+                env:
+                  MESSAGE: "${'No card on Household Overview shows ' + PERSON + String.fromCharCode(39) + 's ID or age (' + output.id.age + ').'}"
+      - evalScript: ${output.tagIdx = 0}
+      - repeat:
+          times: 30
+          while:
+            visible:
+              text: "\\d{12}|No Beneficiary ID"
+              above: ${output.id.ageLine}
+              index: ${output.tagIdx + 1}
+          commands:
+            - evalScript: ${output.tagIdx = output.tagIdx + 1}
+      - copyTextFrom:
+          text: "\\d{12}|No Beneficiary ID"
+          above: ${output.id.ageLine}
+          index: ${output.tagIdx}
+          label: "Read the member's ID (the last ID above the age line)"
+- takeScreenshot: artifacts/member-card
+- runScript:
+    file: id.js
+    env:
+      ACTION: card
+      PERSON: ${PERSON}
+      HOUSEHOLD: ${HOUSEHOLD}
+- runFlow:
+    when:
+      true: ${output.id.failure}
+    file: ../common/fail.yaml
+    env:
+      MESSAGE: ${output.id.failure}

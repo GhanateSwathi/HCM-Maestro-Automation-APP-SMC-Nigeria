@@ -1,0 +1,22 @@
+Case,Name,Phase,Flow,Reallocated,Build
+SETUP,Fixture households QAID-FIX-E1 and E2,-,setup/fixtures.yaml,,mhbase-uat
+P1,Register twice from one search screen,"A, B",cases/P1,1,mhbase-uat
+P1b,Other ways back to search,A,cases/P1b,,mhbase-uat
+P2,Register button on the older search screen,A,cases/P2,,mhbase-uat
+P3,Popup before the ID count loads,A,cases/P3,,mhbase-uat
+P4,Re-download IDs before sync,A,cases/P4,,mhbase-uat
+P5,Six people in a row,A,cases/P5,,mhbase-uat
+X1,Stale ID on Add Member,"A, B",cases/X1,1,mhbase-uat
+X2,Success screen shows the saved ID,"A, B",cases/X1,,mhbase-uat
+X3,Abandoned form uses no ID,A,cases/X3,,mhbase-uat
+X4,Consent No uses no ID,A,cases/X4,,mhbase-uat
+X5,Double-tap Save,A,cases/X5,,mhbase-uat
+X6,Offline registration,A,cases/X6,,mhbase-uat
+X8,Clear data after sync,A,cases/X8,,mhbase-uat
+X9,"Same CDD, two devices, synced","A, C",cases/X9,,mhbase-uat
+X9b,"Same CDD, two devices, sign-ins 1 min apart","A, C",cases/X9b,,mhbase-uat
+D1,Five heads from one search screen,A,cases/D1,4,mhbase-uat
+D2,Deep screen stack,A,cases/D2,,mhbase-uat
+D5,"Same CDD, two devices, unsynced","A, C",cases/D5,,mhbase-uat
+D6,Log out and back in,A,cases/D6,,mhbase-uat
+D11,App killed right after Save,A,cases/D11,,mhbase-uat

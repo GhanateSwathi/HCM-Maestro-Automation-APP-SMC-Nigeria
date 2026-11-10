@@ -1,0 +1,51 @@
+appId: ${HCM_APP_ID}
+name: id-search-field
+---
+# On Search Beneficiary: replace whatever the search field holds with TEXT,
+# then close the keyboard. Typed again, up to 3 times, when what landed is
+# not TEXT.
+#
+# The field has no id. Empty, it is its hint ("Name of the individual"),
+# tapped as the root suite does (search-and-register.yaml); holding text, it
+# is the first thing between "Search by ID" and Register Beneficiary. A tap
+# drops the cursor anywhere in the text and eraseText deletes only before
+# it, so the cursor is moved to the end first (root suite, age-entry.yaml).
+# P1 and D1 come back to a search screen that may still show the last name
+# typed. With two emulators and 0.5 GB of RAM free, QAID-X9-A once landed as
+# QIDD-X9-A (AZM build, X9, 2026-11-03 12:07) - hence the retry; a retry
+# starts on the garbled text, which the clear removes.
+- retry:
+    maxRetries: 3
+    commands:
+      - runFlow:
+          when:
+            visible: "Name of the individual"
+          commands:
+            - tapOn:
+                text: "Name of the individual"
+                label: "Focus the empty search field"
+      - runFlow:
+          when:
+            notVisible: "Name of the individual"
+          commands:
+            - tapOn:
+                below: "Search by ID"
+                above: "Register (New )?Beneficiary"
+                index: 0
+                label: "Focus the search field"
+            - repeat:
+                times: 30
+                commands:
+                  - pressKey: Remote Dpad Right
+            - eraseText: 40
+      - assertVisible:
+          focused: true
+          below: "Search by ID"
+          above: "Register (New )?Beneficiary"
+          label: "The search field has focus"
+      - inputText: ${TEXT}
+      - runFlow: ../common/close-keyboard.yaml
+      - assertVisible:
+          text: ${TEXT}
+          below: "Search by ID"
+          label: "The search text is TEXT"

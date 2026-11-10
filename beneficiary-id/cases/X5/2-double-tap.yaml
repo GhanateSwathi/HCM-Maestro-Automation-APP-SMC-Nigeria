@@ -1,0 +1,41 @@
+appId: ${HCM_APP_ID}
+name: X5 part 2 - double-tap Submit on the head's form
+tags:
+  - phase-a
+---
+# X5 part 2 (see 1-start.yaml), from the home screen. Ends on the home screen.
+- extendedWaitUntil:
+    visible: "Registration & Delivery|Stock Balance"
+    timeout: 15000
+    label: "Part 1 left the app on the home screen"
+- runFlow: ../../subflows/registration/open-search.yaml
+- runFlow:
+    file: ../../subflows/registration/reg-start.yaml
+    env:
+      NAME: "QAID-X5-A-${QAID_RUN}"
+- runFlow:
+    file: ../../subflows/registration/reg-details.yaml
+    env:
+      NAME: "QAID-X5-A-${QAID_RUN}"
+# The head's form saves with Save Beneficiary on this build (the plan's
+# "Submit"); it goes straight to Household Overview (reg-submit.yaml).
+- doubleTapOn:
+    text: "Save Beneficiary|Submit"
+    label: "Double-tap Save Beneficiary"
+- extendedWaitUntil:
+    visible: "Household Overview|Edit Individual"
+    timeout: 30000
+    label: "Household Overview opens"
+- takeScreenshot: artifacts/x5-after-double-tap
+- runFlow:
+    file: ../../subflows/id/read-card.yaml
+    env:
+      PERSON: "QAID-X5-A-${QAID_RUN} ${ID_LAST_NAME}"
+      HOUSEHOLD: "QAID-X5-A-${QAID_RUN}"
+- runScript:
+    file: ../../subflows/id/id.js
+    env:
+      ACTION: var
+      NAME: X5_ID_A
+      VALUE: ${output.id.last}
+- runFlow: ../../subflows/common/go-home.yaml

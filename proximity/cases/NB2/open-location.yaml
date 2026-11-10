@@ -1,0 +1,21 @@
+appId: ${HCM_APP_ID}
+name: NB2 - open a fresh search screen and start registering NAME
+tags:
+  - proximity
+---
+# B6: ends on Beneficiary Location, where the app captures the GPS fix for
+# NAME's household - does it show the lat/long, or only the fix's accuracy?
+# Saves nothing; leave with the side menu (system Back here closed the app
+# on the AZM build - B7 - which is worth a look on this one too).
+- runFlow: ../../subflows/reopen-search.yaml
+- runFlow:
+    file: ../../../beneficiary-id/subflows/registration/reg-search.yaml
+    env:
+      NAME: ${NAME}
+- extendedWaitUntil:
+    visible:
+      text: "\\d+(\\.\\d+)? meters"
+    timeout: 60000
+    optional: true
+    label: "The location is captured"
+- takeScreenshot: artifacts/location-${NAME}

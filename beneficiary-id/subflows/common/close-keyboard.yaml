@@ -1,0 +1,17 @@
+appId: ${HCM_APP_ID}
+name: id-close-keyboard
+---
+# Closes the on-screen keyboard if it is up, with the keyboard's own Back
+# key (android:id/input_method_nav_back) - the root suite's way. Never
+# hideKeyboard: on Android it is a Back press, and when the keyboard is
+# already going down the Back reaches the app (root suite, CLAUDE.md).
+- runFlow:
+    when:
+      visible:
+        id: "android:id/input_method_nav_back"
+    commands:
+      - tapOn:
+          id: "android:id/input_method_nav_back"
+          label: "Close the keyboard"
+      - waitForAnimationToEnd:
+          timeout: 2000

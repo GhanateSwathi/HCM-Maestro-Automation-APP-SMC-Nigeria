@@ -1,0 +1,70 @@
+appId: ${HCM_APP_ID}
+name: P1 part 2 - register A, system Back
+tags:
+  - phase-a
+  - phase-b
+---
+# P1 part 2 (see 1-start.yaml), from the home screen: register QAID-P1-A,
+# then the phone's system Back - not the Back link - to the search screen.
+# Ends there.
+- extendedWaitUntil:
+    visible: "Registration & Delivery|Stock Balance"
+    timeout: 15000
+    label: "Part 1 left the app on the home screen"
+- runFlow: ../../subflows/registration/open-search.yaml
+- runFlow:
+    file: ../../subflows/registration/register-household.yaml
+    env:
+      NAME: "QAID-P1-A-${QAID_RUN}"
+- runFlow:
+    file: ../../subflows/id/read-card.yaml
+    env:
+      PERSON: "QAID-P1-A-${QAID_RUN} ${ID_LAST_NAME}"
+      HOUSEHOLD: "QAID-P1-A-${QAID_RUN}"
+- runScript:
+    file: ../../subflows/id/id.js
+    env:
+      ACTION: var
+      NAME: P1_ID_A
+      VALUE: ${output.id.last}
+- takeScreenshot: artifacts/p1-a-overview
+
+- back
+- extendedWaitUntil:
+    visible: "Register (New )?Beneficiary"
+    timeout: 15000
+    optional: true
+    label: "Back on Search Beneficiary"
+- takeScreenshot: artifacts/p1-after-system-back
+# The plan expects the same screen "with A's name still typed". On the AZM
+# build (2026-10-30, two runs) the field came back empty. On this build
+# Back from Household Overview may walk back through the form pages
+# instead (root suite, registration/go-home.yaml): then that is noted, and
+# to-search.yaml reaches a search screen for B.
+- evalScript: ${output.where = 'another screen'}
+- runFlow:
+    when:
+      visible: "First name \\*|Total household members \\*|Care giver's consent|Beneficiary Location"
+    commands:
+      - evalScript: ${output.where = 'a page of A' + String.fromCharCode(39) + 's form'}
+- runFlow:
+    when:
+      visible: "Register (New )?Beneficiary"
+    commands:
+      - evalScript: ${output.where = 'the search screen with the field empty'}
+- runFlow:
+    when:
+      visible:
+        text: "QAID-P1-A-${QAID_RUN}"
+        below: "Search by ID"
+    commands:
+      - evalScript: ${output.where = 'the search screen with A name still typed'}
+- runScript:
+    file: ../../subflows/id/id.js
+    env:
+      ACTION: note
+      TEXT: "${'System Back from A' + String.fromCharCode(39) + 's Household Overview went to ' + output.where + ' (the plan expects the search screen with A name still typed)'}"
+- runFlow:
+    when:
+      notVisible: "Register (New )?Beneficiary"
+    file: ../../subflows/registration/to-search.yaml

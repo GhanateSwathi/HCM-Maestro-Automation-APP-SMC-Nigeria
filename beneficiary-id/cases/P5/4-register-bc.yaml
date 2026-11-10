@@ -1,0 +1,24 @@
+appId: ${HCM_APP_ID}
+name: P5 part 4 - back to search, households B and C
+tags:
+  - phase-a
+---
+# P5 part 4 (see 1-start.yaml), from A's Household Overview: system Back to
+# the search screen -> B -> back to search -> C. Ends on the home screen.
+- extendedWaitUntil:
+    visible: "Household Overview|Edit Individual"
+    timeout: 15000
+    label: "Part 3 left the app on A's Household Overview"
+- runFlow: ../../subflows/registration/to-search.yaml
+- runFlow:
+    file: ../../subflows/registration/register-and-read.yaml
+    env:
+      NAME: "QAID-P5-B-${QAID_RUN}"
+      KEY: P5_ID_B
+- runFlow: ../../subflows/registration/to-search.yaml
+- runFlow:
+    file: ../../subflows/registration/register-and-read.yaml
+    env:
+      NAME: "QAID-P5-C-${QAID_RUN}"
+      KEY: P5_ID_C
+- runFlow: ../../subflows/common/go-home.yaml

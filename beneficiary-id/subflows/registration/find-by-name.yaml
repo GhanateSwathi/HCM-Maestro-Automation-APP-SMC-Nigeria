@@ -1,0 +1,39 @@
+appId: ${HCM_APP_ID}
+name: id-find-by-name
+---
+# On Search Beneficiary (Search by ID off): search the name TEXT and count
+# the households listed into output.households (0, 1, or 2 for "two or
+# more"). Ends on the search screen with the results.
+#
+# A result is a card with "Open" (root suite, registration/open-household
+# .yaml, 2026-10-21); its name reads "--" on this build, so the cards are
+# counted, never matched by name. The names here end in the run's tag
+# (QAID_RUN), so an earlier run's household - on the device, or downloaded
+# with the boundary's records - is not counted.
+- runFlow:
+    file: search-field.yaml
+    env:
+      TEXT: ${TEXT}
+- extendedWaitUntil:
+    visible:
+      text: "Open"
+      below: "Search by ID"
+    timeout: 8000
+    optional: true
+    label: "Search answers"
+- evalScript: ${output.households = 0}
+- runFlow:
+    when:
+      visible:
+        text: "Open"
+        below: "Search by ID"
+    commands:
+      - evalScript: ${output.households = 1}
+- runFlow:
+    when:
+      visible:
+        text: "Open"
+        below: "Search by ID"
+        index: 1
+    commands:
+      - evalScript: ${output.households = 2}

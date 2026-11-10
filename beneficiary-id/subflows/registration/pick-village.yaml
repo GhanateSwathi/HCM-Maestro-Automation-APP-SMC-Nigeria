@@ -1,0 +1,25 @@
+appId: ${HCM_APP_ID}
+name: id-pick-village
+---
+# On "Select Your Village": REGISTRATION_VILLAGE when it is set, else the
+# first village offered - the root suite's rule (open-registration.yaml),
+# so these cases register where the root suite's do. Every part of a case
+# picks the same village.
+- runFlow:
+    when:
+      true: ${typeof REGISTRATION_VILLAGE != 'undefined' && String(REGISTRATION_VILLAGE).trim() != '' && REGISTRATION_VILLAGE != 'undefined'}
+    commands:
+      - tapOn:
+          text: ${REGISTRATION_VILLAGE}
+          below: "Select Your Village"
+          label: "Open REGISTRATION_VILLAGE"
+- runFlow:
+    when:
+      true: ${typeof REGISTRATION_VILLAGE == 'undefined' || String(REGISTRATION_VILLAGE).trim() == '' || REGISTRATION_VILLAGE == 'undefined'}
+    commands:
+      - tapOn:
+          text: ".+"
+          below: "Select Your Village"
+          above: "Want to choose another Village\\?|Choose Another Village"
+          index: 0
+          label: "Open the first village offered"

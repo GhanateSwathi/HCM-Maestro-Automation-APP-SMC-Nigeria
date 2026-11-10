@@ -1,0 +1,60 @@
+appId: ${HCM_APP_ID}
+name: id-sign-in-cdd
+---
+# Signs the CDD in only when the app is not signed in already, and never
+# clears the app (launch-app.yaml here, not the root suite's). Ends on
+# whatever follows sign-in - boundary selection, a boundary data notice, or
+# home; home.yaml takes it from there.
+#
+# Why not the root suite's sign-in/cdd.yaml: it launches with clearState,
+# which drops the device's beneficiary IDs, and D6 (log out and back in) and
+# X9b (sign-ins a minute apart) are about what survives a sign-in.
+#
+# On the AZM builds a signed-in app showed its login screen for a moment on
+# launch (two emulators, 2026-11-03), so a login screen is given 8 s to pass
+# before signing in. Credentials come from .env through the root suite's
+# login.yaml, never typed here.
+- runFlow: launch-app.yaml
+- extendedWaitUntil:
+    visible: "User ID.*|(ADMIN_)?Health Facility.*|Registration & Delivery|Stock Balance|Allow Permissions|Open navigation menu|No data found!|Data found!|Failed to check data in server"
+    timeout: 60000
+    label: "The login screen, or a signed-in screen"
+- runFlow:
+    when:
+      visible: "User ID.*"
+    commands:
+      - extendedWaitUntil:
+          visible: "(ADMIN_)?Health Facility.*|Registration & Delivery|Stock Balance|Allow Permissions|Open navigation menu"
+          timeout: 8000
+          optional: true
+          label: "A signed-in app passes its login screen"
+- runFlow:
+    when:
+      visible: "User ID.*"
+    file: ../../../subflows/login.yaml
+    env:
+      LOGIN_USER_ID: ${HCM_CDD_USER_ID}
+      LOGIN_PASSWORD: ${HCM_CDD_PASSWORD}
+# Sign-in pulls the project down before handing over the UI - about a
+# minute on mhbase, 3 on SMC-MC UAT (root suite, sign-in/cdd.yaml) - and
+# then holds on Allow Permissions until each permission is granted. With
+# launchApp's permissions already granted the screen can pass by itself, so
+# it is given 8 s first.
+- extendedWaitUntil:
+    visible: "Allow Permissions|(ADMIN_)?Health Facility.*|Registration & Delivery|Stock Balance|Open navigation menu|No data found!|Data found!|Failed to check data in server"
+    timeout: 300000
+    label: "Post-login sync completes"
+- runFlow:
+    when:
+      visible: "Allow Permissions"
+    commands:
+      - extendedWaitUntil:
+          visible: "(ADMIN_)?Health Facility.*|Registration & Delivery|Stock Balance"
+          timeout: 8000
+          optional: true
+          label: "Allow Permissions passes on its own"
+- runFlow:
+    when:
+      visible: "Allow Permissions"
+    file: ../../../subflows/allow-permissions.yaml
+- takeScreenshot: artifacts/cdd-after-sign-in

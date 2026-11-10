@@ -1,0 +1,60 @@
+appId: ${HCM_APP_ID}
+name: id-launch-app
+---
+# Opens the app WITHOUT clearing it. The beneficiary ID pool lives on the
+# device, and the root suite's subflows/launch-app.yaml (clearState: true,
+# used by every root flow's sign-in) would drop it - the cases count IDs
+# across sign-ins, so they must find the pool where the last part left it.
+# A signed-in app comes back signed in; an app never opened shows its login
+# screen.
+#
+# launchApp's defaults stop the app first and grant every runtime
+# permission. Harmless here: these cases are about IDs, not permissions
+# (Prompt 1's flows test the permission path), and a signed-in app holds
+# them already.
+#
+# The system dialogs are the root suite's (subflows/launch-app.yaml): a
+# starved emulator raises "System UI isn't responding" (Wait) or "Bluetooth
+# keeps stopping" (Close). "Internet not available. Try later." is the app's
+# own start-up config request failing (2026-10-26 on mhbase; also on the
+# Kebbi AZM build, 2026-11-03): close it and relaunch, up to twice.
+- launchApp:
+    label: "Launch the app, keeping its data"
+- extendedWaitUntil:
+    visible: "User ID.*|Allow .*\\?|Let app always run in background.*|Turn on|System UI isn't responding|Bluetooth keeps stopping|Allow Permissions|Internet not available.*|CORE_COMMON_CONNECTION_LABEL|(ADMIN_)?Health Facility.*|Registration & Delivery|Stock Balance|Open navigation menu"
+    timeout: 60000
+    label: "Wait for the app's first screen"
+- runFlow:
+    when:
+      visible: "System UI isn't responding"
+    commands:
+      - tapOn:
+          id: "android:id/aerr_wait"
+          label: "Wait out a System UI ANR (emulator, not the app)"
+- runFlow:
+    when:
+      visible: "Bluetooth keeps stopping"
+    commands:
+      - tapOn:
+          id: "android:id/aerr_close"
+          label: "Close the crashed Bluetooth service (emulator, not the app)"
+- runFlow: ../../../subflows/accept-system-dialogs.yaml
+- repeat:
+    times: 2
+    while:
+      visible: "Internet not available.*"
+    label: "Relaunch past a no-internet notice"
+    commands:
+      - takeScreenshot: artifacts/launch-internet-not-available
+      - tapOn:
+          text: "Close"
+          label: "Close the no-internet notice"
+      - stopApp
+      - launchApp:
+          label: "Relaunch - the app could not load its config"
+      - extendedWaitUntil:
+          visible: "User ID.*|Allow .*\\?|Let app always run in background.*|Turn on|Allow Permissions|Internet not available.*|CORE_COMMON_CONNECTION_LABEL|(ADMIN_)?Health Facility.*|Registration & Delivery|Stock Balance|Open navigation menu"
+          timeout: 60000
+          label: "Wait for the app's first screen again"
+      - runFlow: ../../../subflows/accept-system-dialogs.yaml
+- runFlow: connection-dialog.yaml

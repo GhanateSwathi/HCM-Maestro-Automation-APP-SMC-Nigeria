@@ -1,0 +1,18 @@
+appId: ${HCM_APP_ID}
+name: id-reg-submit
+---
+# "Register a household", last part (see reg-start.yaml): Save Beneficiary
+# on the filled-in head's form. Ends on Household Overview. Creates the
+# household and uses an ID - IRREVERSIBLE.
+#
+# Read off the app as AU-CDD-001, 2026-10-21 (root suite,
+# registration/register-household.yaml): the head's Save Beneficiary goes
+# straight to Household Overview - no "Ready to submit" in between (members
+# get one, add-member.yaml).
+- tapOn:
+    text: "Save Beneficiary|Submit"
+    label: "Save Beneficiary"
+- extendedWaitUntil:
+    visible: "Household Overview|Edit Individual"
+    timeout: 30000
+    label: "Household Overview opens"

@@ -1,0 +1,60 @@
+appId: ${HCM_APP_ID}
+name: NB5 - QA's manual case - register NAME, back to Search, Near by on
+tags:
+  - proximity
+---
+# QA's manual steps (2026-11-06), as a tester does them:
+#   the village downloaded (NB1 part 1) -> Search Beneficiary -> register a
+#   household -> come back to the search screen -> switch on Near by
+#   households.
+# Expected: the new household listed. QA saw it missing on the AZM build.
+# NAME is the first name (typed as the search text), ID_LAST_NAME the family
+# name (-Set ID_LAST_NAME=...), HEAD_AGE the head's age (default 131 in
+# scripts/run-sequence.ps1) - how the household is recognised, since every
+# name in the list reads "--". Starts on home or Search Beneficiary; ends on
+# the Near by list for scripts/nearby-list.py. IRREVERSIBLE: creates a
+# household and uses an ID.
+- runFlow:
+    when:
+      notVisible: "Registration & Delivery|Stock Balance"
+    file: ../../../beneficiary-id/subflows/common/go-home.yaml
+- runFlow: ../../../beneficiary-id/subflows/registration/open-search.yaml
+- runFlow:
+    file: ../../../beneficiary-id/subflows/registration/register-and-read.yaml
+    env:
+      NAME: ${NAME}
+      KEY: NB5_ID
+      HEAD_AGE: ${HEAD_AGE}
+- takeScreenshot: artifacts/nb5-overview
+# Come back to the search screen the way a tester does: Back.
+- back
+- extendedWaitUntil:
+    visible: "Register (New )?Beneficiary"
+    timeout: 15000
+    optional: true
+    label: "Back on Search Beneficiary"
+- takeScreenshot: artifacts/nb5-after-back
+- runFlow:
+    when:
+      notVisible: "Register (New )?Beneficiary"
+    commands:
+      - evalScript: "${console.log('NOTE|System Back from Household Overview did not return to Search Beneficiary - reached it another way')}"
+      - runFlow: ../../../beneficiary-id/subflows/registration/to-search.yaml
+- extendedWaitUntil:
+    visible: "Near by households"
+    timeout: 15000
+    label: "Near by households is shown"
+- runFlow: ../../subflows/nearby-switch.yaml
+- extendedWaitUntil:
+    visible:
+      text: "Open"
+      below: "Search by ID"
+    timeout: 20000
+    optional: true
+    label: "Near by results show"
+- runFlow:
+    file: ../../subflows/is-listed.yaml
+    env:
+      AGE: ${HEAD_AGE}
+- evalScript: "${console.log('NOTE|' + NAME + ' on the first screen of the plain Near by list: ' + (output.listed ? 'yes' : 'no - scripts/nearby-list.py records the whole list'))}"
+- takeScreenshot: artifacts/nb5-nearby-on

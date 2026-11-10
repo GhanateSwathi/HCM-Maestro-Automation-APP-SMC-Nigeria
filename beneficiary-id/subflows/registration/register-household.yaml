@@ -1,0 +1,15 @@
+appId: ${HCM_APP_ID}
+name: id-register-household
+---
+# The plan's "Register a household", from Search Beneficiary: NAME as the
+# search text -> Register Beneficiary -> Beneficiary Location -> consent
+# Yes -> ID_HOUSEHOLD_MEMBERS -> the head (NAME ID_LAST_NAME,
+# ID_HEAD_AGE_YEARS, ID_HEAD_GENDER) -> Save Beneficiary. Ends on Household
+# Overview. Creates the household and uses an ID - IRREVERSIBLE.
+#
+# In three parts so a case can stop part-way: reg-start.yaml (search text to
+# consent), reg-details.yaml (member count and the head's form) and
+# reg-submit.yaml. ON_POPUP (see reg-search.yaml) passes through.
+- runFlow: reg-start.yaml
+- runFlow: reg-details.yaml
+- runFlow: reg-submit.yaml

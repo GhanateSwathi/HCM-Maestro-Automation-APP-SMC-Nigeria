@@ -1,0 +1,86 @@
+appId: ${HCM_APP_ID}
+name: X1 part 2 - H1's Overview, Back link, register H2, back to H1
+tags:
+  - phase-a
+  - phase-b
+---
+# X1 part 2 (see 1-start.yaml), from the home screen. Ends on H1's
+# Household Overview.
+#
+# H1 is the fixture QAID-FIX-E1 (setup/fixtures.yaml). Every name reads "--"
+# on Household Overview on this build, so H1's overview is recognised by
+# its head's ID, read when H1 is first opened (VAR X1_ID_E1 - part 4's
+# Search by ID for M expects that household).
+- extendedWaitUntil:
+    visible: "Registration & Delivery|Stock Balance"
+    timeout: 15000
+    label: "Part 1 left the app on the home screen"
+- runFlow: ../../subflows/registration/open-search.yaml
+- runFlow:
+    file: ../../subflows/registration/open-household.yaml
+    env:
+      HOUSEHOLD: QAID-FIX-E1
+- runFlow: ../../subflows/id/read-head-id.yaml
+- evalScript: ${output.e1 = output.id.head}
+- runScript:
+    file: ../../subflows/id/id.js
+    env:
+      ACTION: var
+      NAME: X1_ID_E1
+      VALUE: ${output.e1}
+- takeScreenshot: artifacts/x1-h1-overview
+- tapOn:
+    text: "Back"
+    above: "Household Overview"
+    label: "The Overview's Back link"
+- extendedWaitUntil:
+    visible: "Register (New )?Beneficiary"
+    timeout: 15000
+    label: "A search screen opens"
+- runFlow:
+    file: ../../subflows/registration/register-and-read.yaml
+    env:
+      NAME: "QAID-X1-H2-${QAID_RUN}"
+      KEY: X1_ID_H2
+- back
+- waitForAnimationToEnd:
+    timeout: 3000
+- back
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: artifacts/x1-after-two-backs
+# H1's overview, open before H2 was registered, is the plan's stale screen.
+# On this build Back from an overview may walk back through the form pages
+# instead (root suite, registration/go-home.yaml): then no overview shows.
+- evalScript: ${output.stale = false}
+- runFlow:
+    when:
+      visible: "Household Overview|Edit Individual"
+    commands:
+      - runFlow: ../../subflows/id/read-head-id.yaml
+      - evalScript: ${output.stale = String(output.id.head) == String(output.e1)}
+- runFlow:
+    when:
+      true: ${output.stale}
+    commands:
+      - runScript:
+          file: ../../subflows/id/id.js
+          env:
+            CASE: ""
+            ACTION: note
+            TEXT: "Two system Backs from H2's Overview reached H1's Overview, which was open before H2 was registered (the plan's stale screen)"
+- runFlow:
+    when:
+      true: ${!output.stale}
+    commands:
+      - runScript:
+          file: ../../subflows/id/id.js
+          env:
+            CASE: ""
+            ACTION: note
+            TEXT: "NOT REPRODUCIBLE on this build - two system Backs from H2's Overview did not reach H1's Overview, so the stale Overview of the plan does not exist. H1 was opened afresh for M"
+      - runFlow: ../../subflows/registration/to-search.yaml
+      - runFlow:
+          file: ../../subflows/registration/open-household.yaml
+          env:
+            HOUSEHOLD: QAID-FIX-E1

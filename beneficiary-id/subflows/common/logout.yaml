@@ -1,0 +1,29 @@
+appId: ${HCM_APP_ID}
+name: id-logout
+---
+# Logs the CDD out, without syncing first - D6 and X9b log out as a field
+# user would, and the case decides when to sync. Ends on the login screen.
+# Logging out keeps the app's data; only clearState (X8) drops it.
+#
+# Read off the app as AU-SAT-001, 2026-10-23 (root suite,
+# sync-and-logout.yaml): the side menu's Logout asks "Are you sure you want
+# to end the session?" with No and Ok. The AZM Kebbi build asked "...Are you
+# sure you want to logout?" - both are matched.
+- runFlow: go-home.yaml
+- runFlow: ../../../subflows/open-side-menu.yaml
+- tapOn:
+    text: "Logout"
+    label: "Logout"
+- extendedWaitUntil:
+    visible: "Are you sure you want to end the session\\?|.*Are you sure you want to logout\\?"
+    timeout: 10000
+    label: "Logout asks to confirm"
+- tapOn:
+    text: "Ok"
+    below: "Are you sure you want to end the session\\?|.*Are you sure you want to logout\\?"
+    label: "Ok - end the session"
+- extendedWaitUntil:
+    visible: "User ID.*"
+    timeout: 60000
+    label: "On the login screen"
+- takeScreenshot: artifacts/logged-out

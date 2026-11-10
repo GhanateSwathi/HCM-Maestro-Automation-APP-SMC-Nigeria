@@ -1,0 +1,20 @@
+appId: ${HCM_APP_ID}
+name: id-read-card
+---
+# On Household Overview: the head of household's ID off their card into
+# output.id.last, logged to the ledger as PERSON of HOUSEHOLD. PERSON is
+# the full name typed, "<first> <last>" - the ledger's, not a selector: the
+# card shows "--" for it (read-head-id.yaml). Members: read-member-card.yaml.
+- runFlow: read-head-id.yaml
+- runScript:
+    file: id.js
+    env:
+      ACTION: card
+      PERSON: ${PERSON}
+      HOUSEHOLD: ${HOUSEHOLD}
+- runFlow:
+    when:
+      true: ${output.id.failure}
+    file: ../common/fail.yaml
+    env:
+      MESSAGE: ${output.id.failure}

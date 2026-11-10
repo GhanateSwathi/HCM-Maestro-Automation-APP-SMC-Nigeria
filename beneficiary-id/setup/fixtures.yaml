@@ -1,0 +1,43 @@
+appId: ${HCM_APP_ID}
+name: "Beneficiary ID setup - fixture households"
+tags:
+  - setup
+---
+# Not a test case: registers the households the cases open as "an existing
+# household", each from its own, fresh search screen, so neither is a
+# stale-screen registration:
+#
+#   QAID-FIX-E1  X1's H1 (member count ID_HOUSEHOLD_MEMBERS, room for Add
+#                Members), P2, D2's S1
+#   QAID-FIX-E2  D2's second household
+#
+# Run it ONCE per CDD and village: the cases find the fixtures by name, and
+# open-household.yaml fails when a search lists two. Writes two households
+# to UAT and uses two IDs. Run through run-case.ps1 (-Case SETUP), its
+# LEDGER lines go into the ID ledger as case SETUP.
+- setAirplaneMode: disabled
+- runFlow: ../subflows/common/sign-in-cdd.yaml
+- runFlow: ../subflows/common/home.yaml
+- runFlow: ../subflows/registration/open-search.yaml
+- runFlow:
+    file: ../subflows/registration/register-household.yaml
+    env:
+      NAME: QAID-FIX-E1
+- runFlow:
+    file: ../subflows/id/read-card.yaml
+    env:
+      PERSON: "QAID-FIX-E1 ${ID_LAST_NAME}"
+      HOUSEHOLD: QAID-FIX-E1
+- runFlow: ../subflows/common/go-home.yaml
+- runFlow: ../subflows/registration/open-search.yaml
+- runFlow:
+    file: ../subflows/registration/register-household.yaml
+    env:
+      NAME: QAID-FIX-E2
+- runFlow:
+    file: ../subflows/id/read-card.yaml
+    env:
+      PERSON: "QAID-FIX-E2 ${ID_LAST_NAME}"
+      HOUSEHOLD: QAID-FIX-E2
+- runFlow: ../subflows/common/go-home.yaml
+- runFlow: ../subflows/common/sync-data.yaml

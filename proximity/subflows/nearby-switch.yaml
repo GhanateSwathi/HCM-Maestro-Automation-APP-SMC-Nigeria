@@ -1,0 +1,20 @@
+appId: ${HCM_APP_ID}
+name: prox-nearby-switch
+---
+# On Search Beneficiary: tap the Near by households switch (on, or off when
+# it is on). It reports no state; the caller checks what the list does.
+#
+# Read off the app as AU-CDD-001, 2026-10-27 (root suite,
+# registration/search-nearby.yaml): "Near by households" and "Search by ID"
+# are each a text-less switch left of its label; Near by households' is the
+# first one left of its label, below the subtitle. The switch stays disabled
+# until the device has a position (PROXIMITY-CASES.md F6), so the screen is
+# given a moment first. (The AZM suite tapped a fixed point, 8%,29%.)
+- waitForAnimationToEnd:
+    timeout: 5000
+- tapOn:
+    leftOf: "Near by households"
+    below: "Search beneficiaries registered.*"
+    above: "Search by ID"
+    index: 0
+    label: "The Near by households switch"

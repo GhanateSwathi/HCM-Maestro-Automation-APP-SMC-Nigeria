@@ -1,0 +1,68 @@
+appId: ${HCM_APP_ID}
+name: id-open-search
+---
+# From the home screen: Registration & Delivery -> the village
+# (pick-village.yaml) -> Search Beneficiary, its field empty.
+#
+# Read off the app as AU-CDD-001, 2026-10-21 (root suite,
+# registration/open-registration.yaml): the card opens "Select Your
+# Village", listing the communities chosen at sign-in over "Want to choose
+# another Village?". A village opens "Search Beneficiary": the village's
+# name, "Near by households" / "Search by ID", a field with the hint "Name
+# of the individual", and "Register Beneficiary" at the foot. The CDD's home
+# opens with Stock Balance on top, so the card may need a scroll.
+- runFlow:
+    when:
+      notVisible: "Registration & Delivery"
+    commands:
+      - scrollUntilVisible:
+          element: "Registration & Delivery"
+          direction: DOWN
+          timeout: 10000
+          optional: true
+          label: "Find Registration & Delivery below"
+- runFlow:
+    when:
+      notVisible: "Registration & Delivery"
+    commands:
+      - scrollUntilVisible:
+          element: "Registration & Delivery"
+          direction: UP
+          timeout: 10000
+          optional: true
+          label: "Find Registration & Delivery above"
+- tapOn:
+    text: "Registration & Delivery"
+    label: "Open Registration & Delivery"
+# Just after airplane mode comes on, the tap can land as the app's
+# no-connection dialog opens (AZM build, P4, 2026-11-02 15:05): close the
+# dialog and tap again.
+- extendedWaitUntil:
+    visible: "Select Your Village|CORE_COMMON_CONNECTION_LABEL|Connection Alert|No internet.*"
+    timeout: 10000
+    optional: true
+    label: "Select Your Village opens"
+- runFlow: ../common/connection-dialog.yaml
+- runFlow:
+    when:
+      notVisible: "Select Your Village"
+    commands:
+      - tapOn:
+          text: "Registration & Delivery"
+          label: "Open Registration & Delivery again"
+- extendedWaitUntil:
+    visible: "Select Your Village"
+    timeout: 15000
+    label: "Select Your Village opens"
+- runFlow: pick-village.yaml
+# 30 s: on the software-rendered emulator the screen took over 15 s once
+# (AZM build, D11, 2026-11-02 16:37).
+- extendedWaitUntil:
+    visible: "Name of the individual"
+    timeout: 30000
+    label: "Search Beneficiary opens, its field empty"
+- extendedWaitUntil:
+    visible: "Near by households"
+    timeout: 15000
+    optional: true
+    label: "The search screen finishes loading"

@@ -1,0 +1,46 @@
+appId: ${HCM_APP_ID}
+name: id-to-search
+---
+# System Back until a search screen, from wherever a registration left the
+# app (Household Overview, a success screen). Never presses Back on the
+# home screen - that leaves the app: from home, or from Select Your Village,
+# it opens the search screen afresh instead.
+#
+# Each Back waits up to 5 s for one of those screens before the next: after
+# a cold start the app redraws slowly, and on the AZM build four quick Backs
+# went past them all and out of the app (P3, 2026-11-02 14:59). On this
+# build Back from the household screens may walk back through the form
+# pages filled before (root suite, registration/go-home.yaml), hence up to 8
+# Backs; still not on a search screen after them, it goes home through the
+# side menu and opens one, and says so.
+- repeat:
+    times: 8
+    while:
+      notVisible: "Register (New )?Beneficiary|Select Your Village|Registration & Delivery|Stock Balance"
+    commands:
+      - back
+      - extendedWaitUntil:
+          visible: "Register (New )?Beneficiary|Select Your Village|Registration & Delivery|Stock Balance"
+          timeout: 5000
+          optional: true
+          label: "Wait for the screen Back leads to"
+- runFlow:
+    when:
+      notVisible: "Register (New )?Beneficiary|Select Your Village|Registration & Delivery|Stock Balance"
+    commands:
+      - takeScreenshot: artifacts/to-search-backs-ran-out
+      - evalScript: "${console.log('NOTE|Eight system Backs did not reach a search screen - went home through the side menu and opened Search Beneficiary')}"
+      - runFlow: ../common/go-home.yaml
+- runFlow:
+    when:
+      visible: "Select Your Village"
+    file: pick-village.yaml
+- runFlow:
+    when:
+      visible: "Registration & Delivery|Stock Balance"
+      notVisible: "Register (New )?Beneficiary"
+    file: open-search.yaml
+- extendedWaitUntil:
+    visible: "Register (New )?Beneficiary"
+    timeout: 15000
+    label: "On Search Beneficiary"

@@ -1,0 +1,22 @@
+appId: ${HCM_APP_ID}
+name: prox-is-listed
+---
+# On Search Beneficiary with results: is the household whose head is AGE
+# years old on screen? Sets output.listed (true / false). Looks at the
+# screen as it is - the caller scrolls.
+#
+# Every name reads "--" in this build's result cards (root TEST-CASES,
+# 2026-10-21), so a household is recognised by its head's row, "--" / "<AGE>y
+# 0m" / "<gender>" ("--\n30y 0m\nFemale" - root suite, registration.js
+# search-rows), as Prompt 18 does. Each household of this suite gets a head
+# age no other test household has (README, "Head ages"), and an unusual one
+# (101+), so a downloaded household is unlikely to share it.
+- evalScript: ${output.row = '(?s).*' + AGE + 'y 0m\\s+' + ID_HEAD_GENDER}
+- evalScript: ${output.listed = false}
+- runFlow:
+    when:
+      visible:
+        text: ${output.row}
+        below: "Search by ID"
+    commands:
+      - evalScript: ${output.listed = true}

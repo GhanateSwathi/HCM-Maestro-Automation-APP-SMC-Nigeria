@@ -1,0 +1,47 @@
+appId: ${HCM_APP_ID}
+name: id-search-by-id-on
+---
+# On Search Beneficiary: turn Search by ID on. Fails if it does not turn on.
+#
+# The switch is a text-less clickable left of its label and reports no
+# state; the field's hint turning from "Name of the individual" to "Id
+# Search" is the only sign (root suite, registration/search-by-id.yaml,
+# 2026-10-27). Fenced on three sides: "leftOf" alone reaches the system
+# navigation bar's Back button, which Maestro prefers as clickable - on the
+# AZM build an unfenced tap went Back to Select Your Village (2026-10-30).
+# "Near by households" (the other switch, directly above) appears once the
+# screen has loaded; until then the upper fence is the screen's subtitle,
+# "Search beneficiaries registered for the current campaign" (root suite,
+# registration/search-nearby.yaml).
+- runFlow:
+    when:
+      visible: "Near by households"
+    commands:
+      - tapOn:
+          leftOf: "Search by ID"
+          below: "Near by households"
+          above: "Name of the individual|Id Search"
+          label: "Search by ID - on"
+- runFlow:
+    when:
+      notVisible: "Near by households"
+    commands:
+      - tapOn:
+          leftOf: "Search by ID"
+          below: "Search beneficiaries registered.*"
+          above: "Name of the individual"
+          label: "Search by ID - on"
+- extendedWaitUntil:
+    visible: "Id Search"
+    timeout: 10000
+    optional: true
+    label: "The hint becomes Id Search"
+- runFlow:
+    when:
+      notVisible: "Id Search"
+    commands:
+      - takeScreenshot: artifacts/search-by-id-not-on
+      - runFlow:
+          file: ../common/fail.yaml
+          env:
+            MESSAGE: "Search by ID did not turn on - the search field's hint did not change to Id Search."

@@ -1,0 +1,148 @@
+appId: ${HCM_APP_ID}
+name: id-add-member
+---
+# The plan's "Add a member", from Household Overview: Add Members -> NAME
+# ID_LAST_NAME, aged AGE_MONTHS (default ID_MEMBER_AGE_MONTHS), ID_MEMBER_
+# GENDER -> Save Beneficiary -> Ready to submit -> Submit. Ends on the
+# success screen, with the ID it shows in output.id.ack (X2 compares it with
+# the card) and the member's card line in output.id.ageLine. Creates the
+# member and uses an ID - IRREVERSIBLE. ON_POPUP as in reg-search.yaml.
+#
+# Read off the app as AU-CDD-001, 2026-10-21 (root suite,
+# registration/add-member.yaml, member-form.yaml): "Add Members" sits under
+# the last member's card and opens "Member Details" - the head's form
+# without the head box and the mobile number, First name empty. The plan's
+# member is a child aged 3-59 months; the app accepts 3 months to 5 years.
+# Saving asks "Ready to submit ?" (Submit / Cancel); Submit ends on "Data
+# recorded Successfully" / "Token ID: <id>" with View Household Details and
+# Back To Search. (The AZM builds called the form "Child's Details", asked
+# Height, and saved with Next - matched too.)
+- runScript:
+    file: ../id/id.js
+    env:
+      ACTION: age
+      AGE_MONTHS: "${typeof AGE_MONTHS == 'undefined' ? ID_MEMBER_AGE_MONTHS : AGE_MONTHS}"
+      GENDER: ${ID_MEMBER_GENDER}
+- runFlow:
+    when:
+      true: ${output.id.failure}
+    file: ../common/fail.yaml
+    env:
+      MESSAGE: ${output.id.failure}
+- scrollUntilVisible:
+    element: "Add Members"
+    direction: DOWN
+    timeout: 15000
+    label: "Bring Add Members into view"
+- tapOn:
+    text: "Add Members"
+    label: "Add Members"
+- extendedWaitUntil:
+    visible: "Low Beneficiary IDs|Member Details|Child's Details"
+    timeout: 15000
+    label: "Add Members opens the popup or the form"
+- runFlow:
+    when:
+      visible: "Low Beneficiary IDs"
+    commands:
+      - takeScreenshot: artifacts/low-id-popup-${NAME}
+      - runFlow:
+          when:
+            true: ${typeof ON_POPUP != 'undefined' && ON_POPUP == 'skip'}
+          commands:
+            - evalScript: "${console.log('NOTE|Add Members for ' + NAME + ' raised the Low Beneficiary IDs popup; tapped Skip')}"
+            - tapOn:
+                text: "Skip"
+                below: "Low Beneficiary IDs"
+                label: "Skip"
+      - runFlow:
+          when:
+            true: ${typeof ON_POPUP == 'undefined' || ON_POPUP != 'skip'}
+          commands:
+            - evalScript: "${console.log('CHECK|FAIL|Add Members for ' + NAME + ' raised the Low Beneficiary IDs popup with IDs on the device')}"
+            - runFlow:
+                file: ../common/fail.yaml
+                env:
+                  MESSAGE: "${'Low Beneficiary IDs popup shown for ' + NAME + ' although IDs were on the device.'}"
+- extendedWaitUntil:
+    visible: "First name \\*"
+    timeout: 15000
+    label: "The member form shows its fields"
+- tapOn:
+    below: "First name \\*"
+    above: "Enter the full legal name.*|Last name \\*"
+    index: 0
+    label: "Focus First name"
+- inputText: ${NAME}
+- runFlow: ../common/close-keyboard.yaml
+- assertVisible:
+    text: ${NAME}
+    below: "First name \\*"
+    above: "Last name \\*"
+    label: "First name is NAME"
+- tapOn:
+    below: "Last name \\*"
+    above: "Date of birth"
+    index: 0
+    label: "Focus Last name"
+- inputText: ${ID_LAST_NAME}
+- runFlow: ../common/close-keyboard.yaml
+- assertVisible:
+    text: ${ID_LAST_NAME}
+    below: "Last name \\*"
+    above: "Date of birth"
+    label: "Last name is typed"
+- runFlow:
+    file: ../../../subflows/registration/age-entry.yaml
+    env:
+      FIELD: "Year\\(s\\)"
+      VALUE: ${output.id.ageYears}
+- runFlow:
+    file: ../../../subflows/registration/age-entry.yaml
+    env:
+      FIELD: "Month\\(s\\)"
+      VALUE: ${output.id.ageMonths}
+- runFlow:
+    when:
+      visible: "Age should be from.*"
+    commands:
+      - takeScreenshot: artifacts/member-age-refused-${NAME}
+      - runFlow:
+          file: ../common/fail.yaml
+          env:
+            MESSAGE: "${'The member age ' + output.id.age + ' is refused on the form.'}"
+- tapOn:
+    text: ${ID_MEMBER_GENDER}
+    below: "Gender \\*"
+    label: "Pick ID_MEMBER_GENDER"
+- takeScreenshot: artifacts/member-${NAME}
+- tapOn:
+    text: "Save Beneficiary|Next"
+    label: "Save Beneficiary"
+- extendedWaitUntil:
+    visible: "Ready to submit.*"
+    timeout: 15000
+    label: "Ready to submit"
+- tapOn:
+    text: "Submit"
+    below: "Ready to submit.*"
+    label: "Submit the member"
+- extendedWaitUntil:
+    visible: "Data recorded successfully"
+    timeout: 30000
+    label: "The success screen opens"
+- copyTextFrom:
+    text: "Token ID: .*"
+    label: "Read the ID on the success screen"
+- runScript:
+    file: ../id/id.js
+    env:
+      ACTION: ack
+      PERSON: ${NAME}
+- takeScreenshot: artifacts/ack-${NAME}
+- runFlow:
+    when:
+      true: ${output.id.failure}
+    file: ../common/fail.yaml
+    env:
+      MESSAGE: ${output.id.failure}

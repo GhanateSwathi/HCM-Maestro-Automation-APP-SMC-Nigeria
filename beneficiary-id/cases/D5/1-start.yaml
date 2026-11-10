@@ -1,0 +1,31 @@
+appId: ${HCM_APP_ID}
+name: D5 part 1 - device 1 signs in
+tags:
+  - phase-a
+---
+# Test plan D5 - same CDD, two devices, neither synced - run in lockstep
+# (QA's decision, 2026-11-03): both emulators do each step at the same time,
+# signed in as the same CDD. Parts with the same number run together
+# (beneficiary-id/scripts/run-case.ps1); parts "@2" run on device 2
+# (DEVICE_ID_2).
+#   1  both sign in, with the IDs each holds - no new download. On the AZM
+#      builds Download Beneficiary IDs was greyed out with 597-600 of 600 on
+#      the device (2026-11-03), so D5 runs after X9 on the pools X9 left.
+#   2  both go into airplane mode; device 1 registers QAID-D5-A, device 2
+#      QAID-D5-B
+#   3  A and B compared; both back online and Sync Data
+#
+# Expected: A != B. If A = B, the device-side fix cannot catch it - each
+# device sees only its own data - and in Phase A the duplicate reaches the
+# server: report.py fails the case on the duplicate ID, which is that gap
+# (only the server setting of Phase C can stop it). The plan's server search
+# is not done (no server access).
+#
+# Two emulators with the SMC app, signed in as the same CDD. VARs: N0, N0_2,
+# D5_ID_A, D5_ID_B. Writes two households to UAT - with the same ID if the
+# gap is there (synced as the plan says, by the tester's decision).
+- runFlow:
+    file: ../../subflows/id/case-start.yaml
+    env:
+      NEED: 1
+- evalScript: "${console.log('NOTE|No new ID download in D5 - each device used the pool it already held (run X9 first)')}"

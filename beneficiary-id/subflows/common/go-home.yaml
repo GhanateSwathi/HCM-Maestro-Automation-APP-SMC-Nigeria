@@ -1,0 +1,49 @@
+appId: ${HCM_APP_ID}
+name: id-go-home
+---
+# To the home screen from any screen of the app, never past it.
+#
+# Through the side menu first, as the root suite's registration/go-home.yaml
+# does: on this build system Back from the household screens walks back
+# through the form pages filled earlier. Screens without the menu (the
+# Beneficiary IDs screen, a success screen) fall back to system Back, one at
+# a time, each waiting up to 6 s for home - Back on the home screen would
+# leave the app, and on a busy emulator a quick second Back did (AZM build,
+# X9, 2026-11-03).
+- runFlow:
+    when:
+      visible:
+        id: "android:id/input_method_nav_back"
+    commands:
+      - tapOn:
+          id: "android:id/input_method_nav_back"
+          label: "Close the keyboard"
+- runFlow:
+    when:
+      notVisible: "Registration & Delivery|Stock Balance"
+      visible: "Open navigation menu"
+    commands:
+      - runFlow: ../../../subflows/open-side-menu.yaml
+      - tapOn:
+          text: "Home"
+          above: "Logout"
+          label: "Home"
+      - extendedWaitUntil:
+          visible: "Registration & Delivery|Stock Balance"
+          timeout: 15000
+          optional: true
+          label: "The home screen"
+- repeat:
+    times: 6
+    while:
+      notVisible: "Registration & Delivery|Stock Balance"
+    commands:
+      - back
+      - extendedWaitUntil:
+          visible: "Registration & Delivery|Stock Balance"
+          timeout: 6000
+          optional: true
+          label: "Home, or the screen under this one"
+- assertVisible:
+    text: "Registration & Delivery|Stock Balance"
+    label: "On the home screen"

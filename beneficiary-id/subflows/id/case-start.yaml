@@ -1,0 +1,62 @@
+appId: ${HCM_APP_ID}
+name: id-case-start
+---
+# Every case's first part: sign in if needed (never clearing the app), the
+# home screen, then N available as VAR N0 (and the total as T0) for the
+# later parts. A device with fewer than NEED IDs blocks the case: nothing is
+# judged.
+#
+# DOWNLOAD: "yes" downloads IDs first (Re-Fetch IDs on "Limit exceeded");
+# "try" downloads when the button answers and otherwise goes on with the
+# IDs on the device (download-ids.yaml, TRY) - the two-device cases start
+# each device that way. N_VAR / T_VAR name the VARs instead of N0 / T0 (the
+# second device's start uses N0_2 / T0_2).
+#
+# Airplane mode off first: P4, X6 and D5 turn it on, and one that stops
+# early leaves it on - the cases after it then could not sign in (AZM
+# emulator, X6 and D11, 2026-11-02 15:05).
+# Test data first, before the device is touched: the ID_* keys (.env) and
+# the run's tag, which only run-case.ps1 passes. Without the tag every name
+# would end in "undefined" and an earlier run's household would match.
+- evalScript: "${output.setupMissing = (typeof ID_HOUSEHOLD_MEMBERS == 'undefined' || typeof ID_HEAD_AGE_YEARS == 'undefined' || typeof ID_HEAD_GENDER == 'undefined' || typeof ID_LAST_NAME == 'undefined' || typeof ID_MEMBER_AGE_MONTHS == 'undefined' || typeof ID_MEMBER_GENDER == 'undefined') ? 'Set the ID_* keys in .env (see .env.example, Beneficiary ID cases).' : ((typeof QAID_RUN == 'undefined' || String(QAID_RUN) == '') ? 'Run the case with beneficiary-id/scripts/run-case.ps1 - it passes QAID_RUN, the tag every name registered carries.' : '')}"
+- runFlow:
+    when:
+      true: ${output.setupMissing}
+    file: ../common/fail.yaml
+    env:
+      MESSAGE: ${output.setupMissing}
+- setAirplaneMode: disabled
+- runFlow: ../common/sign-in-cdd.yaml
+- runFlow: ../common/home.yaml
+- runFlow:
+    when:
+      true: ${typeof DOWNLOAD != 'undefined' && (DOWNLOAD == 'yes' || DOWNLOAD == 'try')}
+    file: download-ids.yaml
+    env:
+      TRY: "${typeof DOWNLOAD != 'undefined' && DOWNLOAD == 'try' ? 'yes' : 'no'}"
+- runFlow: read-available.yaml
+- runScript:
+    file: id.js
+    env:
+      ACTION: var
+      NAME: "${typeof N_VAR == 'undefined' ? 'N0' : N_VAR}"
+      VALUE: ${output.id.available}
+- runScript:
+    file: id.js
+    env:
+      ACTION: var
+      NAME: "${typeof T_VAR == 'undefined' ? 'T0' : T_VAR}"
+      VALUE: ${output.id.total}
+- runFlow:
+    when:
+      true: ${output.id.available < Number(NEED)}
+    commands:
+      - runScript:
+          file: id.js
+          env:
+            ACTION: blocked
+            TEXT: "${'Needs at least ' + NEED + ' IDs on the device; Beneficiary IDs showed ' + output.id.available + ' available. Download IDs first (Registration & Delivery, Register Beneficiary, Download - or setup/download-ids.yaml)'}"
+      - runFlow:
+          file: ../common/fail.yaml
+          env:
+            MESSAGE: ${output.id.failure}

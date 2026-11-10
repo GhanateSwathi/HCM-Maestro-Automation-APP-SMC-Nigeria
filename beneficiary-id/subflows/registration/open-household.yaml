@@ -1,0 +1,31 @@
+appId: ${HCM_APP_ID}
+name: id-open-household
+---
+# On Search Beneficiary: search by name for HOUSEHOLD (the search text, e.g.
+# QAID-FIX-E1) -> Open its card. Ends on its Household Overview. Fails when
+# no household, or more than one, is found.
+#
+# The card's name reads "--" on this build, so the household is the only
+# card the search lists (find-by-name.yaml) - not one matched by name. A
+# fixture made twice lists two: make each fixture once.
+- runFlow:
+    file: find-by-name.yaml
+    env:
+      TEXT: ${HOUSEHOLD}
+- runFlow:
+    when:
+      true: ${output.households != 1}
+    commands:
+      - takeScreenshot: artifacts/open-household-${HOUSEHOLD}
+      - runFlow:
+          file: ../common/fail.yaml
+          env:
+            MESSAGE: "${'A search for ' + HOUSEHOLD + ' found ' + (output.households == 0 ? 'no household' : 'more than one household') + ' to open.'}"
+- tapOn:
+    text: "Open"
+    below: "Search by ID"
+    label: "Open HOUSEHOLD"
+- extendedWaitUntil:
+    visible: "Household Overview|Edit Individual"
+    timeout: 15000
+    label: "Its Household Overview opens"

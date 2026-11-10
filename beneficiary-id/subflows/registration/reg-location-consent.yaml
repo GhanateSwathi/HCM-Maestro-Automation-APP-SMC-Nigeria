@@ -1,0 +1,61 @@
+appId: ${HCM_APP_ID}
+name: id-reg-location-consent
+---
+# From Beneficiary Location: wait for the location fix -> Save Location ->
+# Care giver's consent Yes -> Submit. Ends on Household Details (the member
+# count). Saves nothing yet.
+#
+# Read off the app as AU-CDD-001, 2026-10-21 (root suite,
+# registration/beneficiary-location.yaml and consent.yaml): "Beneficiary
+# Location" - "Administrative area *" (the village), "Lat/Long *" showing
+# only the fix's accuracy ("5.00 meters"), Save Location; then "Care giver's
+# consent" - "Did the care giver allow for registration and distribution of
+# SMC medicines? *" with Yes / No radios (text-less, left of their labels,
+# no state reported) and Submit. TEST_LATITUDE / TEST_LONGITUDE, when set,
+# are pushed as the emulator's fix, as in the root suite.
+- extendedWaitUntil:
+    visible: "Beneficiary Location|Household Location"
+    timeout: 15000
+    label: "Beneficiary Location opens"
+- runFlow:
+    when:
+      visible: "While using the app"
+    commands:
+      - tapOn:
+          text: "While using the app"
+          label: "Allow location while using the app"
+- runFlow:
+    when:
+      true: ${typeof TEST_LATITUDE != 'undefined' && String(TEST_LATITUDE).trim() != '' && TEST_LATITUDE != 'undefined' && String(TEST_LONGITUDE).trim() != ''}
+    commands:
+      - setLocation:
+          latitude: ${TEST_LATITUDE}
+          longitude: ${TEST_LONGITUDE}
+          label: "Set the GPS fix to TEST_LATITUDE / TEST_LONGITUDE"
+- extendedWaitUntil:
+    visible:
+      text: "\\d+(\\.\\d+)? meters"
+      below: "Lat/Long \\*|Geo-coordinates \\*"
+    timeout: 60000
+    label: "The location is captured"
+- tapOn:
+    text: "Save Location|Next"
+    label: "Save Location"
+- extendedWaitUntil:
+    visible: "Care giver's consent"
+    timeout: 15000
+    label: "Care giver's consent opens"
+- tapOn:
+    leftOf: "Yes"
+    below: "Did the care giver allow.*"
+    above: "No"
+    label: "Consent - Yes"
+- takeScreenshot: artifacts/consent-yes
+- tapOn:
+    text: "Submit"
+    below: "Care giver's consent"
+    label: "Submit the consent"
+- extendedWaitUntil:
+    visible: "Total household members \\*"
+    timeout: 15000
+    label: "Household Details opens"

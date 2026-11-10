@@ -1,0 +1,72 @@
+appId: ${HCM_APP_ID}
+name: id-sync-loop
+---
+# sync-data.yaml's loop, from the home screen: Sync Data until "No Data
+# available for sync". Sets output.syncDone (nothing left) or
+# output.syncFailed with output.syncError (the app's words). Ends on the
+# answer's dialog when done, else on home.
+#
+# Read off the app as AU-CDD-001 (root suite, registration/sync-data.yaml,
+# 2026-10-19 to 22): Sync Data answers with a "Sync in progress" banner, then
+# "Data Synced Successfully" (Close), or at once "No Data available for
+# sync" (Close) when the background Auto Sync already sent everything. In a
+# session signed in the day before it answered "Sync Up Failed" / "Session
+# Expired" (Close / Retry; Retry gave the same).
+- evalScript: ${output.syncDone = false}
+- evalScript: ${output.syncFailed = false}
+- repeat:
+    times: 4
+    while:
+      true: ${!output.syncDone && !output.syncFailed}
+    label: "Sync until nothing is left"
+    commands:
+      - extendedWaitUntil:
+          notVisible: "Sync in progress"
+          timeout: 180000
+          optional: true
+          label: "Any sync running finishes"
+      - runFlow:
+          when:
+            visible: "Sync Up Failed.*"
+          commands:
+            - copyTextFrom:
+                text: "Sync Up Failed.*"
+                label: "Read the sync error"
+            - evalScript: ${output.syncError = maestro.copiedText.replace(/\s+/g, ' ')}
+            - takeScreenshot: artifacts/sync-failed
+            - tapOn:
+                text: "Close"
+                below: "Sync Up Failed.*"
+                label: "Close the sync error"
+            - evalScript: ${output.syncFailed = true}
+      - runFlow:
+          when:
+            visible: "Data Synced Successfully"
+          commands:
+            - evalScript: ${output.syncLog = output.syncLog + 'Data Synced Successfully, then '}
+            - tapOn:
+                text: "Close"
+                label: "Close the sync result"
+      - runFlow:
+          when:
+            visible: "No Data available for sync"
+          commands:
+            - evalScript: ${output.syncDone = true}
+      - runFlow:
+          when:
+            true: ${!output.syncDone && !output.syncFailed}
+          commands:
+            - scrollUntilVisible:
+                element: "Sync Data"
+                direction: DOWN
+                timeout: 10000
+                optional: true
+                label: "Find Sync Data on home"
+            - tapOn:
+                text: "Sync Data"
+                label: "Sync Data"
+            - extendedWaitUntil:
+                visible: "No Data available for sync|Sync in progress|Data Synced Successfully|Sync Up Failed.*"
+                timeout: 60000
+                optional: true
+                label: "Sync Data answers"

@@ -1,0 +1,76 @@
+appId: ${HCM_APP_ID}
+name: id-search-by-id
+---
+# The ID check's step 4, from the home screen: Search Beneficiary -> Search
+# by ID on -> all 12 digits of ID. Exactly one household must be found, and
+# it must be HEAD's: a member's ID finds its head's household. Logs a CHECK
+# line either way and returns to the home screen.
+#
+# HEAD names the household for the report ("<name> <last name>");
+# HEAD_ID is its head's ID, which is how the household is recognised - the
+# result card and the overview show "--" for every name on this build (root
+# TEST-CASES, 2026-10-21), so the one household found is opened and the ID
+# on its head's card compared (read-head-id.yaml).
+#
+# Read off the app as AU-CDD-001, 2026-10-27 (root suite,
+# registration/search-by-id.yaml): with Search by ID on, the field's hint
+# reads "Id Search"; the search matches the members' beneficiary IDs, inside
+# the village. A result is a card with "Open" and a Beneficiary / Age /
+# Gender row per member; a second "Open" means a second household.
+- runFlow: ../registration/open-search.yaml
+- runFlow: ../registration/search-by-id-on.yaml
+- tapOn:
+    text: "Id Search"
+    below: "Search by ID"
+    label: "Focus the search field"
+- assertVisible:
+    text: "Id Search"
+    below: "Search by ID"
+    focused: true
+    label: "The search field has the focus"
+- inputText: ${ID}
+- runFlow: ../common/close-keyboard.yaml
+- extendedWaitUntil:
+    visible:
+      text: "Open"
+      below: "Search by ID"
+    timeout: 15000
+    optional: true
+    label: "A household is found"
+- evalScript: ${output.found = 0}
+- runFlow:
+    when:
+      visible:
+        text: "Open"
+        below: "Search by ID"
+    commands:
+      - evalScript: ${output.found = 1}
+- runFlow:
+    when:
+      visible:
+        text: "Open"
+        below: "Search by ID"
+        index: 1
+    commands:
+      - evalScript: ${output.found = 2}
+- takeScreenshot: artifacts/search-${ID}
+- evalScript: ${output.foundHead = ''}
+- runFlow:
+    when:
+      true: ${output.found == 1}
+    commands:
+      - tapOn:
+          text: "Open"
+          below: "Search by ID"
+          label: "Open the household found"
+      - runFlow: read-head-id.yaml
+      - evalScript: ${output.foundHead = output.id.head}
+      - takeScreenshot: artifacts/search-${ID}-household
+- runScript:
+    file: id.js
+    env:
+      # X1 runs X2's searches with CASE: X2 (see id.js).
+      CASE: "${typeof CASE == 'undefined' ? '' : CASE}"
+      OK: ${output.found == 1 && String(output.foundHead) == String(HEAD_ID)}
+      TEXT: "${'Search by ID ' + ID + ' - expected only ' + HEAD + ' household (head ' + HEAD_ID + '), found ' + (output.found == 0 ? 'none' : (output.found == 1 ? (String(output.foundHead) == String(HEAD_ID) ? 'it' : 'a different household (head ' + output.foundHead + ')') : 'more than one household'))}"
+- runFlow: ../common/go-home.yaml

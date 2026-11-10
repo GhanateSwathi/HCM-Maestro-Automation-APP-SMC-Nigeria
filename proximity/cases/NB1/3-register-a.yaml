@@ -1,0 +1,40 @@
+appId: ${HCM_APP_ID}
+name: NB1 part 3 - register A at the search point
+tags:
+  - proximity
+---
+# PROXIMITY-CASES.md P-02: after the village's download (part 1), register
+# a new household QAID-NB1-<tag>-A (head aged 101) where the device stands,
+# then come back to Search Beneficiary with system Back. Run with the
+# emulator's GPS on C (scripts/run-sequence.ps1 does it). Reopens the search
+# screen first so it starts clean. IRREVERSIBLE: creates a household and
+# uses an ID.
+- runFlow: ../../subflows/reopen-search.yaml
+- runFlow:
+    file: ../../../beneficiary-id/subflows/registration/register-and-read.yaml
+    env:
+      NAME: "QAID-NB1-${QAID_RUN}-A"
+      KEY: NB1_ID_A
+      HEAD_AGE: "101"
+- takeScreenshot: artifacts/nb1-a-overview
+- back
+- extendedWaitUntil:
+    visible: "Register (New )?Beneficiary"
+    timeout: 15000
+    optional: true
+    label: "Back on Search Beneficiary"
+# E-11: what the search screen shows on return - Near by on or off, and
+# whether A is listed. On this build Back from Household Overview may walk
+# back through the form pages instead (root suite, registration/go-home.yaml).
+- takeScreenshot: artifacts/nb1-after-back
+- runFlow:
+    when:
+      visible: "Register (New )?Beneficiary"
+    commands:
+      - evalScript: "${console.log('NOTE|E-11 - system Back from Household Overview returned to Search Beneficiary (the Near by switch and the list: nb1-after-back.png)')}"
+- runFlow:
+    when:
+      notVisible: "Register (New )?Beneficiary"
+    commands:
+      - evalScript: "${console.log('NOTE|E-11 - system Back from Household Overview did not return to Search Beneficiary')}"
+      - runFlow: ../../../beneficiary-id/subflows/registration/to-search.yaml

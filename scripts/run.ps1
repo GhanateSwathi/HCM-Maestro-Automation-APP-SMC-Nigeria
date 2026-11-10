@@ -20,7 +20,11 @@ param(
     # - see run-chain.ps1.
     [switch]   $KeepSession,
     # KEY=VALUE pairs that replace .env's for this run only (e.g. TEST_USER).
-    [string[]] $Set
+    [string[]] $Set,
+    # Where the run's report, screenshots and logs go; defaults to
+    # artifacts\runs\<yyyyMMdd-HHmmss>. beneficiary-id\scripts\run-case.ps1
+    # gives each case part its own folder inside the case's run.
+    [string]   $RunDir
 )
 
 $ErrorActionPreference = 'Stop'
@@ -78,7 +82,8 @@ if ($ExcludeTags) { $cliArgs += '--exclude-tags';  $cliArgs += $ExcludeTags }
 # not the working directory.
 # Not HTML-DETAILED: it lists every step as executed, and the password step
 # then shows the password in clear text.
-$runDir = Join-Path $root ('artifacts\runs\' + (Get-Date -Format 'yyyyMMdd-HHmmss'))
+if (-not $RunDir) { $RunDir = Join-Path $root ('artifacts\runs\' + (Get-Date -Format 'yyyyMMdd-HHmmss')) }
+$runDir = $RunDir
 $cliArgs += '--test-output-dir'; $cliArgs += $runDir
 $cliArgs += '--format';          $cliArgs += 'HTML'
 $cliArgs += '--output';          $cliArgs += (Join-Path $runDir 'report.html')

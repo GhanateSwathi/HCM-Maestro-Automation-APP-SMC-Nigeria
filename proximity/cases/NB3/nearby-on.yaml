@@ -1,0 +1,23 @@
+appId: ${HCM_APP_ID}
+name: NB3 - fresh Search, Near by on (optionally a name typed)
+tags:
+  - proximity
+---
+# Leaves the result list on screen for scripts/nearby-list.py to record.
+# TYPE (optional): text to type in the name field after Near by is on.
+- runFlow: ../../subflows/reopen-search.yaml
+- runFlow: ../../subflows/nearby-switch.yaml
+- runFlow:
+    when:
+      true: ${typeof TYPE != 'undefined' && TYPE != ''}
+    file: ../../../beneficiary-id/subflows/registration/search-field.yaml
+    env:
+      TEXT: ${TYPE}
+- extendedWaitUntil:
+    visible:
+      text: "Open"
+      below: "Search by ID"
+    timeout: 20000
+    optional: true
+    label: "Results show"
+- takeScreenshot: artifacts/nb3-nearby-on

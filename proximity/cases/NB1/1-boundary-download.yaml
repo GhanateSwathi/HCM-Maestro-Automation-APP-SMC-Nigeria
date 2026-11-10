@@ -1,0 +1,21 @@
+appId: ${HCM_APP_ID}
+name: NB1 part 1 - sign in, pick the boundary and download the village's data
+tags:
+  - proximity
+---
+# PROXIMITY-CASES.md P-02 / E-01: the state QA reported - the village's
+# households downloaded before a new household is registered (Rigan Ori,
+# 153, on the AZM build, 2026-11-06). Signs in if needed, keeping the app's
+# data (beneficiary-id/subflows/common/sign-in-cdd.yaml). When the app asks
+# for the boundary - after a fresh sign-in, e.g. NB6's clean start - it is
+# answered as the root suite does, and "Data found!" is answered with
+# Download whatever BOUNDARY_DATA_CHOICE says. Logs whether a download
+# happened: a session already past its boundary does not download again.
+- runFlow: ../../../beneficiary-id/subflows/common/sign-in-cdd.yaml
+- takeScreenshot: artifacts/nb1-after-sign-in
+- runFlow:
+    file: ../../../beneficiary-id/subflows/common/home.yaml
+    env:
+      BOUNDARY_DATA_CHOICE: "Download"
+- evalScript: "${console.log('NOTE|Boundary data - ' + (typeof output.bd == 'undefined' ? 'not asked (the session was past its boundary) - nothing downloaded' : output.bd.detail))}"
+- takeScreenshot: artifacts/nb1-home

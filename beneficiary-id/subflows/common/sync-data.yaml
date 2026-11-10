@@ -1,0 +1,54 @@
+appId: ${HCM_APP_ID}
+name: id-sync-data
+---
+# Home, then Sync Data until "No Data available for sync" - every record the
+# case made is on the server. Ends on the home screen.
+#
+# "Sync Up Failed" (e.g. "Session Expired": the server ended the sign-in -
+# about 40 minutes after it on the AZM UAT, 2026-11-02; a day-old session on
+# mhbase, 2026-10-22) is answered as a field user would: log out, sign in
+# again (keeping the app's data), sync again. A second failure fails the
+# case - its records are not on the server. The NOTE lands in the case's
+# comment.
+- runFlow: go-home.yaml
+- evalScript: ${output.syncLog = ''}
+- evalScript: ${output.syncError = ''}
+- runFlow:
+    when:
+      visible: "There are .* yet to be synced\\.?"
+    commands:
+      - copyTextFrom:
+          text: "There are .* yet to be synced\\.?"
+          label: "Read the pending count"
+      - evalScript: ${output.syncLog = maestro.copiedText + ' Then '}
+- runFlow: sync-loop.yaml
+- runFlow:
+    when:
+      true: ${output.syncFailed}
+    commands:
+      - evalScript: "${console.log('NOTE|Sync Data failed (' + output.syncError + ') - signed in again and synced again')}"
+      - runFlow: logout.yaml
+      - runFlow: sign-in-cdd.yaml
+      - runFlow: home.yaml
+      - runFlow: sync-loop.yaml
+# The last round's answer may have come after the loop's last look.
+- runFlow:
+    when:
+      visible: "No Data available for sync"
+    commands:
+      - evalScript: ${output.syncDone = true}
+- runFlow:
+    when:
+      true: ${!output.syncDone}
+    commands:
+      - takeScreenshot: artifacts/sync-not-done
+      - runFlow:
+          file: fail.yaml
+          env:
+            MESSAGE: "${'Sync Data did not finish - ' + (output.syncError ? output.syncError : 'no No Data available for sync within four rounds') + '. This case' + String.fromCharCode(39) + 's records are not on the server.'}"
+- takeScreenshot: artifacts/synced
+- tapOn:
+    text: "Close"
+    label: "Close the sync result"
+- evalScript: "${console.log('Sync Data - ' + output.syncLog + 'No Data available for sync')}"
+- runFlow: go-home.yaml
