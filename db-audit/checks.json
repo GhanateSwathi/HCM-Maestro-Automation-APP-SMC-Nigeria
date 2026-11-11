@@ -1,0 +1,71 @@
+{
+ "_about": "The DB checks of the CDD cases (TEST-CASES.md), run by scripts/db_query.py --check <label> --set HEAD=<head's first name> CHILD=<child's first name>. Each SELECT returns one column j (the DB viewer's result cell is copied) and has no % (adb input text reads %s as a space; instr() stands in for LIKE). {HEAD} and {CHILD} are the given names the flows typed, e.g. QAID-DB1-H-111530. Ported from the Kaduna AZM 2.2.122 audit (HCM-Maestro-Beneficiary-ID-Fix, db-audit/, 2026-11-10/11), where these SELECTs ran with fixed names and record IDs; here they find the records by name. Table and column names are the HCM app's Drift schema as the Kaduna build had it - run the schema checks first on a new build.",
+ "checks": [
+  {
+   "label": "tables",
+   "cases": "schema",
+   "purpose": "Every table in the local DB",
+   "sql": "SELECT json_object('tables',group_concat(name,',')) AS j FROM sqlite_master WHERE type='table'"
+  },
+  {
+   "label": "columns",
+   "cases": "schema",
+   "purpose": "The columns of the tables the cases read beyond registration",
+   "sql": "SELECT json_object('task',(SELECT group_concat(name) FROM pragma_table_info('task')),'task_resource',(SELECT group_concat(name) FROM pragma_table_info('task_resource')),'referral',(SELECT group_concat(name) FROM pragma_table_info('referral')),'h_f_referral',(SELECT group_concat(name) FROM pragma_table_info('h_f_referral')),'side_effect',(SELECT group_concat(name) FROM pragma_table_info('side_effect'))) AS j"
+  },
+  {
+   "label": "counts",
+   "cases": "1-10",
+   "purpose": "Row counts of the outcome tables - before and after an action shows which table it wrote",
+   "sql": "SELECT json_object('household',(SELECT count(*) FROM household),'individual',(SELECT count(*) FROM individual),'task',(SELECT count(*) FROM task),'task_resource',(SELECT count(*) FROM task_resource),'referral',(SELECT count(*) FROM referral),'h_f_referral',(SELECT count(*) FROM h_f_referral),'side_effect',(SELECT count(*) FROM side_effect),'service',(SELECT count(*) FROM service)) AS j"
+  },
+  {
+   "label": "head",
+   "cases": "1, 8",
+   "purpose": "The head HEAD: name, date of birth, gender, mobile, IDs, head flag, membership, row version",
+   "sql": "SELECT json_object('name',n.given_name||'/'||n.family_name,'dob',i.date_of_birth,'gender',i.gender,'mobile',i.mobile_number,'ind_af',i.additional_fields,'ident',(SELECT group_concat(identifier_type||':'||identifier_id) FROM identifier WHERE individual_client_reference_id=i.client_reference_id),'is_head',m.is_head_of_household,'hm_af',m.additional_fields,'hh_ref',m.household_client_reference_id,'ind_ref',i.client_reference_id,'row_version',i.row_version) AS j FROM name n JOIN individual i ON i.client_reference_id=n.individual_client_reference_id JOIN household_member m ON m.individual_client_reference_id=i.client_reference_id WHERE n.given_name='{HEAD}'"
+  },
+  {
+   "label": "household",
+   "cases": "1",
+   "purpose": "HEAD's household: member count, lat/long, its fields, the address rows of the household and the head, the head's project_beneficiary",
+   "sql": "SELECT json_object('member_count',h.member_count,'lat',h.latitude,'lng',h.longitude,'hh_type',h.household_type,'hh_af',h.additional_fields,'addr',(SELECT json_group_array(json_object('rel',substr(related_client_reference_id,1,8),'lat',latitude,'lng',longitude,'acc',location_accuracy,'loc',locality_boundary_code,'locname',locality_boundary_name,'type',type)) FROM address WHERE related_client_reference_id IN (h.client_reference_id,m.individual_client_reference_id)),'pb',(SELECT json_object('dor',date_of_registration,'pb_af',additional_fields,'tag',tag) FROM project_beneficiary WHERE beneficiary_client_reference_id=m.individual_client_reference_id)) AS j FROM name n JOIN household_member m ON m.individual_client_reference_id=n.individual_client_reference_id JOIN household h ON h.client_reference_id=m.household_client_reference_id WHERE n.given_name='{HEAD}'"
+  },
+  {
+   "label": "child",
+   "cases": "1",
+   "purpose": "The child CHILD: name, date of birth, gender, fields, IDs, membership, project_beneficiary",
+   "sql": "SELECT json_object('name',n.given_name||'/'||n.family_name,'dob',i.date_of_birth,'gender',i.gender,'ind_af',i.additional_fields,'ident',(SELECT group_concat(identifier_type||':'||identifier_id) FROM identifier WHERE individual_client_reference_id=i.client_reference_id),'is_head',m.is_head_of_household,'hh',substr(m.household_client_reference_id,1,8),'hm_af',m.additional_fields,'ind_ref',i.client_reference_id,'pb',(SELECT client_reference_id||' dor='||date_of_registration FROM project_beneficiary WHERE beneficiary_client_reference_id=i.client_reference_id)) AS j FROM name n JOIN individual i ON i.client_reference_id=n.individual_client_reference_id JOIN household_member m ON m.individual_client_reference_id=i.client_reference_id WHERE n.given_name='{CHILD}'"
+  },
+  {
+   "label": "referral",
+   "cases": "1, 4",
+   "purpose": "CHILD's referral in h_f_referral (where the Kaduna build kept the CDD's referral; the referral table stayed empty)",
+   "sql": "SELECT json_object('n',count(*),'rows',json_group_array(json_object('name',name,'beneficiary_id',beneficiary_id,'referral_code',referral_code,'symptom',symptom,'facility',project_facility_id,'locality',locality_code,'af',additional_fields,'created',client_created_time,'deleted',is_deleted))) AS j FROM h_f_referral WHERE instr(name,'{CHILD}')>0"
+  },
+  {
+   "label": "tasks",
+   "cases": "1, 2, 3, 6, 7, 9",
+   "purpose": "CHILD's tasks (delivery, ineligible, unable to deliver, redose) with their resources and location",
+   "sql": "SELECT json_object('n',count(*),'rows',json_group_array(json_object('status',t.status,'af',t.additional_fields,'start',t.actual_start_date,'end',t.actual_end_date,'created',t.client_created_time,'modified',t.client_modified_time,'rv',t.row_version,'ref',substr(t.client_reference_id,1,8),'res',(SELECT json_group_array(json_object('pv',product_variant_id,'qty',quantity,'delivered',is_delivered,'comment',delivery_comment,'af',additional_fields)) FROM task_resource WHERE taskclient_reference_id=t.client_reference_id),'addr',(SELECT json_group_array(json_object('lat',latitude,'lng',longitude,'acc',location_accuracy)) FROM address WHERE related_client_reference_id=t.client_reference_id)))) AS j FROM task t JOIN project_beneficiary p ON p.client_reference_id=t.project_beneficiary_client_reference_id JOIN name n ON n.individual_client_reference_id=p.beneficiary_client_reference_id WHERE n.given_name='{CHILD}'"
+  },
+  {
+   "label": "consent-no",
+   "cases": "5",
+   "purpose": "The newest household (the consent-No one): its fields and address, and that no member, name or project_beneficiary was made",
+   "sql": "SELECT json_object('hh_count',(SELECT count(*) FROM household),'ref',substr(h.client_reference_id,1,8),'member_count',h.member_count,'lat',h.latitude,'lng',h.longitude,'af',h.additional_fields,'members',(SELECT count(*) FROM household_member WHERE household_client_reference_id=h.client_reference_id),'addr',(SELECT json_group_array(json_object('loc',locality_boundary_code,'acc',location_accuracy,'type',type)) FROM address WHERE related_client_reference_id=h.client_reference_id),'name_rows',(SELECT count(*) FROM name WHERE given_name='{HEAD}'),'pb',(SELECT count(*) FROM project_beneficiary WHERE beneficiary_client_reference_id=h.client_reference_id)) AS j FROM household h ORDER BY h.rowid DESC LIMIT 1"
+  },
+  {
+   "label": "abandoned",
+   "cases": "10",
+   "purpose": "Nothing saved for CHILD after an abandoned checklist: tasks, referrals, checklist (service) rows",
+   "sql": "SELECT json_object('pb',(SELECT count(*) FROM project_beneficiary WHERE beneficiary_client_reference_id=i.client_reference_id),'task',(SELECT count(*) FROM task t JOIN project_beneficiary p ON p.client_reference_id=t.project_beneficiary_client_reference_id WHERE p.beneficiary_client_reference_id=i.client_reference_id),'task_by_id',(SELECT count(*) FROM task WHERE instr(additional_fields,(SELECT identifier_id FROM identifier WHERE individual_client_reference_id=i.client_reference_id))>0),'hfref',(SELECT count(*) FROM h_f_referral WHERE instr(name,'{CHILD}')>0),'referral',(SELECT count(*) FROM referral r JOIN project_beneficiary p ON p.client_reference_id=r.project_beneficiary_client_reference_id WHERE p.beneficiary_client_reference_id=i.client_reference_id),'service_all',(SELECT count(*) FROM service),'side_effect_all',(SELECT count(*) FROM side_effect)) AS j FROM name n JOIN individual i ON i.client_reference_id=n.individual_client_reference_id WHERE n.given_name='{CHILD}'"
+  },
+  {
+   "label": "head-edit",
+   "cases": "8",
+   "purpose": "HEAD's rows before and after an edit: one individual, its mobile, times, row version, fields, names, IDs, membership",
+   "sql": "SELECT json_object('n',count(*),'ind_total',(SELECT count(*) FROM individual),'rows',json_group_array(json_object('ref',substr(i.client_reference_id,1,8),'mobile',i.mobile_number,'dob',i.date_of_birth,'gender',i.gender,'rv',i.row_version,'cmt',i.client_modified_time,'amt',i.audit_modified_time,'ind_af',i.additional_fields,'name_rows',(SELECT count(*) FROM name WHERE individual_client_reference_id=i.client_reference_id),'ident',(SELECT group_concat(identifier_type||':'||identifier_id) FROM identifier WHERE individual_client_reference_id=i.client_reference_id),'hm',(SELECT json_object('rv',row_version,'cmt',client_modified_time,'af',additional_fields) FROM household_member WHERE individual_client_reference_id=i.client_reference_id)))) AS j FROM name n JOIN individual i ON i.client_reference_id=n.individual_client_reference_id WHERE n.given_name='{HEAD}'"
+  }
+ ]
+}

@@ -1,0 +1,18 @@
+appId: ${HCM_APP_ID}
+name: DB audit case 5 - new household, caregiver consent No (head NAME)
+tags:
+  - db-audit
+---
+# From home: Registration & Delivery -> the village -> search NAME ->
+# Register Beneficiary -> location -> Care giver's consent No, the reason
+# CONSENT_REASON (.env) -> Submit -> Ready to Submit? -> Submit -> "Data
+# recorded successfully". Through beneficiary-id's consent-no subflow. NAME
+# is only the search text: a refused household stores no person, and the
+# consent-no check reads the newest household.
+# Writes a record - IRREVERSIBLE once synced.
+- runFlow: home.yaml
+- runFlow: ../../beneficiary-id/subflows/registration/open-search.yaml
+- runFlow:
+    file: ../../beneficiary-id/subflows/registration/consent-no.yaml
+    env:
+      NAME: ${NAME}

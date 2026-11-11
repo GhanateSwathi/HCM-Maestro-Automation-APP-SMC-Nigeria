@@ -1,0 +1,58 @@
+appId: ${HCM_APP_ID}
+name: DB audit - the app in front, on its home screen
+---
+# Every DB-audit flow starts here. The app is brought to the front without a
+# restart or a wipe (the cases build on records already on the device);
+# signed out, the CDD signs in through beneficiary-id's sign-in-cdd.yaml
+# (never clears the app; credentials from .env). A background sync's "Sync
+# failed" popup is closed. Boundary selection, a boundary data notice and
+# the way home are beneficiary-id's home.yaml.
+#
+# The DB viewer's screens (Tables, a table's grid, its Filter, Edit Query)
+# have no side menu, so they are left with system Back, one at a time, each
+# waiting for the screen under it. Ported from the Kaduna AZM suite, where
+# quick Back presses from Edit Query ran past home and out of the app twice
+# (2026-11-10 15:01 and 15:41) - the screens under it take long to redraw.
+# The DB viewer screens' texts are the Kaduna -db build's (2026-11-10); not
+# yet seen on this app (db-audit/README.md, "Not verified yet").
+- launchApp:
+    stopApp: false
+- extendedWaitUntil:
+    visible: "User ID.*|(ADMIN_)?Health Facility.*|Registration & Delivery|Stock Balance|Tables|.* Filter|.* \\(\\d+.*\\)|Edit Query|Close|Open navigation menu|No data found!|Data found!|Failed to check data in server"
+    timeout: 60000
+    label: "The app is in front"
+- runFlow:
+    when:
+      visible: "Sync failed.*|.*No Internet Connection.*"
+    commands:
+      - tapOn: "Close"
+- runFlow:
+    when:
+      visible:
+        id: "android:id/input_method_nav_back"
+    commands:
+      - tapOn:
+          id: "android:id/input_method_nav_back"
+          label: "Close the keyboard"
+- repeat:
+    times: 5
+    while:
+      visible: "Tables|.* Filter|Edit Query|.* \\(\\d+.*\\)"
+      notVisible: "Open navigation menu|Registration & Delivery|Stock Balance"
+    commands:
+      - back
+      - extendedWaitUntil:
+          notVisible: "Edit Query"
+          timeout: 10000
+          optional: true
+          label: "The screen under this one draws"
+      - extendedWaitUntil:
+          visible: "Tables|.* Filter|.* \\(\\d+.*\\)|Open navigation menu|Registration & Delivery|Stock Balance"
+          timeout: 10000
+          optional: true
+          label: "The DB viewer's previous screen, or the app's"
+- runFlow:
+    when:
+      visible: "User ID.*"
+    file: ../../beneficiary-id/subflows/common/sign-in-cdd.yaml
+- runFlow: ../../beneficiary-id/subflows/common/home.yaml

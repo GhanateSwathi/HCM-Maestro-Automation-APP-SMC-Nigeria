@@ -1,0 +1,34 @@
+appId: ${HCM_APP_ID}
+name: DB audit - register a household (head NAME) with one child (CHILD)
+tags:
+  - db-audit
+---
+# One record per case (db-audit/TEST-CASES.md): from home, a new household -
+# Beneficiary Location, consent Yes, ID_HOUSEHOLD_MEMBERS, the head NAME
+# ID_LAST_NAME (ID_HEAD_AGE_YEARS, ID_HEAD_GENDER) - then Add Members: the
+# child CHILD ID_LAST_NAME (AGE_MONTHS if given, else ID_MEMBER_AGE_MONTHS;
+# ID_MEMBER_GENDER). Through beneficiary-id's registration subflows, which
+# read the SMC form (Save Location, Save Household Details, Save
+# Beneficiary; no Height field). Logs both IDs (VAR HEAD_ID / CHILD_ID and
+# LEDGER lines) and ends on Household Overview.
+#
+# NAME and CHILD must be new names: the household is found again by name,
+# and names read "--" on this build's cards, so a search must list exactly
+# one household (beneficiary-id/README.md). Use QAID-DB<case>-H-<ddHHmm> and
+# QAID-DB<case>-C1-<ddHHmm>.
+# Creates a household and uses two IDs - IRREVERSIBLE once synced.
+- runFlow: home.yaml
+- runFlow: ../../beneficiary-id/subflows/registration/open-search.yaml
+- runFlow:
+    file: ../../beneficiary-id/subflows/registration/register-and-read.yaml
+    env:
+      NAME: ${NAME}
+      KEY: HEAD_ID
+- takeScreenshot: artifacts/head-overview
+- runFlow:
+    file: ../../beneficiary-id/subflows/registration/add-member-and-read.yaml
+    env:
+      NAME: ${CHILD}
+      HOUSEHOLD: ${NAME}
+      KEY: CHILD_ID
+- takeScreenshot: artifacts/household-with-child

@@ -10,6 +10,12 @@ artifacts/
 *.mp4
 *.png
 
+# DB audit: a live form config or labels logged from the app stay local
+# (client data). Python caches, and LibreOffice lock files of an open sheet.
+db-audit/config/
+__pycache__/
+.~lock.*#
+
 # OS
 .DS_Store
 Thumbs.db

@@ -1,0 +1,18 @@
+appId: ${HCM_APP_ID}
+name: DB audit - open household NAME on Household Overview
+tags:
+  - db-audit
+---
+# From anywhere: the app in front and home (home.yaml: sign-in if needed,
+# boundary), then Registration & Delivery -> the village -> search NAME ->
+# Open. Ends on its Household Overview, where a case does its action by hand
+# (checklist, Unable To Deliver, Redose, Edit Individual). Reads only.
+# Fails when the search lists no household or more than one (names read
+# "--" on this build, so the household is the only card listed).
+- runFlow: home.yaml
+- runFlow: ../../beneficiary-id/subflows/registration/open-search.yaml
+- runFlow:
+    file: ../../beneficiary-id/subflows/registration/open-household.yaml
+    env:
+      HOUSEHOLD: ${NAME}
+- takeScreenshot: artifacts/overview-${NAME}

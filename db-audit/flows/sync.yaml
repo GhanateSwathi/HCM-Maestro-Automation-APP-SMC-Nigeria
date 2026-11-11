@@ -1,0 +1,12 @@
+appId: ${HCM_APP_ID}
+name: DB audit - Sync Data from home
+tags:
+  - db-audit
+---
+# End of a DB-audit session, after the checks: home, then Sync Data until
+# "No Data available for sync" through beneficiary-id's subflow (on "Session
+# Expired" it logs out and signs in again, keeping the app's data). Sends
+# every case's records to mhbase UAT - IRREVERSIBLE.
+- runFlow: home.yaml
+- runFlow: ../../beneficiary-id/subflows/common/sync-data.yaml
+- takeScreenshot: artifacts/after-sync

@@ -1,0 +1,22 @@
+appId: ${HCM_APP_ID}
+name: DB audit - add one child (CHILD) to household NAME
+tags:
+  - db-audit
+---
+# From anywhere: open household NAME (open-household.yaml), then Add
+# Members -> CHILD ID_LAST_NAME (AGE_MONTHS if given, else
+# ID_MEMBER_AGE_MONTHS; ID_MEMBER_GENDER) through beneficiary-id's subflow.
+# Logs the child's ID (VAR CHILD_ID, LEDGER) and ends on Household Overview.
+# Case 10 adds its child this way; on the Kaduna run it also finished a
+# registration that stalled after the head (2026-11-11, PC asleep).
+# Members of one household are told apart by age on this build (names read
+# "--"), so give a second child its own AGE_MONTHS.
+# Creates a member and uses an ID - IRREVERSIBLE once synced.
+- runFlow: open-household.yaml
+- runFlow:
+    file: ../../beneficiary-id/subflows/registration/add-member-and-read.yaml
+    env:
+      NAME: ${CHILD}
+      HOUSEHOLD: ${NAME}
+      KEY: CHILD_ID
+- takeScreenshot: artifacts/household-with-child

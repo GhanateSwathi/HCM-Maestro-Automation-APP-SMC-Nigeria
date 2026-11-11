@@ -48,6 +48,7 @@ says why.
 | [18](prompts/prompt-18-cdd-search-nearby-and-id.md) | CDD: find a household by Near by households and by ID | `cdd-search-nearby-and-id` |
 | [19](prompts/prompt-19-cdd-eligibility-referral-ineligible.md) | CDD: eligibility checklist leading to referral (sick, fever, side effect) or ineligible (SP or CTX) | `cdd-eligibility-referral` |
 | [20](prompts/prompt-20-beneficiary-id-fix.md) | CDD: the Beneficiary ID Fix test plan's cases, ported from HCM-Maestro-Beneficiary-ID-Fix; then its Search by proximity cases | [`beneficiary-id/`](beneficiary-id/README.md) and [`proximity/`](proximity/README.md), suites of their own (see [Beneficiary ID cases](#beneficiary-id-cases), [Search by proximity](#search-by-proximity)) |
+| [21](prompts/prompt-21-db-audit.md) | CDD: is each action stored in the app's local DB, field by field - the DB audit ported from HCM-Maestro-Beneficiary-ID-Fix | [`db-audit/`](db-audit/README.md), a suite of its own (see [DB audit](#db-audit)) |
 
 ## Prerequisites
 
@@ -321,6 +322,24 @@ test:
 ```
 
 Cases and results: [`proximity/PROXIMITY-CASES.md`](proximity/PROXIMITY-CASES.md).
+
+### DB audit
+
+[`db-audit/`](db-audit/README.md) checks whether each CDD action is stored in
+the app's local DB, field by field ([Prompt 21](prompts/prompt-21-db-audit.md)),
+ported from the same repo. A case does its action in the app, then reads the
+record through the app's **DB** card (the Drift DB viewer of an HCM "-db"
+build) with a SQL check. It is another suite of its own over
+`beneficiary-id/`'s subflows, and needs a build with the DB card.
+
+```powershell
+python -I db-audit\scripts\db_query.py --list                                    # the checks
+.\scripts\run.ps1 -Flow db-audit\flows\register-household-child.yaml -Set 'NAME=QAID-DB1-H-111530','CHILD=QAID-DB1-C1-111530'
+python -I db-audit\scripts\db_query.py --check head --set HEAD=QAID-DB1-H-111530
+```
+
+Cases: [`db-audit/TEST-CASES.md`](db-audit/TEST-CASES.md); field by field:
+[`db-audit/CDD-field-capture.xlsx`](db-audit/CDD-field-capture.xlsx).
 
 ### QR codes on the emulator
 
@@ -815,6 +834,15 @@ proximity/                  the Search by proximity cases (Near by households) -
   scripts/                  run-sequence.ps1 (GPS moves + parts), nearby-list.py, saved-latlong.py
   run.ps1                   one flow, with the run's tag
   PROXIMITY-CASES.md        the cases, the AZM build's bugs, results
+db-audit/                   the DB audit (Prompt 21) - is each CDD action stored in the local DB;
+                              a suite of its own over beneficiary-id/'s subflows; see db-audit/README.md
+  flows/                    home, the DB viewer's SQL editor (open, run), register, open household,
+                              add a child, consent No, sync
+  scripts/                  db_query.py (one check), screen.py, db_snapshot.py, build_field_sheet.py
+  checks.json               the SQL checks, by label
+  baseline/                 the Kaduna AZM audit's field rows, for comparison
+  TEST-CASES.md             the 10 cases, their steps, checks and results
+  CDD-field-capture.xlsx    every field checked, captured or not, beside the Kaduna result
 prompts/                    the specification prompts, one file each
   prompt-01-…-14-….md       Prompts 1-14, word for word as given
   prompt-15-stock-reject.md rejecting incoming stock, all three receiving roles
@@ -823,6 +851,7 @@ prompts/                    the specification prompts, one file each
   prompt-18-cdd-search-nearby-and-id.md  CDD search by Near by households and by ID
   prompt-19-cdd-eligibility-referral-ineligible.md  CDD checklist: referral or ineligible
   prompt-20-beneficiary-id-fix.md  the Beneficiary ID Fix cases, ported
+  prompt-21-db-audit.md     the DB audit of the CDD's actions, ported
 scripts/                    run.ps1 (Windows) and run.sh (bash) - same runs; only run.ps1 keeps
                               the PC awake and checks for black screenshots
                             run-chain.ps1 - each role's flows back to back in one session, then logout
